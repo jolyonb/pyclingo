@@ -20,10 +20,9 @@ def unpack_data(data: str) -> tuple[int, int, list[tuple[int, int, int]]]:
     clues = []
 
     for r, line in enumerate(lines):
-        for c, char in enumerate(line):
-            if char.isdigit():
-                clues.append((r, c, int(char)))
-
+        clues.extend(
+            (r, c, int(char)) for c, char in enumerate(line) if char.isdigit()
+        )
     return rows, cols, clues
 
 
@@ -53,36 +52,37 @@ def main() -> None:
     Radj = Variable("Radj")
     Cadj = Variable("Cadj")
     N = Variable("N")
+    # Useful aliases
+    cell = Cell(row=R, col=C)
+    cell_adj = Cell(row=Radj, col=Cadj)
 
     # Create all cells in the grid
     solver.section("Grid Definition")
-    solver.when([R.in_(RangePool(0, r - 1)), C.in_(RangePool(0, c - 1))], Cell(R, C))
+    solver.when([R.in_(RangePool(0, r - 1)), C.in_(RangePool(0, c - 1))], cell)
 
     # Define possible mine locations (any cell without a number)
     solver.section("Mine Placement Rules")
-    solver.when(Cell(R, C), Choice(Mine(R, C)))
+    solver.when(cell, Choice(Mine(R, C)))
     solver.forbid(Number(R, C, N), Mine(R, C))
 
-    # Define adjacent cells using nested predicate structure
+    # Define adjacent cells
     solver.section("Cell Adjacency")
     solver.when(
         [
-            Cell(R, C),
-            Cell(Radj, Cadj),
+            cell,
+            cell_adj,
             Abs(R - Radj) <= 1,
             Abs(C - Cadj) <= 1,
             Abs(R - Radj) + Abs(C - Cadj) > 0,  # Not the same cell
         ],
-        Adjacent(Cell(R, C), Cell(Radj, Cadj)),
+        Adjacent(cell, cell_adj),
     )
 
     # Number constraints: each number indicates exactly how many mines are adjacent
     solver.section("Number Constraints")
     solver.when(
         Number(R, C, N),
-        Choice(
-            Mine(Radj, Cadj), condition=Adjacent(Cell(R, C), Cell(Radj, Cadj))
-        ).exactly(N),
+        Choice(Mine(Radj, Cadj), condition=Adjacent(cell, cell_adj)).exactly(N),
     )
 
     print(solver.render())
