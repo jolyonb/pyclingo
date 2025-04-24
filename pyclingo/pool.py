@@ -122,7 +122,7 @@ class RangePool(Pool):
         Returns:
             str: The string representation of the range, e.g., "1..5".
         """
-        return f"{self.start.render()}..{self.end.render()}"
+        return f"{self.start.render(as_argument=False)}..{self.end.render(as_argument=False)}"
 
     def collect_predicates(self) -> set[PREDICATE_CLASS_TYPE]:
         """
