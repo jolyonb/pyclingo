@@ -157,7 +157,7 @@ class Expression(Term):
 
                 return f"-{second_str}"
             elif self.operator == Operation.ABS:
-                return f"|{self.second_term.render()}|"
+                return f"|{self.second_term.render(as_argument=True)}|"
             else:
                 raise ValueError(f"Unknown operator {self.operator}")
 
@@ -168,7 +168,9 @@ class Expression(Term):
             self.second_term, self.operator, is_right=True
         )
 
-        return f"{first_str}{self.operator.value}{second_str}"
+        result = f"{first_str} {self.operator.value} {second_str}"
+
+        return result if as_argument else f"({result})"
 
     @staticmethod
     def _render_term_with_precedence(
@@ -420,7 +422,7 @@ class Comparison(Term):
         left_str = self.left_term.render(as_argument=True)
         right_str = self.right_term.render(as_argument=True)
 
-        return f"{left_str}{self.operator.value}{right_str}"
+        return f"{left_str} {self.operator.value} {right_str}"
 
     def validate_in_context(self, is_in_head: bool) -> None:
         """
