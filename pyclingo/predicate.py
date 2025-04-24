@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import Field, dataclass, fields, make_dataclass
-from typing import TYPE_CHECKING, ClassVar, Type, Any
+from typing import TYPE_CHECKING, Any, ClassVar, Type
 
 from pyclingo.term import BasicTerm
 from pyclingo.value import Constant, StringConstant, Value
@@ -301,3 +301,27 @@ class Predicate(BasicTerm):
             variables.update(arg.collect_variables())
 
         return variables
+
+    def __str__(self) -> str:
+        """
+        Human-readable string representation of the predicate.
+
+        Returns:
+            A string in the format: name(arg1=value1, arg2=value2)
+        """
+        return self.render(as_argument=False)
+
+    def __repr__(self) -> str:
+        """
+        Developer-friendly string representation of the predicate.
+
+        Returns:
+            A string that could be used to recreate this predicate
+        """
+        if not self.argument_fields():
+            return f"{self.__class__.__name__}()"
+
+        kwargs = ", ".join(
+            f"{f.name}={repr(self[f.name])}" for f in self.argument_fields()
+        )
+        return f"{self.__class__.__name__}({kwargs})"

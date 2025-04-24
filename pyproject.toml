@@ -10,6 +10,7 @@ python = "^3.11"
 ruff = "^0.11.2"
 mypy = "^1.15.0"
 pyright = "^1.1.399"
+clingo = "^5.8.0"
 
 
 [build-system]
