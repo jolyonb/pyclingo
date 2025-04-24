@@ -1,9 +1,4 @@
-from pyclingo.choice import Choice
-from pyclingo.expression import Abs
-from pyclingo.pool import RangePool
-from pyclingo.predicate import Predicate
-from pyclingo.solver import ASPProgram
-from pyclingo.value import Variable
+from pyclingo import Abs, ASPProgram, Choice, Predicate, RangePool, Variable
 
 test_data = """.2...
 ..32.
@@ -20,9 +15,7 @@ def unpack_data(data: str) -> tuple[int, int, list[tuple[int, int, int]]]:
     clues = []
 
     for r, line in enumerate(lines):
-        clues.extend(
-            (r, c, int(char)) for c, char in enumerate(line) if char.isdigit()
-        )
+        clues.extend((r, c, int(char)) for c, char in enumerate(line) if char.isdigit())
     return rows, cols, clues
 
 
@@ -86,6 +79,9 @@ def main() -> None:
     )
 
     print(solver.render())
+
+    for result in solver.solve():
+        print(result)
 
 
 if __name__ == "__main__":

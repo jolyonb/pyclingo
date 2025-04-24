@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+import time
+from collections import defaultdict
 from datetime import datetime
-from typing import Iterable
+from typing import Generator
+
+import clingo
 
 from pyclingo.predicate import Predicate
 from pyclingo.program_elements import BlankLine, Comment, ProgramElement, Rule
 from pyclingo.term import Term
-from pyclingo.value import SymbolicConstant
+from pyclingo.value import Constant, StringConstant, SymbolicConstant
 
 
 class ASPProgram:
@@ -17,6 +21,12 @@ class ASPProgram:
     that make up an ASP program, and provides methods to build and render
     the program.
     """
+
+    solved: bool = False
+    satisfiable: bool | None = None
+    exhausted: bool | None = None
+    model_count: int | None = None
+    statistics: dict[str, int] | None = None
 
     def __init__(self) -> None:
         """Initialize an empty ASP program."""
@@ -64,7 +74,9 @@ class ASPProgram:
         self.blank_line()
         self.comment(title)
 
-    def register_symbolic_constant(self, name: str, value: int | str) -> SymbolicConstant:
+    def register_symbolic_constant(
+        self, name: str, value: int | str
+    ) -> SymbolicConstant:
         """
         Register a symbolic constant with the program.
 
@@ -195,4 +207,141 @@ class ASPProgram:
         used_constants = self._collect_used_symbolic_constants()
 
         if unregistered := used_constants - set(self._symbolic_constants.keys()):
-            raise ValueError(f"Unregistered symbolic constants used in program: {', '.join(sorted(unregistered))}")
+            raise ValueError(
+                f"Unregistered symbolic constants used in program: {', '.join(sorted(unregistered))}"
+            )
+
+    def solve(
+        self, models: int = 0, timeout: int = 0
+    ) -> Generator[dict[type[Predicate], set[Predicate]], None, None]:
+        """
+        Solve the ASP program and yield solutions as sets of Predicate objects.
+
+        Args:
+            models: Maximum number of models to compute (0 for all)
+            timeout: Timeout in seconds (0 for no timeout)
+
+        Yields:
+            For each solution, a dictionary mapping Predicate types to sets of Predicate instances
+
+        Raises:
+            RuntimeError: If an error occurs during solving
+
+        Notes:
+            After all models are yielded, solver statistics are stored in the
+            'statistics' attribute of the ASPProgram instance.
+        """
+        tic = time.perf_counter()
+
+        # Configure and prepare the control object
+        control = clingo.Control()
+        if models > 0:
+            control.configuration.solve.models = models
+        if timeout > 0:
+            control.configuration.solve.timeout = timeout
+
+        # Get a mapping of predicate names to their types for reconstruction
+        predicate_types = {pred.get_name(): pred for pred in self._collect_predicates()}
+
+        # Add and ground the program
+        control.add("base", [], self.render())
+        control.ground([("base", [])])
+
+        # Solve and yield models
+        self.exhausted = False
+        self.model_count = 0
+        with control.solve(yield_=True) as handle:
+            for model in handle:
+                self.model_count += 1
+                self.satisfiable = True
+                yield self._convert_model_to_predicates(model, predicate_types)
+
+            # Save final solve result information
+            result = handle.get()
+            self.satisfiable = result.satisfiable
+            self.exhausted = result.exhausted
+
+        toc = time.perf_counter()
+
+        # Store statistics after solving is complete
+        self.statistics = {
+            "atoms": int(control.statistics["problem"]["lp"]["atoms"]),
+            "rules": int(control.statistics["problem"]["lp"]["rules_tr"]),
+            "variables": int(control.statistics["problem"]["generator"]["vars"]),
+            "constraints": int(
+                control.statistics["problem"]["generator"]["complexity"]
+            ),
+            "time": toc - tic,
+        }
+
+    def _convert_symbol_to_predicate(
+        self, symbol, predicate_types: dict[str, type[Predicate]]
+    ) -> Predicate:
+        """
+        Convert a clingo symbol to a Predicate object.
+
+        Args:
+            symbol: A clingo Symbol object representing an atom
+            predicate_types: Dictionary mapping predicate names to Predicate classes
+
+        Returns:
+            A Predicate instance corresponding to the symbol
+
+        Raises:
+            ValueError: If the symbol cannot be converted to a predicate
+        """
+        # Get predicate name
+        pred_name = symbol.name
+
+        if pred_name not in predicate_types:
+            raise ValueError(f"Unknown predicate type: {pred_name}")
+
+        pred_class = predicate_types[pred_name]
+        field_names = [f.name for f in pred_class.argument_fields()]
+
+        # Verify argument count
+        if len(symbol.arguments) != len(field_names):
+            raise ValueError(
+                f"Arity mismatch for predicate {pred_name}: got {len(symbol.arguments)} arguments, expected {len(field_names)}"
+            )
+
+        # Convert arguments to appropriate Value objects
+        kwargs = {}
+        for i, (arg, field_name) in enumerate(zip(symbol.arguments, field_names)):
+            # Convert argument based on its type
+            if arg.type == clingo.SymbolType.Number:
+                kwargs[field_name] = Constant(arg.number)
+            elif arg.type == clingo.SymbolType.String:
+                kwargs[field_name] = StringConstant(arg.string)
+            elif arg.type == clingo.SymbolType.Function:
+                # Recursively convert nested predicates
+                nested_pred = self._convert_symbol_to_predicate(arg, predicate_types)
+                kwargs[field_name] = nested_pred
+            else:
+                raise ValueError(
+                    f"Unsupported symbol type in argument {i} of {pred_name}: {arg.type}"
+                )
+
+        # Create and return the predicate instance
+        return pred_class(**kwargs)
+
+    def _convert_model_to_predicates(
+        self, model, predicate_types: dict[str, type[Predicate]]
+    ) -> dict[type[Predicate], set[Predicate]]:
+        """
+        Convert a clingo model to a dictionary of Predicate objects.
+
+        Args:
+            model: A clingo model containing symbols
+            predicate_types: Dictionary mapping predicate names to Predicate classes
+
+        Returns:
+            Dictionary mapping Predicate types to sets of Predicate instances
+        """
+        result = defaultdict(set)
+
+        for symbol in model.symbols(shown=True):
+            pred_instance = self._convert_symbol_to_predicate(symbol, predicate_types)
+            result[pred_instance.name].add(pred_instance)
+
+        return dict(result)
