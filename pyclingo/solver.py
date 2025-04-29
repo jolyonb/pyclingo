@@ -30,49 +30,57 @@ class ASPProgram:
 
     def __init__(self) -> None:
         """Initialize an empty ASP program."""
-        self._elements: list[ProgramElement] = []
+        self._segments: defaultdict[str, list[ProgramElement]] = defaultdict(list)
         self._symbolic_constants: dict[str, int | str] = {}
 
-    def fact(self, *predicates: Predicate) -> None:
+    def add_segment(self, segment: str) -> None:
+        """Add a new segment to the program."""
+        if segment in self._segments:
+            raise ValueError(f"Segment '{segment}' already exists")
+        self._segments[segment] = []
+
+    def fact(self, *predicates: Predicate, segment: str = "default") -> None:
         """Add one or more unconditional facts to the program."""
         assert all(isinstance(predicate, Predicate) for predicate in predicates)
         for predicate in predicates:
-            self._elements.append(Rule(head=predicate))
+            self._segments[segment].append(Rule(head=predicate))
 
-    def when(self, conditions: Term | list[Term], let: Term) -> None:
+    def when(
+        self, conditions: Term | list[Term], let: Term, segment: str = "default"
+    ) -> None:
         """Create a clingo rule which sets the let term when all conditions are satisfied."""
         condition_list = conditions if isinstance(conditions, list) else [conditions]
         assert all(isinstance(condition, Term) for condition in condition_list)
         assert isinstance(let, Term)
-        self._elements.append(Rule(head=let, body=condition_list))
+        self._segments[segment].append(Rule(head=let, body=condition_list))
 
-    def forbid(self, *conditions: Term) -> None:
+    def forbid(self, *conditions: Term, segment: str = "default") -> None:
         """Creates a clingo constraint which forbids the specified combination of conditions."""
         assert all(isinstance(condition, Term) for condition in conditions)
-        self._elements.append(Rule(body=list(conditions)))
+        self._segments[segment].append(Rule(body=list(conditions)))
 
-    def comment(self, text: str) -> None:
+    def comment(self, text: str, segment: str = "default") -> None:
         """
         Add a comment to the program.
 
         Args:
             text: The comment text.
         """
-        self._elements.append(Comment(text))
+        self._segments[segment].append(Comment(text))
 
-    def blank_line(self) -> None:
+    def blank_line(self, segment: str = "default") -> None:
         """Add a blank line to the program for formatting."""
-        self._elements.append(BlankLine())
+        self._segments[segment].append(BlankLine())
 
-    def section(self, title: str) -> None:
+    def section(self, title: str, segment: str = "default") -> None:
         """
         Add a section header to the program.
 
         Args:
             title: The section title.
         """
-        self.blank_line()
-        self.comment(title)
+        self.blank_line(segment=segment)
+        self.comment(title, segment=segment)
 
     def register_symbolic_constant(
         self, name: str, value: int | str
@@ -124,8 +132,9 @@ class ASPProgram:
         """
         predicates = set()
 
-        for element in self._elements:
-            predicates.update(element.collect_predicates())
+        for segment_name, elements in self._segments.items():
+            for element in elements:
+                predicates.update(element.collect_predicates())
 
         return predicates
 
@@ -163,8 +172,11 @@ class ASPProgram:
                 else:
                     lines.append(f"#const {name} = {value}.")  # Integer values are not
 
-        # 3. Add program elements
-        lines.extend(element.render() for element in self._elements)
+        # 3. Add program elements for each segment
+        for segment_name, elements in self._segments.items():
+            if len(self._segments) > 1 and len(elements) > 0:
+                lines.extend(("", f"% ===== {segment_name} ====="))
+            lines.extend(element.render() for element in elements)
 
         # 4. Add show directives
         if predicates_to_show := {
@@ -192,8 +204,9 @@ class ASPProgram:
         """
         constants = set()
 
-        for element in self._elements:
-            constants.update(element.collect_symbolic_constants())
+        for segment_name, elements in self._segments.items():
+            for element in elements:
+                constants.update(element.collect_symbolic_constants())
 
         return constants
 
@@ -345,3 +358,6 @@ class ASPProgram:
             result[pred_instance.name].add(pred_instance)
 
         return dict(result)
+
+
+# TODO: Allow the default segment name to be configurable
