@@ -632,5 +632,20 @@ class SymbolicConstant(ConstantBase):
         """
         return str(self.value)
 
+ANY = Variable("_")
+
+def create_variables(*names) -> tuple[Variable, ...]:
+    """Create multiple Variable objects at once.
+
+    Args:
+        *names: Variable names as strings.
+
+    Returns:
+        A tuple of Variable objects.
+
+    Example:
+        X, Y, Z = create_variables("X", "Y", "Z")
+    """
+    return tuple(Variable(name) for name in names)
 
 # TODO: Add hash and eq methods for all things that I need to compare via sets!

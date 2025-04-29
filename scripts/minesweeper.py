@@ -1,4 +1,4 @@
-from pyclingo import Abs, ASPProgram, Choice, Predicate, RangePool, Variable
+from pyclingo import ANY, Abs, ASPProgram, Choice, Predicate, RangePool, Variable, create_variables
 
 test_data = """.2...
 ..32.
@@ -31,35 +31,25 @@ def main() -> None:
 
     # Define predicates
     Cell = Predicate.define("cell", ["row", "col"], show=False)
-    Number = Predicate.define("number", ["row", "col", "num"], show=False)
-    Mine = Predicate.define("mine", ["row", "col"], show=True)
+    Number = Predicate.define("number", ["loc", "num"], show=False)
+    Mine = Predicate.define("mine", ["loc"], show=True)
     Adjacent = Predicate.define("adj", ["cell1", "cell2"], show=False)
 
     # Add clues as facts
     solver.section("Clues")
-    solver.fact(*[Number(r0, c0, num0) for r0, c0, num0 in clues])
+    solver.fact(*[Number(loc=Cell(r0, c0), num=num0) for r0, c0, num0 in clues])
 
     # Create variables
-    R = Variable("R")
-    C = Variable("C")
-    Radj = Variable("Radj")
-    Cadj = Variable("Cadj")
-    N = Variable("N")
-    # Useful aliases
-    cell = Cell(row=R, col=C)
-    cell_adj = Cell(row=Radj, col=Cadj)
+    R, C, Radj, Cadj, N = create_variables("R", "C", "Radj", "Cadj", "N")
 
     # Create all cells in the grid
     solver.section("Grid Definition")
+    cell = Cell(row=R, col=C)
     solver.when([R.in_(RangePool(0, r - 1)), C.in_(RangePool(0, c - 1))], cell)
-
-    # Define possible mine locations (any cell without a number)
-    solver.section("Mine Placement Rules")
-    solver.when(cell, Choice(Mine(R, C)))
-    solver.forbid(Number(R, C, N), Mine(R, C))
 
     # Define adjacent cells
     solver.section("Cell Adjacency")
+    cell_adj = Cell(row=Radj, col=Cadj)
     solver.when(
         [
             cell,
@@ -71,11 +61,16 @@ def main() -> None:
         Adjacent(cell, cell_adj),
     )
 
+    # Define possible mine locations
+    solver.section("Mine Placement Rules")
+    solver.when(cell, Choice(Mine(loc=cell)))
+    solver.forbid(Number(loc=cell, num=ANY), Mine(loc=cell))
+
     # Number constraints: each number indicates exactly how many mines are adjacent
     solver.section("Number Constraints")
     solver.when(
-        Number(R, C, N),
-        Choice(Mine(Radj, Cadj), condition=Adjacent(cell, cell_adj)).exactly(N),
+        Number(loc=cell, num=N),
+        Choice(Mine(loc=cell_adj), condition=Adjacent(cell, cell_adj)).exactly(N),
     )
 
     print(solver.render())
