@@ -15,7 +15,7 @@ class Puzzle:
     using pyclingo, with support for modular organization.
     """
 
-    def __init__(self, name: str = "puzzle"):
+    def __init__(self, name: str = "Puzzle"):
         """
         Initialize a new puzzle.
 
@@ -182,6 +182,7 @@ class Puzzle:
         Returns:
             str: The rendered ASP program.
         """
+        self._program.header = f"{self.name} by ASPuzzle"
         return self._program.render()
 
 
@@ -301,6 +302,3 @@ def cached_predicate(init_func: Callable[[Any], T]) -> property:
         return getattr(self, attr_name)
 
     return property(getter)
-
-
-# TODO: Add puzzle name header (requires creating header in ASPProgram)

@@ -17,7 +17,7 @@ def solve_minesweeper(data: str):
     rows, cols, clues = read_grid(data)
 
     # Create the puzzle
-    puzzle = Puzzle("Minesweeper")
+    puzzle = Puzzle("Minesweeper puzzle solver")
     grid = Grid(puzzle, rows, cols)
 
     # Define predicates
