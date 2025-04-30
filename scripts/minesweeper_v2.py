@@ -8,7 +8,6 @@ from pyclingo import (
     Not,
     NotEquals,
     Count,
-    create_variables,
 )
 from scripts.utils import read_grid
 

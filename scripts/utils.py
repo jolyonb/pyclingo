@@ -22,7 +22,7 @@ def read_grid(
     tuple[int, int, list[tuple[int, int, str]]],
 ]:
     """
-    Extract dimensions and clues from the input data.
+    Extract dimensions and clues from the input data. Note that the extraction converts to 1-based indexing!
 
     Args:
         data: The input grid as a string
@@ -42,6 +42,6 @@ def read_grid(
         for c, char in enumerate(line):
             if char != ".":
                 value = int(char) if convert_to_int else char
-                clues.append((r, c, value))
+                clues.append((r + 1, c + 1, value))
 
     return rows, cols, clues

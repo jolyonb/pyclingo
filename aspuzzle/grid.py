@@ -4,7 +4,7 @@ from pyclingo.value import SymbolicConstant, Variable, ANY
 
 
 class Grid(Module):
-    """Module for grid-based puzzles with rows and columns."""
+    """Module for grid-based puzzles with rows and columns. Note that this uses 1-based indexing!"""
 
     def __init__(
         self,
@@ -30,7 +30,7 @@ class Grid(Module):
         # Define grid cells
         self.section("Define cells in the grid")
         self.when(
-            [R.in_(RangePool(0, self.rows - 1)), C.in_(RangePool(0, self.cols - 1))],
+            [R.in_(RangePool(1, self.rows)), C.in_(RangePool(1, self.cols))],
             Cell(R, C),
         )
 
