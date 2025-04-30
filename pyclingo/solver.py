@@ -28,7 +28,7 @@ class ASPProgram:
     solved: bool = False
     satisfiable: bool | None = None
     exhausted: bool | None = None
-    model_count: int | None = None
+    solution_count: int | None = None
     statistics: dict[str, int] | None = None
 
     def __init__(self, header: str | None = None, default_segment: str = "Rules") -> None:
@@ -270,10 +270,10 @@ class ASPProgram:
 
         # Solve and yield models
         self.exhausted = False
-        self.model_count = 0
+        self.solution_count = 0
         with control.solve(yield_=True) as handle:
             for model in handle:
-                self.model_count += 1
+                self.solution_count += 1
                 self.satisfiable = True
                 yield self._convert_model_to_predicates(model, predicate_types)
 
