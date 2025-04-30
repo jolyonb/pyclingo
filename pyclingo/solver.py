@@ -23,17 +23,20 @@ class ASPProgram:
     """
 
     header: str | None = None
+    default_segment: str = "Rules"
+
     solved: bool = False
     satisfiable: bool | None = None
     exhausted: bool | None = None
     model_count: int | None = None
     statistics: dict[str, int] | None = None
 
-    def __init__(self, header: str | None = None) -> None:
+    def __init__(self, header: str | None = None, default_segment: str = "Rules") -> None:
         """Initialize an empty ASP program."""
         self._segments: defaultdict[str, list[ProgramElement]] = defaultdict(list)
         self._symbolic_constants: dict[str, int | str] = {}
         self.header = header
+        self.default_segment = default_segment
 
     def add_segment(self, segment: str) -> None:
         """Add a new segment to the program."""
@@ -41,27 +44,27 @@ class ASPProgram:
             raise ValueError(f"Segment '{segment}' already exists")
         self._segments[segment] = []
 
-    def fact(self, *predicates: Predicate, segment: str = "default") -> None:
+    def fact(self, *predicates: Predicate, segment: str | None = None) -> None:
         """Add one or more unconditional facts to the program."""
         assert all(isinstance(predicate, Predicate) for predicate in predicates)
         for predicate in predicates:
-            self._segments[segment].append(Rule(head=predicate))
+            self._segments[segment or self.default_segment].append(Rule(head=predicate))
 
     def when(
-        self, conditions: Term | list[Term], let: Term, segment: str = "default"
+        self, conditions: Term | list[Term], let: Term, segment: str | None = None
     ) -> None:
         """Create a clingo rule which sets the let term when all conditions are satisfied."""
         condition_list = conditions if isinstance(conditions, list) else [conditions]
         assert all(isinstance(condition, Term) for condition in condition_list)
         assert isinstance(let, Term)
-        self._segments[segment].append(Rule(head=let, body=condition_list))
+        self._segments[segment or self.default_segment].append(Rule(head=let, body=condition_list))
 
-    def forbid(self, *conditions: Term, segment: str = "default") -> None:
+    def forbid(self, *conditions: Term, segment: str | None = None) -> None:
         """Creates a clingo constraint which forbids the specified combination of conditions."""
         assert all(isinstance(condition, Term) for condition in conditions)
-        self._segments[segment].append(Rule(body=list(conditions)))
+        self._segments[segment or self.default_segment].append(Rule(body=list(conditions)))
 
-    def comment(self, text: str, segment: str = "default") -> None:
+    def comment(self, text: str, segment: str | None = None) -> None:
         """
         Add a comment to the program.
 
@@ -69,13 +72,13 @@ class ASPProgram:
             text: The comment text.
             segment: The segment to add this comment to
         """
-        self._segments[segment].append(Comment(text))
+        self._segments[segment or self.default_segment].append(Comment(text))
 
-    def blank_line(self, segment: str = "default") -> None:
+    def blank_line(self, segment: str | None = None) -> None:
         """Add a blank line to the program for formatting."""
-        self._segments[segment].append(BlankLine())
+        self._segments[segment or self.default_segment].append(BlankLine())
 
-    def section(self, title: str, segment: str = "default") -> None:
+    def section(self, title: str, segment: str | None = None) -> None:
         """
         Add a section header to the program.
 
@@ -180,7 +183,7 @@ class ASPProgram:
         # 3. Add program elements for each segment
         for segment_name, elements in self._segments.items():
             if len(self._segments) > 1 and len(elements) > 0:
-                lines.extend(("", f"% ===== {segment_name} ====="))
+                lines.extend(("", f"% ===== {segment_name.title()} ====="))
             lines.extend(element.render() for element in elements)
 
         # 4. Add show directives
@@ -363,6 +366,3 @@ class ASPProgram:
             result[pred_instance.get_name()].add(pred_instance)
 
         return dict(result)
-
-
-# TODO: Allow the default segment name to be configurable
