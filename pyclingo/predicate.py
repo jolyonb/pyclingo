@@ -170,11 +170,6 @@ class Predicate(BasicTerm):
         """
         return [(f.name, self[f.name]) for f in self.argument_fields()]
 
-    @property
-    def name(self) -> str:
-        """Get the name of this predicate with namespace if any."""
-        return self.get_name()
-
     @classmethod
     def get_name(cls) -> str:
         """Get the name of this predicate with namespace if any."""
@@ -222,10 +217,10 @@ class Predicate(BasicTerm):
             str: The string representation of the predicate.
         """
         if not self.argument_fields():
-            return self.name
+            return self.get_name()
 
         args_str = ", ".join(arg.render(as_argument=True) for arg in self.arguments)
-        return f"{self.name}({args_str})"
+        return f"{self.get_name()}({args_str})"
 
     def validate_in_context(self, is_in_head: bool) -> None:
         """
