@@ -1,6 +1,6 @@
 from aspuzzle.puzzle import Module, Puzzle, cached_predicate
 from pyclingo import Equals, Predicate, RangePool, create_variables, ExplicitPool
-from pyclingo.value import SymbolicConstant, Variable
+from pyclingo.value import SymbolicConstant, Variable, ANY
 
 
 class Grid(Module):
@@ -12,9 +12,10 @@ class Grid(Module):
         rows: int | SymbolicConstant,
         cols: int | SymbolicConstant,
         name: str = "grid",
+        primary_namespace: bool = False,
     ):
         """Initialize a grid module with specified dimensions."""
-        super().__init__(puzzle, name)
+        super().__init__(puzzle, name, primary_namespace)
 
         self.rows = rows
         self.cols = cols
@@ -22,12 +23,12 @@ class Grid(Module):
     @cached_predicate
     def Cell(self) -> type[Predicate]:
         """Get the Cell predicate for this grid."""
-        Cell = Predicate.define("cell", ["row", "col"], namespace=self.name, show=False)
+        Cell = Predicate.define("cell", ["row", "col"], namespace=self.namespace, show=False)
 
         R, C = create_variables("R", "C")
 
         # Define grid cells
-        self.section("Grid definition")
+        self.section("Define cells in the grid")
         self.when(
             [R.in_(RangePool(0, self.rows - 1)), C.in_(RangePool(0, self.cols - 1))],
             Cell(R, C),
@@ -46,7 +47,7 @@ class Grid(Module):
     def Direction(self) -> type[Predicate]:
         """Get the Direction predicate for this grid, defining all possible directions as vectors."""
         Direction = Predicate.define(
-            "direction", ["name", "vector"], namespace=self.name, show=False
+            "direction", ["name", "vector"], namespace=self.namespace, show=False
         )
 
         self.section("Define directions in the grid")
@@ -76,31 +77,16 @@ class Grid(Module):
     def OrthogonalDirection(self) -> type[Predicate]:
         """Get the OrthogonalDirection predicate, identifying orthogonal directions (N,S,E,W)."""
         OrthogonalDirection = Predicate.define(
-            "orthogonal_direction", ["name"], namespace=self.name, show=False
+            "orthogonal_direction", ["name"], namespace=self.namespace, show=False
         )
 
-        self.section("Orthogonal direction definition")
+        self.section("Orthogonal directions")
 
         # Define the 4 orthogonal directions
         orthogonal_dirs = ["n", "e", "s", "w"]
         self.fact(*[OrthogonalDirection(name=name) for name in orthogonal_dirs])
 
         return OrthogonalDirection
-
-    @cached_predicate
-    def VertexSharingDirection(self) -> type[Predicate]:
-        """Get the VertexSharingDirection predicate, identifying all 8 directions."""
-        VertexSharingDirection = Predicate.define(
-            "vertex_sharing_direction", ["name"], namespace=self.name, show=False
-        )
-
-        self.section("Vertex sharing direction definition")
-
-        # All 8 directions are vertex-sharing
-        vertex_dirs = ["n", "ne", "e", "se", "s", "sw", "w", "nw"]
-        self.fact(VertexSharingDirection(ExplicitPool(vertex_dirs)))
-
-        return VertexSharingDirection
 
     def directions(
         self, name_suffix: str = "", vector_suffix: str = "vec"
@@ -121,19 +107,11 @@ class Grid(Module):
         N = Variable(f"N{name_suffix}")
         return self.OrthogonalDirection(name=N)
 
-    def vertex_sharing_directions(self, name_suffix: str = "") -> Predicate:
-        """Get a vertex-sharing direction predicate with variable values."""
-        if name_suffix:
-            name_suffix = f"_{name_suffix}"
-
-        N = create_variables(f"N{name_suffix}")[0]
-        return self.VertexSharingDirection(name=N)
-
     @cached_predicate
     def Orthogonal(self) -> type[Predicate]:
         """Get the orthogonal adjacency predicate (cells that share an edge)."""
         Orthogonal = Predicate.define(
-            "orthogonal", ["cell1", "cell2"], namespace=self.name, show=False
+            "orthogonal", ["cell1", "cell2"], namespace=self.namespace, show=False
         )
 
         R, C = create_variables("R", "C")
@@ -166,9 +144,9 @@ class Grid(Module):
 
     @cached_predicate
     def VertexSharing(self) -> type[Predicate]:
-        """Get the vertex-sharing adjacency predicate (cells that share at least a vertex)."""
+        """Get the vertex-sharing adjacency predicate."""
         VertexSharing = Predicate.define(
-            "vertex_sharing", ["cell1", "cell2"], namespace=self.name, show=False
+            "vertex_sharing", ["cell1", "cell2"], namespace=self.namespace, show=False
         )
 
         R, C = create_variables("R", "C")
@@ -178,7 +156,6 @@ class Grid(Module):
 
         # Initialize predicates that we'll need
         _ = self.Direction
-        _ = self.VertexSharingDirection
 
         self.section("Vertex-sharing adjacency definition")
 
@@ -186,8 +163,7 @@ class Grid(Module):
         self.when(
             [
                 cell,
-                self.VertexSharingDirection(Dir),
-                self.Direction(Dir, vector=self.Cell(row=DR, col=DC)),
+                self.Direction(ANY, vector=self.Cell(row=DR, col=DC)),
                 adj_cell,
             ],
             VertexSharing(cell1=cell, cell2=adj_cell),

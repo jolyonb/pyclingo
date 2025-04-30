@@ -175,7 +175,7 @@ class Aggregate(Term, ABC):
         elements_str = []
 
         for element_tuple, conditions in self._elements:
-            element_str = ",".join(
+            element_str = ", ".join(
                 elem.render(as_argument=True) for elem in element_tuple
             )
 

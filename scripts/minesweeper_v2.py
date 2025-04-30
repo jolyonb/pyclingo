@@ -1,6 +1,15 @@
 from aspuzzle.grid import Grid
 from aspuzzle.puzzle import Puzzle
-from pyclingo import ANY, Choice, Predicate, Variable, Not, NotEquals, Count
+from pyclingo import (
+    ANY,
+    Choice,
+    Predicate,
+    Variable,
+    Not,
+    NotEquals,
+    Count,
+    create_variables,
+)
 from scripts.utils import read_grid
 
 def solve_minesweeper(data: str):
@@ -18,14 +27,14 @@ def solve_minesweeper(data: str):
 
     # Create the puzzle
     puzzle = Puzzle("Minesweeper puzzle solver")
-    grid = Grid(puzzle, rows, cols)
+    grid = Grid(puzzle, rows, cols, primary_namespace=True)
 
     # Define predicates
     Number = Predicate.define("number", ["loc", "num"], show=False)
     Mine = Predicate.define("mine", ["loc"], show=True)
 
     # Create variables
-    N = Variable("N")
+    N, R_adj, C_adj = create_variables("N", "R_adj", "C_adj")
     cell = grid.cell()
     cell_adj = grid.cell(suffix="adj")
 
@@ -34,13 +43,13 @@ def solve_minesweeper(data: str):
     puzzle.when(conditions=[cell, Not(Number(loc=cell, num=ANY))], let=Choice(Mine(loc=cell)))
 
     # Number constraints: each number indicates exactly how many mines are adjacent
-    puzzle.section("Numbers indicate number of adjacent mines")
+    puzzle.section("Numbers indicate the number of adjacent mines")
     puzzle.forbid(
         Number(loc=cell, num=N),
         NotEquals(
             Count(
-                Mine(loc=cell_adj),
-                condition=grid.VertexSharing(cell1=cell, cell2=cell_adj),
+                (R_adj, C_adj),
+                condition=[grid.VertexSharing(cell1=cell, cell2=cell_adj), Mine(loc=cell_adj)],
             ),
             N,
         ),
@@ -55,6 +64,8 @@ def solve_minesweeper(data: str):
     for solution in puzzle.solve():
         print(solution)
 
+    print()
+    print(f"{puzzle.solution_count} solutions")
     print(puzzle.statistics)
 
 

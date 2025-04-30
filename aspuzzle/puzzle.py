@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import curses.ascii
 from typing import Callable, Generator, Type, Any, TypeVar
 
 from pyclingo import ASPProgram, Predicate
@@ -166,9 +167,9 @@ class Puzzle:
         return self._program.satisfiable
 
     @property
-    def model_count(self) -> int | None:
-        """The number of models found, or None if not solved yet."""
-        return self._program.model_count
+    def solution_count(self) -> int | None:
+        """The number of solutions found, or None if not solved yet."""
+        return self._program.solution_count
 
     @property
     def statistics(self) -> dict[str, int] | None:
@@ -194,19 +195,23 @@ class Module:
     components of a puzzle. Each module has its own namespace in the ASP program.
     """
 
-    def __init__(self, puzzle: Puzzle, name: str):
+    def __init__(self, puzzle: Puzzle, name: str, primary_namespace: bool = False):
         """
         Initialize a module.
 
         Args:
             puzzle: The puzzle this module belongs to
             name: The name of this module (used as the segment name)
+            primary_namespace: If True, then do not add namespace prefixes for this module
         """
         if type(self) == Module:
             raise ValueError("Cannot instantiate an abstract Module object")
 
         self._puzzle = puzzle
-        self._name = name
+        if not all(c.isalnum() for c in name) or not name[0].isalpha():
+            raise ValueError(f"Bad name {name}; must be alphanumeric and start with a letter")
+        self._name = name.lower() 
+        self._namespace = "" if primary_namespace else f"{self._name}"
 
         # Register with the puzzle
         puzzle.register_module(self)
@@ -215,6 +220,11 @@ class Module:
     def name(self) -> str:
         """Get the name of this module."""
         return self._name
+
+    @property
+    def namespace(self) -> str:
+        """Get the namespace for this module."""
+        return self._namespace
 
     @property
     def puzzle(self) -> Puzzle:
