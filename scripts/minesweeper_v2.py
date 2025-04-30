@@ -34,7 +34,7 @@ def solve_minesweeper(data: str):
     Mine = Predicate.define("mine", ["loc"], show=True)
 
     # Create variables
-    N, R_adj, C_adj = create_variables("N", "R_adj", "C_adj")
+    N = Variable("N")
     cell = grid.cell()
     cell_adj = grid.cell(suffix="adj")
 
@@ -48,7 +48,7 @@ def solve_minesweeper(data: str):
         Number(loc=cell, num=N),
         NotEquals(
             Count(
-                (R_adj, C_adj),
+                cell_adj,
                 condition=[grid.VertexSharing(cell1=cell, cell2=cell_adj), Mine(loc=cell_adj)],
             ),
             N,
