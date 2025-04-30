@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Sequence
 
 from pyclingo.predicate import Predicate
 from pyclingo.term import BasicTerm
-from pyclingo.value import Constant, ConstantBase
+from pyclingo.value import Constant, ConstantBase, StringConstant
 
 if TYPE_CHECKING:
     from pyclingo.types import PREDICATE_CLASS_TYPE, VARIABLE_TYPE
@@ -165,7 +165,7 @@ class ExplicitPool(Pool):
     Explicit pools can contain ConstantBase objects or grounded Predicates.
     """
 
-    def __init__(self, elements: Sequence[ConstantBase | Predicate]):
+    def __init__(self, elements: Sequence[int | str | ConstantBase | Predicate]):
         """
         Initialize an explicit pool with a sequence of elements.
 
@@ -182,15 +182,20 @@ class ExplicitPool(Pool):
         self._elements = []
 
         for element in elements:
-            if not isinstance(element, (ConstantBase, Predicate)):
+            if not isinstance(element, (int, str, ConstantBase, Predicate)):
                 raise TypeError(
-                    f"Pool element must be a ConstantBase or Predicate, got {type(element).__name__}"
+                    f"Pool element must be an int, str, ConstantBase or Predicate, got {type(element).__name__}"
                 )
 
             if isinstance(element, Predicate) and not element.is_grounded:
                 raise ValueError(
                     f"Predicate in pool must be grounded: {element.render()}"
                 )
+
+            if isinstance(element, str):
+                element = StringConstant(element)
+            elif isinstance(element, int):
+                element = Constant(element)
 
             self._elements.append(element)
 
@@ -228,7 +233,7 @@ class ExplicitPool(Pool):
         Returns:
             str: The string representation of the pool, e.g., "1;3;5" or "(1;3;5)".
         """
-        elements_str = ";".join(
+        elements_str = "; ".join(
             element.render(as_argument=True) for element in self._elements
         )
 
