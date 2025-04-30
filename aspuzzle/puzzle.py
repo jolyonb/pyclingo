@@ -60,18 +60,18 @@ class Puzzle:
         self._program.add_segment(module.name)
 
     # Forward methods to ASPProgram with segment
-    def fact(self, *predicates: Predicate, segment: str = "default") -> None:
+    def fact(self, *predicates: Predicate, segment: str | None = None) -> None:
         """
         Add one or more unconditional facts to the program.
 
         Args:
             *predicates: One or more predicate instances to add as facts
-            segment: The segment to add these facts to (default: "default")
+            segment: The segment to add these facts to
         """
         self._program.fact(*predicates, segment=segment)
 
     def when(
-        self, conditions: Term | list[Term], let: Term, segment: str = "default"
+        self, conditions: Term | list[Term], let: Term, segment: str | None = None
     ) -> None:
         """
         Create a rule which sets the 'let' term when all conditions are satisfied.
@@ -79,46 +79,46 @@ class Puzzle:
         Args:
             conditions: One or more conditions that must be satisfied
             let: The term that becomes true when conditions are met
-            segment: The segment to add this rule to (default: "default")
+            segment: The segment to add this rule to
         """
         self._program.when(conditions, let, segment=segment)
 
-    def forbid(self, *conditions: Term, segment: str = "default") -> None:
+    def forbid(self, *conditions: Term, segment: str | None = None) -> None:
         """
         Create a constraint which forbids the specified combination of conditions.
 
         Args:
             *conditions: One or more conditions that must not be simultaneously satisfied
-            segment: The segment to add this constraint to (default: "default")
+            segment: The segment to add this constraint to
         """
         self._program.forbid(*conditions, segment=segment)
 
-    def comment(self, text: str, segment: str = "default") -> None:
+    def comment(self, text: str, segment: str | None = None) -> None:
         """
         Add a comment to the program.
 
         Args:
             text: The comment text
-            segment: The segment to add this comment to (default: "default")
+            segment: The segment to add this comment to
         """
         self._program.comment(text, segment=segment)
 
-    def blank_line(self, segment: str = "default") -> None:
+    def blank_line(self, segment: str | None = None) -> None:
         """
         Add a blank line to the program for formatting.
 
         Args:
-            segment: The segment to add this blank line to (default: "default")
+            segment: The segment to add this blank line to
         """
         self._program.blank_line(segment=segment)
 
-    def section(self, title: str, segment: str = "default") -> None:
+    def section(self, title: str, segment: str | None = None) -> None:
         """
         Add a section header to the program.
 
         Args:
             title: The section title
-            segment: The segment to add this section header to (default: "default")
+            segment: The segment to add this section header to
         """
         self._program.section(title, segment=segment)
 
