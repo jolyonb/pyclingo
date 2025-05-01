@@ -1,6 +1,6 @@
 from aspuzzle.puzzle import Module, Puzzle, cached_predicate
-from pyclingo import Equals, Predicate, RangePool, create_variables, ExplicitPool
-from pyclingo.value import SymbolicConstant, Variable, ANY
+from pyclingo import Equals, ExplicitPool, Predicate, RangePool, create_variables
+from pyclingo.value import ANY, SymbolicConstant, Variable
 
 
 class Grid(Module):
@@ -12,6 +12,7 @@ class Grid(Module):
         rows: int | SymbolicConstant,
         cols: int | SymbolicConstant,
         name: str = "grid",
+        include_outside_border: bool = False,
         primary_namespace: bool = False,
     ):
         """Initialize a grid module with specified dimensions."""
@@ -19,20 +20,32 @@ class Grid(Module):
 
         self.rows = rows
         self.cols = cols
+        self.include_outside_border = include_outside_border
 
     @cached_predicate
     def Cell(self) -> type[Predicate]:
         """Get the Cell predicate for this grid."""
-        Cell = Predicate.define("cell", ["row", "col"], namespace=self.namespace, show=False)
+        Cell = Predicate.define(
+            "cell", ["row", "col"], namespace=self.namespace, show=False
+        )
+        self._Cell = Cell  # To avoid circular definitions with Outside
 
         R, C = create_variables("R", "C")
 
         # Define grid cells
         self.section("Define cells in the grid")
+        offset = 1 if self.include_outside_border else 0
         self.when(
-            [R.in_(RangePool(1, self.rows)), C.in_(RangePool(1, self.cols))],
+            [
+                R.in_(RangePool(1 - offset, self.rows + offset)),
+                C.in_(RangePool(1 - offset, self.cols + offset)),
+            ],
             Cell(R, C),
         )
+
+        if self.include_outside_border:
+            # Define the Outside predicate
+            _ = self.Outside
 
         return Cell
 
@@ -42,6 +55,44 @@ class Grid(Module):
             suffix = f"_{suffix}"
         R, C = create_variables(f"R{suffix}", f"C{suffix}")
         return self.Cell(row=R, col=C)
+
+    @cached_predicate
+    def Outside(self) -> type[Predicate]:
+        """Get the Outside predicate identifying cells in the outside border."""
+        if not self.include_outside_border:
+            raise ValueError("Grid does not include outside border")
+
+        Outside = Predicate.define(
+            "outside", ["loc"], namespace=self.namespace, show=False
+        )
+
+        R, C = create_variables("R", "C")
+        cell = self.Cell(R, C)
+
+        self.section("Define outside border cells")
+
+        # Top and bottom rows
+        self.when(
+            [
+                R.in_([0, self.rows + 1]),
+                C.in_(RangePool(0, self.cols + 1)),
+            ],
+            Outside(loc=cell),
+        )
+        # Left and right columns (but not double counting the corners)
+        self.when(
+            [
+                C.in_([0, self.cols + 1]),
+                R.in_(RangePool(1, self.rows)),
+            ],
+            Outside(loc=cell),
+        )
+
+        return Outside
+
+    def outside(self, suffix: str = "") -> Predicate:
+        """Get an outside predicate for this grid with variable values."""
+        return self.Outside(self.cell(suffix=suffix))
 
     @cached_predicate
     def Direction(self) -> type[Predicate]:

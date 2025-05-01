@@ -419,8 +419,8 @@ class Comparison(Term):
         Returns:
             str: The string representation of the comparison.
         """
-        left_str = self.left_term.render(as_argument=True)
-        right_str = self.right_term.render(as_argument=True)
+        left_str = self.left_term.render(as_argument=False)
+        right_str = self.right_term.render(as_argument=False)
 
         return f"{left_str} {self.operator.value} {right_str}"
 
