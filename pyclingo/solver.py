@@ -256,8 +256,7 @@ class ASPProgram:
 
         # Configure and prepare the control object
         control = clingo.Control()
-        if models > 0:
-            control.configuration.solve.models = models
+        control.configuration.solve.models = models
         if timeout > 0:
             control.configuration.solve.timeout = timeout
 
