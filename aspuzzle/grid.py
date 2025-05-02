@@ -1,5 +1,6 @@
 from aspuzzle.puzzle import Module, Puzzle, cached_predicate
-from pyclingo import Equals, ExplicitPool, Predicate, RangePool, create_variables
+from pyclingo import Equals, ExplicitPool, Predicate, RangePool, create_variables, Not
+from pyclingo.conditional_literal import ConditionalLiteral
 from pyclingo.value import ANY, SymbolicConstant, Variable
 
 
@@ -225,3 +226,13 @@ class Grid(Module):
     def vertex_sharing(self, suffix_1: str = "", suffix_2: str = "adj") -> Predicate:
         """Get the vertex-sharing adjacency predicate with variable values."""
         return self.VertexSharing(cell1=self.cell(suffix_1), cell2=self.cell(suffix_2))
+
+
+def do_not_show_outside(pred: Predicate, grid: Grid) -> None:
+    """
+    This helper function sets the show directive on a predicate to not display for cells outside the grid.
+    The predicate must be instantiated with the grid.cell() location.
+    """
+    pred.__class__.set_show_directive(
+        ConditionalLiteral(pred, [pred, Not(grid.outside())])
+    )

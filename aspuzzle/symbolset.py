@@ -43,12 +43,13 @@ class SymbolSet(Module):
         self._excluded_cells: list[Predicate] = []
         self.fill_all_squares = fill_all_squares
 
-    def add_symbol(self, name: str) -> Self:
+    def add_symbol(self, name: str, show: bool = True) -> Self:
         """
         Add a new symbol to the set.
 
         Args:
             name: The name of the symbol
+            show: Whether to include this symbol in the show directive
 
         Returns:
             Self for method chaining
@@ -58,7 +59,7 @@ class SymbolSet(Module):
 
         # Define the predicate for this symbol
         symbol_pred = Predicate.define(
-            name, ["loc"], namespace=self.namespace, show=True
+            name, ["loc"], namespace=self.namespace, show=show
         )
 
         self._symbols[name] = SymbolInfo(predicate=symbol_pred, is_range=False)
@@ -70,6 +71,7 @@ class SymbolSet(Module):
         pool: Pool,
         name: str = "number",
         type_name: str = "num",
+        show: bool = True,
     ) -> Self:
         """
         Add a new symbol to the set that comes from a set of related objects.
@@ -78,6 +80,7 @@ class SymbolSet(Module):
             pool: Pool of values to use as symbols
             name: Base name for the predicate
             type_name: Name of the value parameter in the predicate
+            show: Whether to include this symbol in the show directive
 
         Returns:
             Self for method chaining
@@ -87,7 +90,7 @@ class SymbolSet(Module):
 
         # Define the predicate for this symbol type
         symbol_pred = Predicate.define(
-            name, ["loc", type_name], namespace=self.namespace, show=True
+            name, ["loc", type_name], namespace=self.namespace, show=show
         )
 
         self._symbols[name] = SymbolInfo(
@@ -181,3 +184,5 @@ class SymbolSet(Module):
 
 
 # TODO: Helper conditions on count constraints
+
+# TODO: Helper conoditions for contiguous symbols

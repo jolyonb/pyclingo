@@ -51,6 +51,8 @@ def solve_minesweeper(data: str):
         ),
     )
 
+    # TODO: Optional mine count constraint
+
     # Add clues as facts
     puzzle.fact(*[Number(loc=grid.Cell(row=r, col=c), num=num) for r, c, num in clues], segment="Clues")
 
