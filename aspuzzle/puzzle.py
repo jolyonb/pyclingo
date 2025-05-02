@@ -16,6 +16,8 @@ class Puzzle:
     using pyclingo, with support for modular organization.
     """
 
+    finalized: bool = False
+
     def __init__(self, name: str = "Puzzle"):
         """
         Initialize a new puzzle.
@@ -183,6 +185,12 @@ class Puzzle:
         Returns:
             str: The rendered ASP program.
         """
+        # Finalize all modules in an idempotent way (we may render multiple times)
+        if not self.finalized:
+            for module in self._modules.values():
+                module.finalize()
+            self.finalized = True
+
         self._program.header = f"{self.name} by ASPuzzle"
         return self._program.render()
 
@@ -282,6 +290,12 @@ class Module:
             title: The section title
         """
         self._puzzle.section(title, segment=self._name)
+
+    def finalize(self) -> None:
+        """
+        Called just before rendering in case the module needs to add any rules based on an internal state.
+        """
+        pass
 
 
 T = TypeVar("T")
