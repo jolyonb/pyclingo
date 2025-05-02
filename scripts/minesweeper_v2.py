@@ -1,11 +1,10 @@
 from aspuzzle.grid import Grid
 from aspuzzle.puzzle import Puzzle
+from aspuzzle.symbolset import SymbolSet
 from pyclingo import (
     ANY,
-    Choice,
     Predicate,
     Variable,
-    Not,
     NotEquals,
     Count,
 )
@@ -26,20 +25,18 @@ def solve_minesweeper(data: str):
 
     # Create the puzzle
     puzzle = Puzzle("Minesweeper puzzle solver")
-    grid = Grid(puzzle, rows, cols, primary_namespace=True)
+    grid = Grid(puzzle, rows, cols)
 
     # Define predicates
     Number = Predicate.define("number", ["loc", "num"], show=False)
-    Mine = Predicate.define("mine", ["loc"], show=True)
 
     # Create variables
     N = Variable("N")
     cell = grid.cell()
     cell_adj = grid.cell(suffix="adj")
 
-    # Define possible mine locations
-    puzzle.section("Any cell without a number can have a mine")
-    puzzle.when(conditions=[cell, Not(Number(loc=cell, num=ANY))], let=Choice(Mine(loc=cell)))
+    # Define mine placement
+    symbols = SymbolSet(grid).add_symbol("mine").excluded_symbol(Number(loc=cell, num=ANY))
 
     # Number constraints: each number indicates exactly how many mines are adjacent
     puzzle.section("Numbers indicate the number of adjacent mines")
@@ -48,15 +45,14 @@ def solve_minesweeper(data: str):
         NotEquals(
             Count(
                 cell_adj,
-                condition=[grid.VertexSharing(cell1=cell, cell2=cell_adj), Mine(loc=cell_adj)],
+                condition=[grid.VertexSharing(cell1=cell, cell2=cell_adj), symbols["mine"](loc=cell_adj)],
             ),
             N,
         ),
     )
 
     # Add clues as facts
-    puzzle.section("Clues")
-    puzzle.fact(*[Number(loc=grid.Cell(row=r, col=c), num=num) for r, c, num in clues])
+    puzzle.fact(*[Number(loc=grid.Cell(row=r, col=c), num=num) for r, c, num in clues], segment="Clues")
 
     print(puzzle.render())
 

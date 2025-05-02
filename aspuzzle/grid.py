@@ -13,7 +13,7 @@ class Grid(Module):
         cols: int | SymbolicConstant,
         name: str = "grid",
         include_outside_border: bool = False,
-        primary_namespace: bool = False,
+        primary_namespace: bool = True,
     ):
         """Initialize a grid module with specified dimensions."""
         super().__init__(puzzle, name, primary_namespace)

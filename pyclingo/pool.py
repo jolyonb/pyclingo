@@ -280,3 +280,6 @@ class ExplicitPool(Pool):
             variables.update(element.collect_variables())
 
         return variables
+
+
+# TODO: Helper function that creates a pool object from a python sequence
