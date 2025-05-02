@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import TYPE_CHECKING, Union, Any
+from typing import TYPE_CHECKING, Any, Union
 
 from pyclingo.operators import Operation
 from pyclingo.term import BasicTerm
@@ -136,9 +136,7 @@ class Variable(Value):
             ValueError: If the name doesn't start with an uppercase letter and isn't '_'.
         """
         if name != "_" and not name[0].isupper():
-            raise ValueError(
-                f"Variable name must start with an uppercase letter or be '_': {name}"
-            )
+            raise ValueError(f"Variable name must start with an uppercase letter or be '_': {name}")
         self._name = name
 
     @property
@@ -195,9 +193,7 @@ class Variable(Value):
         Raises:
             ValueError: When trying to validate a standalone variable in a rule.
         """
-        raise ValueError(
-            "Variables can only be used as arguments to predicates or other terms"
-        )
+        raise ValueError("Variables can only be used as arguments to predicates or other terms")
 
     def collect_predicates(self) -> set[PREDICATE_CLASS_TYPE]:
         """
@@ -312,9 +308,7 @@ class Variable(Value):
                 elif isinstance(element, (ConstantBase, Predicate)):
                     # Ensure the predicate is grounded
                     if isinstance(element, Predicate) and not element.is_grounded:
-                        raise ValueError(
-                            f"Predicate in pool must be grounded: {element.render()}"
-                        )
+                        raise ValueError(f"Predicate in pool must be grounded: {element.render()}")
                     elements.append(element)
                 else:
                     raise TypeError(
@@ -344,9 +338,7 @@ class Variable(Value):
                 pool = ExplicitPool(elements)
 
         else:
-            raise TypeError(
-                f"Expected Pool, list, tuple, or range, got {type(pool_or_range).__name__}"
-            )
+            raise TypeError(f"Expected Pool, list, tuple, or range, got {type(pool_or_range).__name__}")
 
         # Create a comparison: Variable = Pool
         return Comparison(self, ComparisonOperator.EQUAL, pool)
@@ -382,9 +374,7 @@ class ConstantBase(Value, ABC):
         Raises:
             ValueError: When trying to validate a standalone constant in a rule.
         """
-        raise ValueError(
-            "Constants can only be used as arguments to predicates or other terms"
-        )
+        raise ValueError("Constants can only be used as arguments to predicates or other terms")
 
     def collect_predicates(self) -> set[PREDICATE_CLASS_TYPE]:
         """
@@ -435,9 +425,7 @@ class Constant(ConstantBase):
         """
 
         if not isinstance(value, int):
-            raise TypeError(
-                f"Constant value must be an integer, got {type(value).__name__}"
-            )
+            raise TypeError(f"Constant value must be an integer, got {type(value).__name__}")
         self._value = value
 
     @property
@@ -500,9 +488,7 @@ class StringConstant(ConstantBase):
             TypeError: If the value is not a string.
         """
         if not isinstance(value, str):
-            raise TypeError(
-                f"String constant value must be a string, got {type(value).__name__}"
-            )
+            raise TypeError(f"String constant value must be a string, got {type(value).__name__}")
 
         if '"' in value or "'" in value:
             raise ValueError(f"String constant cannot contain quotation marks: {value}")
@@ -571,14 +557,10 @@ class SymbolicConstant(ConstantBase):
             ValueError: If the value doesn't start with a lowercase letter or contains invalid characters.
         """
         if not value or not value[0].islower():
-            raise ValueError(
-                f"Symbolic constant must start with a lowercase letter: {value}"
-            )
+            raise ValueError(f"Symbolic constant must start with a lowercase letter: {value}")
 
         if not all(c.isalnum() or c == "_" for c in value):
-            raise ValueError(
-                f"Symbolic constant can only contain letters, digits, and underscores: {value}"
-            )
+            raise ValueError(f"Symbolic constant can only contain letters, digits, and underscores: {value}")
 
         self._value = value
 
@@ -632,7 +614,9 @@ class SymbolicConstant(ConstantBase):
         """
         return str(self.value)
 
+
 ANY = Variable("_")
+
 
 def create_variables(*names) -> tuple[Variable, ...]:
     """Create multiple Variable objects at once.
@@ -647,5 +631,6 @@ def create_variables(*names) -> tuple[Variable, ...]:
         X, Y, Z = create_variables("X", "Y", "Z")
     """
     return tuple(Variable(name) for name in names)
+
 
 # TODO: Add hash and eq methods for all things that I need to compare via sets!

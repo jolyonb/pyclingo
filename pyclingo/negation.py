@@ -102,9 +102,7 @@ class DefaultNegation(NegatedLiteral):
         # Validate term type
         # TODO: Add Aggregate and ConditionalLiteral when implemented
         if not isinstance(term, (Predicate, Comparison, NegatedLiteral)):
-            raise TypeError(
-                "Default negation can only be applied to predicates, comparisons, or already negated terms"
-            )
+            raise TypeError("Default negation can only be applied to predicates, comparisons, or already negated terms")
 
         # Handle nested default negations
         if isinstance(term, DefaultNegation):
@@ -175,9 +173,7 @@ class ClassicalNegation(NegatedLiteral):
             TypeError: If the term is not a Predicate or ClassicalNegation.
         """
         if not isinstance(term, (Predicate, ClassicalNegation)):
-            raise TypeError(
-                "Classical negation can only be applied to predicates or classical negations"
-            )
+            raise TypeError("Classical negation can only be applied to predicates or classical negations")
 
         # Check if we're negating a negation: -(-p) -> simplify to p
         actual_term = term.term if isinstance(term, ClassicalNegation) else term

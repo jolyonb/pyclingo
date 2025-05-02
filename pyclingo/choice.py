@@ -32,9 +32,7 @@ class Choice(Term):
     def __init__(
         self,
         element: CHOICE_ELEMENT_TYPE,
-        condition: Union[
-            CHOICE_CONDITION_TYPE, list[CHOICE_CONDITION_TYPE], None
-        ] = None,
+        condition: Union[CHOICE_CONDITION_TYPE, list[CHOICE_CONDITION_TYPE], None] = None,
     ):
         """
         Initialize a choice rule with a required initial element and optional condition.
@@ -48,9 +46,7 @@ class Choice(Term):
             TypeError: If element or condition is not of the expected type
         """
         # Initialize internal state
-        self._elements: list[
-            tuple[CHOICE_ELEMENT_TYPE, list[CHOICE_CONDITION_TYPE]]
-        ] = []
+        self._elements: list[tuple[CHOICE_ELEMENT_TYPE, list[CHOICE_CONDITION_TYPE]]] = []
         self._min_cardinality: None | Value = None
         self._max_cardinality: None | Value = None
 
@@ -60,9 +56,7 @@ class Choice(Term):
     def add(
         self,
         element: CHOICE_ELEMENT_TYPE,
-        condition: Union[
-            CHOICE_CONDITION_TYPE, list[CHOICE_CONDITION_TYPE], None
-        ] = None,
+        condition: Union[CHOICE_CONDITION_TYPE, list[CHOICE_CONDITION_TYPE], None] = None,
     ) -> Self:
         """
         Add another element to the choice rule.
@@ -134,9 +128,7 @@ class Choice(Term):
         """
         # Check type
         if not isinstance(count, (int, Value)):
-            raise TypeError(
-                f"{description} must be an integer or Value, got {type(count).__name__}"
-            )
+            raise TypeError(f"{description} must be an integer or Value, got {type(count).__name__}")
 
         # Reject string constants which don't make sense for cardinality
         if isinstance(count, StringConstant):
@@ -144,9 +136,7 @@ class Choice(Term):
 
         # Check for negative integers
         if isinstance(count, int) and count < 0:
-            raise ValueError(
-                f"{description} must be a non-negative integer, got {count}"
-            )
+            raise ValueError(f"{description} must be a non-negative integer, got {count}")
 
         return Constant(count) if isinstance(count, int) else count
 
@@ -351,9 +341,7 @@ class Choice(Term):
             ValueError: When trying to use a choice rule in a rule body.
         """
         if not is_in_head:
-            raise ValueError(
-                "Choice rules can only be used in rule heads, not in rule bodies"
-            )
+            raise ValueError("Choice rules can only be used in rule heads, not in rule bodies")
 
     def collect_predicates(self) -> set[PREDICATE_CLASS_TYPE]:
         """

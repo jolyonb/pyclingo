@@ -8,8 +8,8 @@ from pyclingo.term import BasicTerm
 from pyclingo.value import Constant, ConstantBase, StringConstant
 
 if TYPE_CHECKING:
-    from pyclingo.types import PREDICATE_CLASS_TYPE, VARIABLE_TYPE
     from pyclingo.expression import Expression
+    from pyclingo.types import PREDICATE_CLASS_TYPE, VARIABLE_TYPE
 
 
 class Pool(BasicTerm, ABC):
@@ -63,16 +63,12 @@ class RangePool(Pool):
             end = Constant(end)
 
         if not isinstance(start, (ConstantBase, Expression)):
-            raise TypeError(
-                f"Range start must be an int, ConstantBase or Expression, got {type(start).__name__}"
-            )
+            raise TypeError(f"Range start must be an int, ConstantBase or Expression, got {type(start).__name__}")
         if isinstance(start, Expression) and not start.is_grounded:
             raise ValueError("Expression in range start must be grounded")
 
         if not isinstance(end, (ConstantBase, Expression)):
-            raise TypeError(
-                f"Range end must be an int, ConstantBase or Expression, got {type(end).__name__}"
-            )
+            raise TypeError(f"Range end must be an int, ConstantBase or Expression, got {type(end).__name__}")
         if isinstance(end, Expression) and not end.is_grounded:
             raise ValueError("Expression in range end must be grounded")
 
@@ -188,9 +184,7 @@ class ExplicitPool(Pool):
                 )
 
             if isinstance(element, Predicate) and not element.is_grounded:
-                raise ValueError(
-                    f"Predicate in pool must be grounded: {element.render()}"
-                )
+                raise ValueError(f"Predicate in pool must be grounded: {element.render()}")
 
             if isinstance(element, str):
                 element = StringConstant(element)
@@ -233,9 +227,7 @@ class ExplicitPool(Pool):
         Returns:
             str: The string representation of the pool, e.g., "1;3;5" or "(1;3;5)".
         """
-        elements_str = "; ".join(
-            element.render(as_argument=True) for element in self._elements
-        )
+        elements_str = "; ".join(element.render(as_argument=True) for element in self._elements)
 
         return elements_str if as_argument else f"({elements_str})"
 
