@@ -1,17 +1,26 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
-from typing import Optional, Self
+from typing import TYPE_CHECKING, Optional, Self
 
 from aspuzzle.grid import Grid
 from aspuzzle.puzzle import Module
 from pyclingo import (
     Choice,
+    Count,
+    Equals,
     Not,
+    NotEquals,
     Predicate,
     Variable,
 )
 from pyclingo.expression import Comparison
 from pyclingo.negation import NegatedLiteral
 from pyclingo.pool import Pool
+
+if TYPE_CHECKING:
+    from pyclingo.aggregates import AGGREGATE_CONDITION_TYPE
+    from pyclingo.types import CONSTANT_NUMBER
 
 
 @dataclass
@@ -183,6 +192,84 @@ class SymbolSet(Module):
         self.when(conditions, choice)
 
 
-# TODO: Helper conditions on count constraints
+def set_count_constraint(
+    grid: Grid,
+    predicate: Predicate,
+    exactly: CONSTANT_NUMBER | None = None,
+    not_equal: CONSTANT_NUMBER | None = None,
+    at_least: CONSTANT_NUMBER | None = None,
+    at_most: CONSTANT_NUMBER | None = None,
+    greater_than: CONSTANT_NUMBER | None = None,
+    less_than: CONSTANT_NUMBER | None = None,
+    extra_conditions: AGGREGATE_CONDITION_TYPE
+    | list[AGGREGATE_CONDITION_TYPE]
+    | None = None,
+) -> None:
+    """
+    Set a count constraint on cells matching a specific predicate pattern.
 
-# TODO: Helper conoditions for contiguous symbols
+    Args:
+        grid: The grid object
+        predicate: The predicate instance to count. IMPORTANT: This predicate must be
+                  instantiated with grid.cell() as one of its fields (typically the 'loc' field)
+        exactly: The exact count (==)
+        not_equal: The count must not equal this value (!=)
+        at_least: The minimum count, inclusive (>=)
+        at_most: The maximum count, inclusive (<=)
+        greater_than: The count must be greater than this value (>)
+        less_than: The count must be less than this value (<)
+        extra_conditions: Optional list of additional conditions for the count
+
+    TODO: Option for the count to be in an ExplicitPool
+    """
+    # Get the puzzle from the grid
+    puzzle = grid.puzzle
+
+    # Check that at least one comparison is set
+    comparisons = [exactly, not_equal, at_least, at_most, greater_than, less_than]
+    if all(comp is None for comp in comparisons):
+        raise ValueError("Must specify at least one comparison constraint")
+
+    # Build the condition list
+    conditions: list[AGGREGATE_CONDITION_TYPE] = [predicate]
+    if extra_conditions:
+        if not isinstance(extra_conditions, list):
+            extra_conditions = [extra_conditions]
+        conditions.extend(extra_conditions)
+
+    # Create a variable for the count
+    C = Variable("Counter")
+
+    # Create the constraint terms list
+    constraint_terms = [Equals(C, Count(grid.cell(), condition=conditions))]
+
+    # Add constraint terms using separate if statements
+    if exactly is not None:
+        # Forbid C != exactly, which means we require C == exactly
+        constraint_terms.append(NotEquals(C, exactly))
+
+    if not_equal is not None:
+        # Forbid C == not_equal, which means we require C != not_equal
+        constraint_terms.append(Equals(C, not_equal))
+
+    if at_least is not None:
+        # Forbid C < at_least, which means we require C >= at_least
+        constraint_terms.append(C < at_least)
+
+    if at_most is not None:
+        # Forbid C > at_most, which means we require C <= at_most
+        constraint_terms.append(C > at_most)
+
+    if greater_than is not None:
+        # Forbid C <= greater_than, which means we require C > greater_than
+        constraint_terms.append(C <= greater_than)
+
+    if less_than is not None:
+        # Forbid C >= less_than, which means we require C < less_than
+        constraint_terms.append(C >= less_than)
+
+    # Apply all constraints at once
+    puzzle.forbid(*constraint_terms)
+
+
+# TODO: Helper conditions for contiguous symbols

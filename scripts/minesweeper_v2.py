@@ -1,6 +1,6 @@
 from aspuzzle.grid import Grid
 from aspuzzle.puzzle import Puzzle
-from aspuzzle.symbolset import SymbolSet
+from aspuzzle.symbolset import SymbolSet, set_count_constraint
 from pyclingo import (
     ANY,
     Predicate,
@@ -10,12 +10,13 @@ from pyclingo import (
 )
 from scripts.utils import read_grid
 
-def solve_minesweeper(data: str):
+def solve_minesweeper(data: str, num_mines: int | None = None):
     """
     Solve a Minesweeper puzzle from the given string data.
 
     Args:
         data: String representation of the puzzle
+        num_mines: Number of mines to place
 
     Returns:
         A generator yielding solutions
@@ -51,7 +52,10 @@ def solve_minesweeper(data: str):
         ),
     )
 
-    # TODO: Optional mine count constraint
+    # Impose mine count constraint
+    if num_mines:
+        puzzle.section("Mine count constraint")
+        set_count_constraint(grid, symbols["mine"](loc=grid.cell()), exactly=num_mines)
 
     # Add clues as facts
     puzzle.fact(*[Number(loc=grid.Cell(row=r, col=c), num=num) for r, c, num in clues], segment="Clues")
@@ -75,7 +79,7 @@ def main():
 ..12.
 """
 
-    solve_minesweeper(test_data)
+    solve_minesweeper(test_data, 7)
 
 
 if __name__ == "__main__":
