@@ -42,22 +42,14 @@ def solve_minesweeper(data: str, num_mines: int | None = None):
 
     # Number constraints: each number indicates exactly how many mines are adjacent
     puzzle.section("Numbers indicate the number of adjacent mines")
-    puzzle.when(
-        [
-            Number(loc=cell, num=N),
-            Equals(
-                Minecount,
-                Count(
-                    cell_adj,
-                    condition=[
-                        grid.VertexSharing(cell1=cell, cell2=cell_adj),
-                        symbols["mine"](loc=cell_adj),
-                    ],
-                ),
-            ),
+    surrounding_count = Count(
+        cell_adj,
+        condition=[
+            grid.VertexSharing(cell1=cell, cell2=cell_adj),
+            symbols["mine"](loc=cell_adj),
         ],
-        Equals(N, Minecount),
-    )
+    ).assign_to(Minecount)
+    puzzle.when([Number(loc=cell, num=N), surrounding_count], let=Equals(N, Minecount))
 
     # Impose mine count constraint
     if num_mines:

@@ -4,11 +4,11 @@ from abc import ABC
 from enum import StrEnum
 from typing import TYPE_CHECKING, ClassVar, Self, Union
 
-from pyclingo.expression import Comparison
+from pyclingo.expression import Comparison, Equals
 from pyclingo.negation import NegatedLiteral
 from pyclingo.predicate import Predicate
 from pyclingo.term import Term
-from pyclingo.value import Value
+from pyclingo.value import Value, Variable
 
 if TYPE_CHECKING:
     from pyclingo.types import PREDICATE_CLASS_TYPE, VARIABLE_TYPE
@@ -257,6 +257,21 @@ class Aggregate(Term, ABC):
                 variables.update(condition.collect_variables())
 
         return variables
+
+    def assign_to(self, variable: Variable) -> Comparison:
+        """
+        Creates a comparison that assigns this aggregate's value to a variable.
+
+        Args:
+            variable: The variable to assign the aggregate result to
+
+        Returns:
+            Comparison: A comparison term representing "variable = aggregate"
+        """
+        if not isinstance(variable, Variable):
+            raise TypeError(f"Expected Variable, got {type(variable).__name__}")
+
+        return Equals(variable, self)
 
 
 class Count(Aggregate):
