@@ -39,9 +39,7 @@ class ConditionalLiteral(Term):
         """
         # Validate head type
         if not isinstance(head, (Predicate, Comparison, NegatedLiteral)):
-            raise TypeError(
-                "The head of a conditional literal must be a predicate, comparison, or negated term"
-            )
+            raise TypeError("The head of a conditional literal must be a predicate, comparison, or negated term")
 
         self._head = head
 
@@ -54,9 +52,7 @@ class ConditionalLiteral(Term):
         # Validate all conditions are valid terms
         for cond in self._condition:
             if not isinstance(cond, (Predicate, Comparison, NegatedLiteral)):
-                raise TypeError(
-                    "Conditions in a conditional literal must be predicates, comparisons, or negated terms"
-                )
+                raise TypeError("Conditions in a conditional literal must be predicates, comparisons, or negated terms")
 
     @property
     def head(self) -> CONDITIONAL_TERM_TYPE:
@@ -76,9 +72,7 @@ class ConditionalLiteral(Term):
         Returns:
             bool: True if everything is grounded, False otherwise.
         """
-        return self.head.is_grounded and all(
-            cond.is_grounded for cond in self.condition
-        )
+        return self.head.is_grounded and all(cond.is_grounded for cond in self.condition)
 
     def render(self, as_argument: bool = False) -> str:
         """

@@ -1,13 +1,11 @@
 from pyclingo import (
+    ANY,
     Abs,
     ASPProgram,
     Choice,
-    Equals,
-    Not,
     Predicate,
     RangePool,
     create_variables,
-    ANY,
 )
 
 test_data = """aabbb
@@ -53,9 +51,7 @@ def main() -> None:
 
     # Add region data as facts
     solver.section("Region Definitions")
-    solver.fact(
-        *[Region(Cell(row=r, col=c), region_id) for c, r, region_id in region_data]
-    )
+    solver.fact(*[Region(Cell(row=r, col=c), region_id) for c, r, region_id in region_data])
 
     # Define the grid indices
     solver.section("Grid Definition")
@@ -87,9 +83,7 @@ def main() -> None:
     solver.when(Nums(C), Choice(Star(cell), condition=Nums(R)).exactly(starcount))
 
     # Per region: exactly starcount stars in each region
-    solver.when(
-        Region(loc=ANY, id=N), Choice(Star(cell), condition=Region(cell, N)).exactly(starcount)
-    )
+    solver.when(Region(loc=ANY, id=N), Choice(Star(cell), condition=Region(cell, N)).exactly(starcount))
 
     # Rule 2: Stars cannot be touching (including diagonally)
     solver.section("Star Adjacency Constraints")

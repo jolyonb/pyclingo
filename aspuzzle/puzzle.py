@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-import curses.ascii
-from typing import Callable, Generator, Type, Any, TypeVar
+from typing import Any, Callable, Generator, Type, TypeVar
 
 from pyclingo import ASPProgram, Predicate
 from pyclingo.term import Term
@@ -73,9 +72,7 @@ class Puzzle:
         """
         self._program.fact(*predicates, segment=segment)
 
-    def when(
-        self, conditions: Term | list[Term], let: Term, segment: str | None = None
-    ) -> None:
+    def when(self, conditions: Term | list[Term], let: Term, segment: str | None = None) -> None:
         """
         Create a rule which sets the 'let' term when all conditions are satisfied.
 
@@ -125,9 +122,7 @@ class Puzzle:
         """
         self._program.section(title, segment=segment)
 
-    def register_symbolic_constant(
-        self, name: str, value: int | str
-    ) -> SymbolicConstant:
+    def register_symbolic_constant(self, name: str, value: int | str) -> SymbolicConstant:
         """
         Register a symbolic constant with the program.
 
@@ -144,9 +139,7 @@ class Puzzle:
         """
         return self._program.register_symbolic_constant(name, value)
 
-    def solve(
-        self, models: int = 0, timeout: int = 0
-    ) -> Generator[dict[Type[Predicate], set[Predicate]], None, None]:
+    def solve(self, models: int = 0, timeout: int = 0) -> Generator[dict[Type[Predicate], set[Predicate]], None, None]:
         """
         Solve the puzzle and yield solutions.
 
@@ -212,13 +205,13 @@ class Module:
             name: The name of this module (used as the segment name)
             primary_namespace: If True, then do not add namespace prefixes for this module
         """
-        if type(self) == Module:
+        if type(self) is Module:
             raise ValueError("Cannot instantiate an abstract Module object")
 
         self._puzzle = puzzle
         if not all(c.isalnum() for c in name) or not name[0].isalpha():
             raise ValueError(f"Bad name {name}; must be alphanumeric and start with a letter")
-        self._name = name.lower() 
+        self._name = name.lower()
         self._namespace = "" if primary_namespace else f"{self._name}"
 
         # Register with the puzzle

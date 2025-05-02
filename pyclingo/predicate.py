@@ -34,9 +34,7 @@ class Predicate(BasicTerm):
     _show: ClassVar[bool] = True
     _show_conditions: ClassVar[ConditionalLiteral | None] = None
 
-    def __init__(
-        self, *args: PREDICATE_RAW_INPUT_TYPE, **kwargs: PREDICATE_RAW_INPUT_TYPE
-    ) -> None:
+    def __init__(self, *args: PREDICATE_RAW_INPUT_TYPE, **kwargs: PREDICATE_RAW_INPUT_TYPE) -> None:
         # This empty init is just to satisfy the type checker for arbitrary arguments
         super().__init__(*args, **kwargs)
 
@@ -59,9 +57,7 @@ class Predicate(BasicTerm):
         )
 
     @classmethod
-    def define(
-        cls, name: str, fields: list[str], namespace: str = "", show: bool = True
-    ) -> Type[Predicate]:
+    def define(cls, name: str, fields: list[str], namespace: str = "", show: bool = True) -> Type[Predicate]:
         """
         Dynamically create a new Predicate subclass.
 
@@ -82,20 +78,13 @@ class Predicate(BasicTerm):
         """
         # Validate the predicate name
         if not name or not name[0].islower():
-            raise ValueError(
-                f"Predicate name must start with a lowercase letter: {name}"
-            )
+            raise ValueError(f"Predicate name must start with a lowercase letter: {name}")
 
         if not all(c.isalnum() or c == "_" for c in name):
-            raise ValueError(
-                f"Predicate name can only contain letters, digits, and underscores: {name}"
-            )
+            raise ValueError(f"Predicate name can only contain letters, digits, and underscores: {name}")
 
         # Create field specifications for make_dataclass
-        field_specs = [
-            (field_name, "pyclingo.types.PREDICATE_RAW_INPUT_TYPE")
-            for field_name in fields
-        ]
+        field_specs = [(field_name, "pyclingo.types.PREDICATE_RAW_INPUT_TYPE") for field_name in fields]
 
         # Create the new class with the provided name as the class name
         new_class = make_dataclass(  # type: ignore
@@ -328,7 +317,5 @@ class Predicate(BasicTerm):
         if not self.argument_fields():
             return f"{self.__class__.__name__}()"
 
-        kwargs = ", ".join(
-            f"{f.name}={repr(self[f.name])}" for f in self.argument_fields()
-        )
+        kwargs = ", ".join(f"{f.name}={repr(self[f.name])}" for f in self.argument_fields())
         return f"{self.__class__.__name__}({kwargs})"

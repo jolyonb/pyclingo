@@ -85,6 +85,7 @@ class Term(ABC):
     def __lt__(self, other: Any) -> Comparison:  # pyright: ignore[reportIncompatibleMethodOverride]
         """Creates a Comparison representing self < other."""
         from pyclingo.expression import Comparison
+
         if not isinstance(other, (Term, int)):
             raise ValueError(f"Cannot compare Term with {type(other).__name__}")
 
@@ -93,6 +94,7 @@ class Term(ABC):
     def __le__(self, other: Any) -> Comparison:  # pyright: ignore[reportIncompatibleMethodOverride]
         """Creates a Comparison representing self <= other."""
         from pyclingo.expression import Comparison
+
         if not isinstance(other, (Term, int)):
             raise ValueError(f"Cannot compare Term with {type(other).__name__}")
 
@@ -101,6 +103,7 @@ class Term(ABC):
     def __gt__(self, other: Any) -> Comparison:  # pyright: ignore[reportIncompatibleMethodOverride]
         """Creates a Comparison representing self > other."""
         from pyclingo.expression import Comparison
+
         if not isinstance(other, (Term, int)):
             raise ValueError(f"Cannot compare Term with {type(other).__name__}")
 
@@ -109,6 +112,7 @@ class Term(ABC):
     def __ge__(self, other: Any) -> Comparison:  # pyright: ignore[reportIncompatibleMethodOverride]
         """Creates a Comparison representing self >= other."""
         from pyclingo.expression import Comparison
+
         if not isinstance(other, (Term, int)):
             raise ValueError(f"Cannot compare Term with {type(other).__name__}")
 

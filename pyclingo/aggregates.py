@@ -8,7 +8,7 @@ from pyclingo.expression import Comparison
 from pyclingo.negation import NegatedLiteral
 from pyclingo.predicate import Predicate
 from pyclingo.term import Term
-from pyclingo.value import Value, Variable
+from pyclingo.value import Value
 
 if TYPE_CHECKING:
     from pyclingo.types import PREDICATE_CLASS_TYPE, VARIABLE_TYPE
@@ -43,9 +43,7 @@ class Aggregate(Term, ABC):
     def __init__(
         self,
         element: AGGREGATE_ELEMENT_TYPE | tuple[AGGREGATE_ELEMENT_TYPE, ...],
-        condition: Union[
-            AGGREGATE_CONDITION_TYPE, list[AGGREGATE_CONDITION_TYPE], None
-        ] = None,
+        condition: Union[AGGREGATE_CONDITION_TYPE, list[AGGREGATE_CONDITION_TYPE], None] = None,
     ):
         """
         Initialize an aggregate with an element and optional conditions.
@@ -59,9 +57,7 @@ class Aggregate(Term, ABC):
             TypeError: If element or condition is not of the expected type
         """
         # Initialize internal state
-        self._elements: list[
-            tuple[tuple[AGGREGATE_ELEMENT_TYPE, ...], list[AGGREGATE_CONDITION_TYPE]]
-        ] = []
+        self._elements: list[tuple[tuple[AGGREGATE_ELEMENT_TYPE, ...], list[AGGREGATE_CONDITION_TYPE]]] = []
 
         # Add the initial element
         self.add(element, condition)
@@ -69,9 +65,7 @@ class Aggregate(Term, ABC):
     def add(
         self,
         element: AGGREGATE_ELEMENT_TYPE | tuple[AGGREGATE_ELEMENT_TYPE, ...],
-        condition: Union[
-            AGGREGATE_CONDITION_TYPE, list[AGGREGATE_CONDITION_TYPE], None
-        ] = None,
+        condition: Union[AGGREGATE_CONDITION_TYPE, list[AGGREGATE_CONDITION_TYPE], None] = None,
     ) -> Self:
         """
         Add another element to the aggregate.
@@ -96,9 +90,7 @@ class Aggregate(Term, ABC):
         element_tuple = element if isinstance(element, tuple) else (element,)
         for item in element_tuple:
             if not isinstance(item, (Value, Predicate)):
-                raise TypeError(
-                    f"Aggregate element items must be Values or Predicates, got {type(item).__name__}"
-                )
+                raise TypeError(f"Aggregate element items must be Values or Predicates, got {type(item).__name__}")
 
         # Process and validate conditions
         if condition is None:
@@ -110,8 +102,7 @@ class Aggregate(Term, ABC):
         for cond in conditions:
             if not isinstance(cond, (Predicate, NegatedLiteral, Comparison)):
                 raise TypeError(
-                    f"Aggregate condition must be a Predicate, NegatedLiteral, or Comparison, "
-                    f"got {type(cond).__name__}"
+                    f"Aggregate condition must be a Predicate, NegatedLiteral, or Comparison, got {type(cond).__name__}"
                 )
 
         self._elements.append((element_tuple, conditions))
@@ -121,9 +112,7 @@ class Aggregate(Term, ABC):
     @property
     def elements(
         self,
-    ) -> list[
-        tuple[tuple[AGGREGATE_ELEMENT_TYPE, ...], list[AGGREGATE_CONDITION_TYPE]]
-    ]:
+    ) -> list[tuple[tuple[AGGREGATE_ELEMENT_TYPE, ...], list[AGGREGATE_CONDITION_TYPE]]]:
         """
         Get the list of element-condition pairs in this aggregate.
 
@@ -175,9 +164,7 @@ class Aggregate(Term, ABC):
         elements_str = []
 
         for element_tuple, conditions in self._elements:
-            element_str = ", ".join(
-                elem.render(as_argument=True) for elem in element_tuple
-            )
+            element_str = ", ".join(elem.render(as_argument=True) for elem in element_tuple)
 
             # Add conditions if present
             if conditions:

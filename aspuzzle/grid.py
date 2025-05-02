@@ -1,5 +1,5 @@
 from aspuzzle.puzzle import Module, Puzzle, cached_predicate
-from pyclingo import Equals, ExplicitPool, Predicate, RangePool, create_variables, Not
+from pyclingo import Not, Predicate, RangePool, create_variables
 from pyclingo.conditional_literal import ConditionalLiteral
 from pyclingo.value import ANY, SymbolicConstant, Variable
 
@@ -26,9 +26,7 @@ class Grid(Module):
     @cached_predicate
     def Cell(self) -> type[Predicate]:
         """Get the Cell predicate for this grid."""
-        Cell = Predicate.define(
-            "cell", ["row", "col"], namespace=self.namespace, show=False
-        )
+        Cell = Predicate.define("cell", ["row", "col"], namespace=self.namespace, show=False)
         self._Cell = Cell  # To avoid circular definitions with Outside
 
         R, C = create_variables("R", "C")
@@ -63,9 +61,7 @@ class Grid(Module):
         if not self.include_outside_border:
             raise ValueError("Grid does not include outside border")
 
-        Outside = Predicate.define(
-            "outside", ["loc"], namespace=self.namespace, show=False
-        )
+        Outside = Predicate.define("outside", ["loc"], namespace=self.namespace, show=False)
 
         R, C = create_variables("R", "C")
         cell = self.Cell(R, C)
@@ -98,9 +94,7 @@ class Grid(Module):
     @cached_predicate
     def Direction(self) -> type[Predicate]:
         """Get the Direction predicate for this grid, defining all possible directions as vectors."""
-        Direction = Predicate.define(
-            "direction", ["name", "vector"], namespace=self.namespace, show=False
-        )
+        Direction = Predicate.define("direction", ["name", "vector"], namespace=self.namespace, show=False)
 
         self.section("Define directions in the grid")
 
@@ -116,21 +110,14 @@ class Grid(Module):
             ("nw", -1, -1),
         ]
 
-        self.fact(
-            *[
-                Direction(name=name, vector=self.Cell(row=dr, col=dc))
-                for name, dr, dc in directions
-            ]
-        )
+        self.fact(*[Direction(name=name, vector=self.Cell(row=dr, col=dc)) for name, dr, dc in directions])
 
         return Direction
 
     @cached_predicate
     def OrthogonalDirection(self) -> type[Predicate]:
         """Get the OrthogonalDirection predicate, identifying orthogonal directions (N,S,E,W)."""
-        OrthogonalDirection = Predicate.define(
-            "orthogonal_direction", ["name"], namespace=self.namespace, show=False
-        )
+        OrthogonalDirection = Predicate.define("orthogonal_direction", ["name"], namespace=self.namespace, show=False)
 
         self.section("Orthogonal directions")
 
@@ -140,9 +127,7 @@ class Grid(Module):
 
         return OrthogonalDirection
 
-    def directions(
-        self, name_suffix: str = "", vector_suffix: str = "vec"
-    ) -> Predicate:
+    def directions(self, name_suffix: str = "", vector_suffix: str = "vec") -> Predicate:
         """Get a direction predicate with variable values."""
         if name_suffix:
             name_suffix = f"_{name_suffix}"
@@ -162,9 +147,7 @@ class Grid(Module):
     @cached_predicate
     def Orthogonal(self) -> type[Predicate]:
         """Get the orthogonal adjacency predicate (cells that share an edge)."""
-        Orthogonal = Predicate.define(
-            "orthogonal", ["cell1", "cell2"], namespace=self.namespace, show=False
-        )
+        Orthogonal = Predicate.define("orthogonal", ["cell1", "cell2"], namespace=self.namespace, show=False)
 
         R, C = create_variables("R", "C")
         Dir, DR, DC = create_variables("Dir", "DR", "DC")
@@ -197,9 +180,7 @@ class Grid(Module):
     @cached_predicate
     def VertexSharing(self) -> type[Predicate]:
         """Get the vertex-sharing adjacency predicate."""
-        VertexSharing = Predicate.define(
-            "vertex_sharing", ["cell1", "cell2"], namespace=self.namespace, show=False
-        )
+        VertexSharing = Predicate.define("vertex_sharing", ["cell1", "cell2"], namespace=self.namespace, show=False)
 
         R, C = create_variables("R", "C")
         Dir, DR, DC = create_variables("Dir", "DR", "DC")
@@ -233,6 +214,4 @@ def do_not_show_outside(pred: Predicate, grid: Grid) -> None:
     This helper function sets the show directive on a predicate to not display for cells outside the grid.
     The predicate must be instantiated with the grid.cell() location.
     """
-    pred.__class__.set_show_directive(
-        ConditionalLiteral(pred, [pred, Not(grid.outside())])
-    )
+    pred.__class__.set_show_directive(ConditionalLiteral(pred, [pred, Not(grid.outside())]))

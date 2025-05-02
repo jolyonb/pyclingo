@@ -1,18 +1,14 @@
-from typing import Union, TypeVar, overload
+from typing import TypeVar, Union, overload
 
 T = TypeVar("T", int, str)
 
 
 @overload
-def read_grid(
-    data: str, convert_to_int: bool = True
-) -> tuple[int, int, list[tuple[int, int, int]]]: ...
+def read_grid(data: str, convert_to_int: bool = True) -> tuple[int, int, list[tuple[int, int, int]]]: ...
 
 
 @overload
-def read_grid(
-    data: str, convert_to_int: bool = False
-) -> tuple[int, int, list[tuple[int, int, str]]]: ...
+def read_grid(data: str, convert_to_int: bool = False) -> tuple[int, int, list[tuple[int, int, str]]]: ...
 
 
 def read_grid(

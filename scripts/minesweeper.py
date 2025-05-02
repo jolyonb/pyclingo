@@ -1,4 +1,4 @@
-from pyclingo import ANY, Abs, ASPProgram, Choice, Predicate, RangePool, Variable, create_variables
+from pyclingo import ANY, Abs, ASPProgram, Choice, Predicate, RangePool, create_variables
 
 test_data = """.2...
 ..32.

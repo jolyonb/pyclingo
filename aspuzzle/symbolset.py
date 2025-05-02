@@ -67,9 +67,7 @@ class SymbolSet(Module):
             raise ValueError(f"Symbol '{name}' already exists in this set")
 
         # Define the predicate for this symbol
-        symbol_pred = Predicate.define(
-            name, ["loc"], namespace=self.namespace, show=show
-        )
+        symbol_pred = Predicate.define(name, ["loc"], namespace=self.namespace, show=show)
 
         self._symbols[name] = SymbolInfo(predicate=symbol_pred, is_range=False)
 
@@ -98,9 +96,7 @@ class SymbolSet(Module):
             raise ValueError(f"Symbol '{name}' already exists in this set")
 
         # Define the predicate for this symbol type
-        symbol_pred = Predicate.define(
-            name, ["loc", type_name], namespace=self.namespace, show=show
-        )
+        symbol_pred = Predicate.define(name, ["loc", type_name], namespace=self.namespace, show=show)
 
         self._symbols[name] = SymbolInfo(
             predicate=symbol_pred,
@@ -201,9 +197,7 @@ def set_count_constraint(
     at_most: CONSTANT_NUMBER | None = None,
     greater_than: CONSTANT_NUMBER | None = None,
     less_than: CONSTANT_NUMBER | None = None,
-    extra_conditions: AGGREGATE_CONDITION_TYPE
-    | list[AGGREGATE_CONDITION_TYPE]
-    | None = None,
+    extra_conditions: AGGREGATE_CONDITION_TYPE | list[AGGREGATE_CONDITION_TYPE] | None = None,
 ) -> None:
     """
     Set a count constraint on cells matching a specific predicate pattern.

@@ -16,7 +16,6 @@ from pyclingo.term import Term
 from pyclingo.value import Constant, StringConstant, Value, Variable
 
 if TYPE_CHECKING:
-    from pyclingo.aggregates import Aggregate
     from pyclingo.types import (
         COMPARISON_TERM_TYPE,
         EXPRESSION_FIELD_TYPE,
@@ -51,16 +50,10 @@ class Expression(Term):
             ValueError: If the operator is invalid or incompatible with operands.
             TypeError: If the operands are of invalid types.
         """
-        if first_term is not None and not isinstance(
-            first_term, (int, Value, Expression)
-        ):
-            raise TypeError(
-                f"first_term must be a Value or Expression, got {type(first_term).__name__}"
-            )
+        if first_term is not None and not isinstance(first_term, (int, Value, Expression)):
+            raise TypeError(f"first_term must be a Value or Expression, got {type(first_term).__name__}")
         if not isinstance(second_term, (int, Value, Expression)):
-            raise TypeError(
-                f"second_term must be a Value or Expression, got {type(first_term).__name__}"
-            )
+            raise TypeError(f"second_term must be a Value or Expression, got {type(first_term).__name__}")
 
         # Validate the expression structure
         if first_term is None and operator not in UNARY_OPERATIONS:
@@ -69,9 +62,7 @@ class Expression(Term):
             raise ValueError(f"Unsupported binary operator: {operator}")
 
         # Convert Python literals to ASP values
-        self._first_term = (
-            None if first_term is None else self._convert_if_needed(first_term)
-        )
+        self._first_term = None if first_term is None else self._convert_if_needed(first_term)
         self._operator = operator
         self._second_term = self._convert_if_needed(second_term)
 
@@ -149,10 +140,7 @@ class Expression(Term):
                 second_str = self.second_term.render()
 
                 # Add parentheses if the operand is a binary expression
-                if (
-                    isinstance(self.second_term, Expression)
-                    and not self.second_term.is_unary
-                ):
+                if isinstance(self.second_term, Expression) and not self.second_term.is_unary:
                     second_str = f"({second_str})"
 
                 return f"-{second_str}"
@@ -164,18 +152,14 @@ class Expression(Term):
         # For binary operations
         assert self.first_term is not None
         first_str = self._render_term_with_precedence(self.first_term, self.operator)
-        second_str = self._render_term_with_precedence(
-            self.second_term, self.operator, is_right=True
-        )
+        second_str = self._render_term_with_precedence(self.second_term, self.operator, is_right=True)
 
         result = f"{first_str} {self.operator.value} {second_str}"
 
         return result if as_argument else f"({result})"
 
     @staticmethod
-    def _render_term_with_precedence(
-        term: VALUE_EXPRESSION_TYPE, parent_op: Operation, is_right: bool = False
-    ) -> str:
+    def _render_term_with_precedence(term: VALUE_EXPRESSION_TYPE, parent_op: Operation, is_right: bool = False) -> str:
         """
         Renders a term with appropriate parentheses based on precedence.
 
@@ -205,11 +189,7 @@ class Expression(Term):
         if term_precedence > parent_precedence:
             needs_parens = True
         # For same precedence, non-commutative ops need parens on right side
-        elif (
-            term_precedence == parent_precedence
-            and is_right
-            and parent_op in NONCOMMUTATIVE_OPERATIONRS
-        ):
+        elif term_precedence == parent_precedence and is_right and parent_op in NONCOMMUTATIVE_OPERATIONRS:
             needs_parens = True
 
         return f"({term_str})" if needs_parens else term_str
@@ -227,9 +207,7 @@ class Expression(Term):
         Raises:
             ValueError: When trying to use an expression directly in a rule.
         """
-        raise ValueError(
-            "Expressions can only be used as parts of comparisons, assignments, or as predicate arguments"
-        )
+        raise ValueError("Expressions can only be used as parts of comparisons, assignments, or as predicate arguments")
 
     # Arithmetic operator methods
     def __add__(self, other: EXPRESSION_FIELD_TYPE) -> "Expression":
@@ -370,18 +348,14 @@ class Comparison(Term):
             )
 
         if not isinstance(operator, ComparisonOperator):
-            raise TypeError(
-                f"Comparison operator must be a ComparisonOperator, got {type(left_term).__name__}"
-            )
+            raise TypeError(f"Comparison operator must be a ComparisonOperator, got {type(left_term).__name__}")
         self._operator = operator
 
         if isinstance(right_term, Pool) and operator != ComparisonOperator.EQUAL:
             raise ValueError("A pool can only be compared using equality")
 
         if isinstance(right_term, Pool) and not isinstance(left_term, Variable):
-            raise ValueError(
-                "A comparison involving a pool must have a variable on the left"
-            )
+            raise ValueError("A comparison involving a pool must have a variable on the left")
 
     @property
     def left_term(self) -> COMPARISON_TERM_TYPE:
@@ -441,9 +415,7 @@ class Comparison(Term):
     @property
     def is_assignment(self) -> bool:
         """Whether this function represents a variable assignment"""
-        return self.operator == ComparisonOperator.EQUAL and isinstance(
-            self.left_term, Variable
-        )
+        return self.operator == ComparisonOperator.EQUAL and isinstance(self.left_term, Variable)
 
     def collect_predicates(self) -> set[PREDICATE_CLASS_TYPE]:
         """
