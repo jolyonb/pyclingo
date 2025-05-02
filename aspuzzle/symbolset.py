@@ -241,35 +241,26 @@ def set_count_constraint(
     C = Variable("Counter")
 
     # Create the constraint terms list
-    constraint_terms = [Equals(C, Count(grid.cell(), condition=conditions))]
+    count_term = Equals(C, Count(grid.cell(), condition=conditions))
 
-    # Add constraint terms using separate if statements
+    # Create rules for each constraint
     if exactly is not None:
-        # Forbid C != exactly, which means we require C == exactly
-        constraint_terms.append(NotEquals(C, exactly))
+        puzzle.when(count_term, Equals(C, exactly))
 
     if not_equal is not None:
-        # Forbid C == not_equal, which means we require C != not_equal
-        constraint_terms.append(Equals(C, not_equal))
+        puzzle.when(count_term, NotEquals(C, not_equal))
 
     if at_least is not None:
-        # Forbid C < at_least, which means we require C >= at_least
-        constraint_terms.append(C < at_least)
+        puzzle.when(count_term, C >= at_least)
 
     if at_most is not None:
-        # Forbid C > at_most, which means we require C <= at_most
-        constraint_terms.append(C > at_most)
+        puzzle.when(count_term, C <= at_most)
 
     if greater_than is not None:
-        # Forbid C <= greater_than, which means we require C > greater_than
-        constraint_terms.append(C <= greater_than)
+        puzzle.when(count_term, C > greater_than)
 
     if less_than is not None:
-        # Forbid C >= less_than, which means we require C < less_than
-        constraint_terms.append(C >= less_than)
-
-    # Apply all constraints at once
-    puzzle.forbid(*constraint_terms)
+        puzzle.when(count_term, C < less_than)
 
 
 # TODO: Helper conditions for contiguous symbols

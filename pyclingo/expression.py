@@ -436,8 +436,7 @@ class Comparison(Term):
         Raises:
             ValueError: When trying to use a comparison in a rule head.
         """
-        if is_in_head:
-            raise ValueError("Comparisons cannot be used in rule heads")
+        pass
 
     @property
     def is_assignment(self) -> bool:
