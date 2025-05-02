@@ -1,0 +1,16 @@
+{
+  "puzzle_type": "Starbattle",
+  "grid_type": "RectangularGrid",
+  "grid_params": {
+    "rows": 5,
+    "cols": 5
+  },
+  "star_count": 1,
+  "regions": [
+    "aabbb",
+    "caaad",
+    "cccdd",
+    "eeedd",
+    "eeeee"
+  ]
+}

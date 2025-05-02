@@ -1,0 +1,29 @@
+{
+  "puzzle_type": "Minesweeper",
+  "grid_type": "RectangularGrid",
+  "grid_params": {
+    "rows": 5,
+    "cols": 5
+  },
+  "num_mines": 7,
+  "clue_grid": [
+    ".2...",
+    "..32.",
+    "3..2.",
+    ".2..1",
+    "..12."
+  ],
+  "solutions": [
+    {
+      "mine": [
+        "mine(loc=cell(row=1, col=4))",
+        "mine(loc=cell(row=2, col=1))",
+        "mine(loc=cell(row=4, col=3))",
+        "mine(loc=cell(row=2, col=2))",
+        "mine(loc=cell(row=3, col=2))",
+        "mine(loc=cell(row=5, col=5))",
+        "mine(loc=cell(row=2, col=5))}}"
+      ]
+    }
+  ]
+}
