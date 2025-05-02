@@ -7,6 +7,7 @@ from pyclingo.term import BasicTerm
 from pyclingo.value import Constant, StringConstant, Value
 
 if TYPE_CHECKING:
+    from pyclingo.conditional_literal import ConditionalLiteral
     from pyclingo.negation import ClassicalNegation
     from pyclingo.types import (
         PREDICATE_CLASS_TYPE,
@@ -31,6 +32,7 @@ class Predicate(BasicTerm):
     # Class-level attributes
     _namespace: ClassVar[str] = ""
     _show: ClassVar[bool] = True
+    _show_conditions: ClassVar[ConditionalLiteral | None] = None
 
     def __init__(
         self, *args: PREDICATE_RAW_INPUT_TYPE, **kwargs: PREDICATE_RAW_INPUT_TYPE
@@ -154,9 +156,6 @@ class Predicate(BasicTerm):
         Raises:
             KeyError: If the field doesn't exist
         """
-        from pyclingo.expression import Expression
-        from pyclingo.pool import Pool
-
         if not hasattr(self, key):
             raise KeyError(f"Predicate has no field named '{key}'")
         return getattr(self, key)
@@ -184,14 +183,27 @@ class Predicate(BasicTerm):
         return len([f for f in fields(cls) if not f.name.startswith("_")])
 
     @classmethod
-    def get_show(cls) -> bool:
+    def get_show_directive(cls) -> str | None:
         """
-        Gets whether this predicate should be included in the show directive.
+        Constructs the show directive for this predicate, or returns None if it should remain hidden.
 
         Returns:
-            bool: True if the predicate should be shown, False otherwise.
+            str | None: Show directive for this predicate, or None
         """
-        return cls._show
+        if not cls._show:
+            return None
+        if cls._show_conditions:
+            signature = cls._show_conditions.render(as_argument=False)
+        else:
+            signature = f"{cls.get_name()}/{cls.get_arity()}"
+        return f"#show {signature}."
+
+    @classmethod
+    def set_show_directive(cls, statement: ConditionalLiteral | None) -> None:
+        """
+        Sets the show directive for this predicate.
+        """
+        cls._show_conditions = statement
 
     @property
     def is_grounded(self) -> bool:
