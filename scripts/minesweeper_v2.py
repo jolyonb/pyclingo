@@ -58,6 +58,7 @@ def solve_minesweeper(data: str, num_mines: int | None = None):
         set_count_constraint(grid, symbols["mine"](loc=grid.cell()), exactly=num_mines)
 
     # Add clues as facts
+    puzzle.blank_line(segment="Clues")
     puzzle.fact(*[Number(loc=grid.Cell(row=r, col=c), num=num) for r, c, num in clues], segment="Clues")
 
     print(puzzle.render())
