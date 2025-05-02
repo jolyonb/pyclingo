@@ -191,7 +191,7 @@ class ASPProgram:
         # 3. Add program elements for each segment
         for segment_name, elements in self._segments.items():
             if len(self._segments) > 1 and len(elements) > 0:
-                lines.extend(("", f"% ===== {segment_name.title()} ====="))
+                lines.extend(("", "", f"% ===== {segment_name.title()} ====="))
             lines.extend(element.render() for element in elements)
 
         # 4. Add show directives
