@@ -169,17 +169,22 @@ class ASPProgram:
                     lines.append(f"#const {name} = {value}.")  # Integer values are not
 
         # 3. Add program elements for each segment
+        first_segment = True
         for segment_name, elements in self._segments.items():
             if len(self._segments) > 1 and len(elements) > 0:
-                lines.extend(("", "", f"% ===== {segment_name.title()} ====="))
+                # Don't put double newlines for the first segment
+                if not first_segment:
+                    lines.extend("")
+                else:
+                    first_segment = False
+                lines.extend(("", f"% ===== {segment_name.title()} ====="))
             lines.extend(element.render() for element in elements)
 
         # 4. Add show directives
         show_statements = {pred.get_show_directive() for pred in self._collect_predicates()}
         show_statements.remove(None)  # Used for hidden predicates
         if show_statements:
-            lines.append("")
-            lines.append("#show.")
+            lines.extend(("", "#show."))
             lines.extend(sorted(list(show_statements)))
 
         # 5. Join everything together
@@ -234,7 +239,7 @@ class ASPProgram:
 
         # Configure and prepare the control object
         control = clingo.Control()
-        control.configuration.solve.models = models
+        control.configuration.solve.models = models or 1000  # Maximum of 1000 rather than unlimited
         if timeout > 0:
             control.configuration.solve.timeout = timeout
 
@@ -267,7 +272,17 @@ class ASPProgram:
             "rules": int(control.statistics["problem"]["lp"]["rules_tr"]),
             "variables": int(control.statistics["problem"]["generator"]["vars"]),
             "constraints": int(control.statistics["problem"]["generator"]["complexity"]),
-            "time": toc - tic,
+            "choices": int(control.statistics["solving"]["solvers"]["choices"]),
+            "conflicts": int(control.statistics["solving"]["solvers"]["conflicts"]),
+            "normal_rules": int(control.statistics["problem"]["lp"]["rules_normal"]),
+            "choice_rules": int(control.statistics["problem"]["lp"]["rules_choice"]),
+            "binary_constraints": int(control.statistics["problem"]["generator"]["constraints_binary"]),
+            "ternary_constraints": int(control.statistics["problem"]["generator"]["constraints_ternary"]),
+            "total_time": toc - tic,
+            "grounding_time": (
+                control.statistics["summary"]["times"]["total"] - control.statistics["summary"]["times"]["solve"]
+            ),
+            "solving_time": control.statistics["summary"]["times"]["solve"],
         }
 
     def _convert_symbol_to_predicate(self, symbol, predicate_types: dict[str, type[Predicate]]) -> Predicate:
