@@ -115,34 +115,54 @@ class Grid(Module):
         return Direction
 
     @cached_predicate
-    def OrthogonalDirection(self) -> type[Predicate]:
-        """Get the OrthogonalDirection predicate, identifying orthogonal directions (N,S,E,W)."""
-        OrthogonalDirection = Predicate.define("orthogonal_direction", ["name"], namespace=self.namespace, show=False)
+    def Directions(self) -> type[Predicate]:
+        """Get the Directions predicate, identifying all directions."""
+        Directions = Predicate.define("directions", ["name"], namespace=self.namespace, show=False)
+
+        self.section("All directions")
+
+        # Define Directions for each direction vector
+        N = Variable("N")
+        self.when(self.Direction(name=N, vector=ANY), Directions(name=N))
+
+        return Directions
+
+    @cached_predicate
+    def OrthogonalDirections(self) -> type[Predicate]:
+        """Get the OrthogonalDirections predicate, identifying orthogonal directions (N,S,E,W)."""
+        OrthogonalDirections = Predicate.define("orthogonal_directions", ["name"], namespace=self.namespace, show=False)
 
         self.section("Orthogonal directions")
 
         # Define the 4 orthogonal directions
         orthogonal_dirs = ["n", "e", "s", "w"]
-        self.fact(*[OrthogonalDirection(name=name) for name in orthogonal_dirs])
+        self.fact(*[OrthogonalDirections(name=name) for name in orthogonal_dirs])
 
-        return OrthogonalDirection
+        return OrthogonalDirections
 
-    def directions(self, name_suffix: str = "", vector_suffix: str = "vec") -> Predicate:
-        """Get a direction predicate with variable values."""
+    def direction(self, name_suffix: str = "", vector_suffix: str = "vec") -> Predicate:
+        """Get a direction predicate including names and vectors."""
         if name_suffix:
             name_suffix = f"_{name_suffix}"
 
         N = Variable(f"N{name_suffix}")
-
         return self.Direction(name=N, vector=self.cell(suffix=vector_suffix))
 
-    def orthogonal_directions(self, name_suffix: str = "") -> Predicate:
-        """Get an orthogonal direction predicate with variable values."""
+    def directions(self, name_suffix: str = "") -> Predicate:
+        """Get an orthogonal direction predicate, listing the names of all directions."""
         if name_suffix:
             name_suffix = f"_{name_suffix}"
 
         N = Variable(f"N{name_suffix}")
-        return self.OrthogonalDirection(name=N)
+        return self.Directions(name=N)
+
+    def orthogonal_directions(self, name_suffix: str = "") -> Predicate:
+        """Get an orthogonal direction predicate, listing the names of orthogonal directions."""
+        if name_suffix:
+            name_suffix = f"_{name_suffix}"
+
+        N = Variable(f"N{name_suffix}")
+        return self.OrthogonalDirections(name=N)
 
     @cached_predicate
     def Orthogonal(self) -> type[Predicate]:
@@ -156,7 +176,7 @@ class Grid(Module):
 
         # Initialize predicates that we'll need
         _ = self.Direction
-        _ = self.OrthogonalDirection
+        _ = self.OrthogonalDirections
 
         self.section("Orthogonal adjacency definition")
 
@@ -164,7 +184,7 @@ class Grid(Module):
         self.when(
             [
                 cell,
-                self.OrthogonalDirection(Dir),
+                self.OrthogonalDirections(Dir),
                 self.Direction(Dir, vector=self.Cell(row=DR, col=DC)),
                 adj_cell,
             ],
