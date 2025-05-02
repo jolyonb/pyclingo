@@ -51,6 +51,7 @@ class Starbattle(Solver):
 
         # Rule 1: Place star_count stars on each row, column and region
         puzzle.section("Star placement rules")
+        # TODO: Rewrite these in terms of counts? Need to be grid-agnostic regardless
         # Per row: exactly starcount stars in each row
         puzzle.when(Rows(R), Choice(Star(cell), condition=Columns(C)).exactly(star_count))
         # Per column: exactly starcount stars in each column
