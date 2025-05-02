@@ -3,12 +3,13 @@ from aspuzzle.puzzle import Puzzle
 from aspuzzle.symbolset import SymbolSet, set_count_constraint
 from pyclingo import (
     ANY,
-    Predicate,
-    Variable,
-    NotEquals,
     Count,
+    Equals,
+    Predicate,
+    create_variables,
 )
 from scripts.utils import read_grid
+
 
 def solve_minesweeper(data: str, num_mines: int | None = None):
     """
@@ -32,7 +33,7 @@ def solve_minesweeper(data: str, num_mines: int | None = None):
     Number = Predicate.define("number", ["loc", "num"], show=False)
 
     # Create variables
-    N = Variable("N")
+    N, Minecount = create_variables("N", "Minecount")
     cell = grid.cell()
     cell_adj = grid.cell(suffix="adj")
 
@@ -41,15 +42,21 @@ def solve_minesweeper(data: str, num_mines: int | None = None):
 
     # Number constraints: each number indicates exactly how many mines are adjacent
     puzzle.section("Numbers indicate the number of adjacent mines")
-    puzzle.forbid(
-        Number(loc=cell, num=N),
-        NotEquals(
-            Count(
-                cell_adj,
-                condition=[grid.VertexSharing(cell1=cell, cell2=cell_adj), symbols["mine"](loc=cell_adj)],
+    puzzle.when(
+        [
+            Number(loc=cell, num=N),
+            Equals(
+                Minecount,
+                Count(
+                    cell_adj,
+                    condition=[
+                        grid.VertexSharing(cell1=cell, cell2=cell_adj),
+                        symbols["mine"](loc=cell_adj),
+                    ],
+                ),
             ),
-            N,
-        ),
+        ],
+        Equals(N, Minecount),
     )
 
     # Impose mine count constraint
@@ -59,7 +66,10 @@ def solve_minesweeper(data: str, num_mines: int | None = None):
 
     # Add clues as facts
     puzzle.blank_line(segment="Clues")
-    puzzle.fact(*[Number(loc=grid.Cell(row=r, col=c), num=num) for r, c, num in clues], segment="Clues")
+    puzzle.fact(
+        *[Number(loc=grid.Cell(row=r, col=c), num=num) for r, c, num in clues],
+        segment="Clues",
+    )
 
     print(puzzle.render())
 
