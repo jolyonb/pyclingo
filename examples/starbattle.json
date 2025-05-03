@@ -16,11 +16,11 @@
   "solutions": [
     {
       "star": [
-        "star(loc=cell(row=1, col=5))",
-        "star(loc=cell(row=5, col=2))",
-        "star(loc=cell(row=2, col=3))",
-        "star(loc=cell(row=4, col=4))",
-        "star(loc=cell(row=3, col=1))"
+        "star(cell(1, 5))",
+        "star(cell(2, 3))",
+        "star(cell(3, 1))",
+        "star(cell(4, 4))",
+        "star(cell(5, 2))"
       ]
     }
   ]

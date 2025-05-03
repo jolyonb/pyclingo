@@ -13,5 +13,17 @@
     "##..##",
     "#...#.",
     ".#...#"
+  ],
+  "solutions": [
+    {
+      "star": [
+        "star(cell(1, 6))",
+        "star(cell(2, 3))",
+        "star(cell(3, 1))",
+        "star(cell(4, 4))",
+        "star(cell(5, 2))",
+        "star(cell(6, 5))"
+      ]
+    }
   ]
 }

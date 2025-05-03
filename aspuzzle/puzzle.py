@@ -161,6 +161,11 @@ class Puzzle:
         yield from self._program.solve(models=models, timeout=timeout)
 
     @property
+    def exhausted(self) -> bool | None:
+        """Whether the solution space was exhausted."""
+        return self._program.exhausted
+
+    @property
     def satisfiable(self) -> bool | None:
         """Whether the puzzle has at least one solution."""
         return self._program.satisfiable
