@@ -7,10 +7,20 @@ from aspuzzle.puzzle import Puzzle
 
 class Solver:
 
+    default_config: dict[str, Any] = {}
+    solver_name: str = "Puzzle solver"
+
     def __init__(self, puzzle: Puzzle, grid: Grid, config: dict[str, Any]) -> None:
         self.puzzle = puzzle
+        self.puzzle.name = self.solver_name
         self.grid = grid
-        self.config = config
+        # Merge default config with instance config
+        self.config = {**self.default_config, **config}
+
+    @property
+    def pgc(self) -> tuple[Puzzle, Grid, dict[str, Any]]:
+        """Convenience property to get puzzle, grid, and config."""
+        return self.puzzle, self.grid, self.config
 
     def construct_puzzle(self) -> None:
         """Construct the rules of the puzzle."""

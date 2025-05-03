@@ -3,20 +3,17 @@ from aspuzzle.symbolset import SymbolSet
 from aspuzzle.utils import read_grid
 from pyclingo import ANY, Predicate, create_variables
 
-default_config = {
-    "star_count": 1,
-}
-
 
 class Starbattle(Solver):
+    solver_name = "Starbattle puzzle solver"
+    default_config = {
+        "star_count": 1,
+    }
+
     def construct_puzzle(self) -> None:
         """Construct the rules of the puzzle."""
-        grid = self.grid
-        puzzle = self.puzzle
-        puzzle.name = "Starbattle puzzle solver"
+        puzzle, grid, config = self.pgc
 
-        # Merge default config
-        config = {**default_config, **self.config}
         star_count = puzzle.register_symbolic_constant("star_count", config["star_count"])
 
         # Define predicates
