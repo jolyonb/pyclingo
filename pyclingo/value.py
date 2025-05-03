@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import TYPE_CHECKING, Any, Union
+from typing import TYPE_CHECKING, Any, Union, overload
 
 from pyclingo.operators import Operation
 from pyclingo.term import BasicTerm
@@ -618,19 +618,32 @@ class SymbolicConstant(ConstantBase):
 ANY = Variable("_")
 
 
-def create_variables(*names) -> tuple[Variable, ...]:
-    """Create multiple Variable objects at once.
+@overload
+def create_variables(name: str) -> Variable: ...
+
+@overload
+def create_variables(name1: str, name2: str) -> tuple[Variable, Variable]: ...
+
+@overload
+def create_variables(name1: str, name2: str, name3: str) -> tuple[Variable, Variable, Variable]: ...
+
+@overload
+def create_variables(*names: str) -> tuple[Variable, ...]: ...
+
+def create_variables(*names: str) -> Variable | tuple[Variable, ...]:
+    """
+    Create one or more ASP variables with the given names.
 
     Args:
-        *names: Variable names as strings.
+        *names: Variable names
 
     Returns:
-        A tuple of Variable objects.
-
-    Example:
-        X, Y, Z = create_variables("X", "Y", "Z")
+        A single Variable if one name is provided, otherwise a tuple of Variables
     """
-    return tuple(Variable(name) for name in names)
+    if not names:
+        raise ValueError("At least one variable name must be provided")
+    variables = tuple(Variable(name) for name in names)
+    return variables[0] if len(names) == 1 else variables
 
 
 # TODO: Add hash and eq methods for all things that I need to compare via sets!
