@@ -17,6 +17,7 @@ from pyclingo import (
 from pyclingo.expression import Comparison
 from pyclingo.negation import NegatedLiteral
 from pyclingo.pool import Pool
+from pyclingo.term import Term
 
 if TYPE_CHECKING:
     from pyclingo.aggregates import AGGREGATE_CONDITION_TYPE
@@ -197,7 +198,8 @@ def set_count_constraint(
     at_most: CONSTANT_NUMBER | None = None,
     greater_than: CONSTANT_NUMBER | None = None,
     less_than: CONSTANT_NUMBER | None = None,
-    extra_conditions: AGGREGATE_CONDITION_TYPE | list[AGGREGATE_CONDITION_TYPE] | None = None,
+    count_conditions: AGGREGATE_CONDITION_TYPE | list[AGGREGATE_CONDITION_TYPE] | None = None,
+    rule_terms: Term | list[Term] | None = None,
 ) -> None:
     """
     Set a count constraint on cells matching a specific predicate pattern.
@@ -212,7 +214,8 @@ def set_count_constraint(
         at_most: The maximum count, inclusive (<=)
         greater_than: The count must be greater than this value (>)
         less_than: The count must be less than this value (<)
-        extra_conditions: Optional list of additional conditions for the count
+        count_conditions: Optional list of additional conditions for the count
+        rule_terms: Optional list of additional terms to add to the rule
 
     TODO: Option for the count to be in an ExplicitPool
     """
@@ -226,35 +229,41 @@ def set_count_constraint(
 
     # Build the condition list
     conditions: list[AGGREGATE_CONDITION_TYPE] = [predicate]
-    if extra_conditions:
-        if not isinstance(extra_conditions, list):
-            extra_conditions = [extra_conditions]
-        conditions.extend(extra_conditions)
+    if count_conditions:
+        if not isinstance(count_conditions, list):
+            count_conditions = [count_conditions]
+        conditions.extend(count_conditions)
 
     # Create a variable for the count
-    C = Variable("Counter")
+    N = Variable("N_cnt")  # TODO: Need something that doesn't clash! Autodetect clashes?
 
     # Create the constraint terms list
-    count_term = Equals(C, Count(grid.cell(), condition=conditions))
+    count_term = Equals(N, Count(grid.cell(), condition=conditions))
+    if isinstance(rule_terms, list):
+        rule_body = [*rule_terms, count_term]
+    elif rule_terms is not None:
+        rule_body = [rule_terms, count_term]
+    else:
+        rule_body = count_term
 
     # Create rules for each constraint
     if exactly is not None:
-        puzzle.when(count_term, Equals(C, exactly))
+        puzzle.when(rule_body, Equals(N, exactly))
 
     if not_equal is not None:
-        puzzle.when(count_term, NotEquals(C, not_equal))
+        puzzle.when(rule_body, NotEquals(N, not_equal))
 
     if at_least is not None:
-        puzzle.when(count_term, C >= at_least)
+        puzzle.when(rule_body, N >= at_least)
 
     if at_most is not None:
-        puzzle.when(count_term, C <= at_most)
+        puzzle.when(rule_body, N <= at_most)
 
     if greater_than is not None:
-        puzzle.when(count_term, C > greater_than)
+        puzzle.when(rule_body, N > greater_than)
 
     if less_than is not None:
-        puzzle.when(count_term, C < less_than)
+        puzzle.when(rule_body, N < less_than)
 
 
 # TODO: Helper conditions for contiguous symbols

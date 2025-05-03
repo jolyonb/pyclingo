@@ -228,6 +228,48 @@ class Grid(Module):
         """Get the vertex-sharing adjacency predicate with variable values."""
         return self.VertexSharing(cell1=self.cell(suffix_1), cell2=self.cell(suffix_2))
 
+    @cached_predicate
+    def Line(self) -> type[Predicate]:
+        """Get the Line predicate defining major lines in the grid."""
+        Line = Predicate.define("line", ["direction", "index", "loc"], namespace=self.namespace, show=False)
+
+        R, C = create_variables("R", "C")
+        cell = self.Cell(row=R, col=C)
+
+        self.section("Define major lines in the grid")
+
+        # For rectangular grids, define rows (direction E) and columns (direction S)
+        # Row lines: all cells in the same row
+        self.when(
+            [
+                cell,
+                R.in_(RangePool(1, self.rows)),
+            ],
+            Line(direction="e", index=R, loc=cell),
+        )
+
+        # Column lines: all cells in the same column
+        self.when(
+            [
+                cell,
+                C.in_(RangePool(1, self.cols)),
+            ],
+            Line(direction="s", index=C, loc=cell),
+        )
+
+        return Line
+
+    def line(self, direction_suffix: str = "", index_suffix: str = "", loc_suffix: str = "") -> Predicate:
+        """Get a line predicate for this grid with variable values."""
+        if direction_suffix:
+            direction_suffix = f"_{direction_suffix}"
+        if index_suffix:
+            index_suffix = f"_{index_suffix}"
+
+        D = Variable(f"D{direction_suffix}")
+        I = Variable(f"I{index_suffix}")
+        return self.Line(direction=D, index=I, loc=self.cell(suffix=loc_suffix))
+
 
 def do_not_show_outside(pred: Predicate, grid: Grid) -> None:
     """

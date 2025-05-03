@@ -26,7 +26,10 @@ class Solver:
 
         # Print statistics
         print()
-        print(f"{self.puzzle.solution_count} solutions")
+        if self.puzzle.solution_count == 1:
+            print("1 solution")
+        else:
+            print(f"{self.puzzle.solution_count} solutions")
         pprint.pprint(self.puzzle.statistics)
 
         if "solutions" in self.config:
