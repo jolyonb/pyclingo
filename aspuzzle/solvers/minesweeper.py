@@ -1,7 +1,7 @@
 from aspuzzle.solvers.base import Solver
 from aspuzzle.symbolset import SymbolSet
 from aspuzzle.utils import read_grid
-from pyclingo import ANY, Predicate, Variable
+from pyclingo import ANY, Predicate, create_variables
 
 
 class Minesweeper(Solver):
@@ -19,7 +19,7 @@ class Minesweeper(Solver):
 
         # Define predicates
         Number = Predicate.define("number", ["loc", "num"], show=False)
-        N = Variable("N")
+        N = create_variables("N")
         cell = grid.cell()
         cell_adj = grid.cell(suffix="adj")
 
