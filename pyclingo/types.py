@@ -20,4 +20,4 @@ if TYPE_CHECKING:
 
     VARIABLE_TYPE = Variable
 
-    CONSTANT_NUMBER = Union[int, Constant, SymbolicConstant]
+    NUMBER = Union[int, Constant, SymbolicConstant, Variable]

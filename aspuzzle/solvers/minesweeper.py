@@ -1,13 +1,7 @@
 from aspuzzle.solvers.base import Solver
-from aspuzzle.symbolset import SymbolSet, set_count_constraint
+from aspuzzle.symbolset import SymbolSet
 from aspuzzle.utils import read_grid
-from pyclingo import (
-    ANY,
-    Count,
-    Equals,
-    Predicate,
-    create_variables,
-)
+from pyclingo import ANY, Predicate, create_variables, Variable
 
 default_config = {
     "num_mines": None,
@@ -30,7 +24,7 @@ class Minesweeper(Solver):
         # Define predicates
         Number = Predicate.define("number", ["loc", "num"], show=False)
         # Create variables
-        N, Minecount = create_variables("N", "Minecount")
+        N = Variable("N")
         cell = grid.cell()
         cell_adj = grid.cell(suffix="adj")
 
@@ -39,19 +33,24 @@ class Minesweeper(Solver):
 
         # Number constraints: each number indicates exactly how many mines are adjacent
         puzzle.section("Numbers indicate the number of adjacent mines")
-        surrounding_count = Count(
-            cell_adj,
+        puzzle.count_constraint(
+            count_over=cell_adj,
             condition=[
                 grid.VertexSharing(cell1=cell, cell2=cell_adj),
                 symbols["mine"](loc=cell_adj),
             ],
-        ).assign_to(Minecount)
-        puzzle.when([Number(loc=cell, num=N), surrounding_count], let=Equals(N, Minecount))
+            when=Number(loc=cell, num=N),
+            exactly=N,
+        )
 
-        # Impose mine count constraint
+        # Impose global mine count constraint
         if config["num_mines"]:
             puzzle.section("Mine count constraint")
-            set_count_constraint(grid, symbols["mine"](loc=grid.cell()), exactly=config["num_mines"])
+            puzzle.count_constraint(
+                count_over=grid.cell(),
+                condition=symbols["mine"](loc=grid.cell()),
+                exactly=config["num_mines"]
+            )
 
         # Add clues
         puzzle.blank_line(segment="Clues")

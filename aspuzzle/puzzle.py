@@ -1,10 +1,14 @@
 from __future__ import annotations
 
-from typing import Any, Callable, Generator, Type, TypeVar
+from typing import TYPE_CHECKING, Any, Callable, Generator, Type, TypeVar
 
-from pyclingo import ASPProgram, Predicate
+from pyclingo import ASPProgram, Count, Equals, NotEquals, Predicate
 from pyclingo.term import Term
-from pyclingo.value import SymbolicConstant
+from pyclingo.value import SymbolicConstant, Variable
+
+if TYPE_CHECKING:
+    from pyclingo.aggregates import AGGREGATE_CONDITION_TYPE
+    from pyclingo.types import NUMBER
 
 
 class Puzzle:
@@ -186,6 +190,61 @@ class Puzzle:
 
         self._program.header = f"{self.name} by ASPuzzle"
         return self._program.render()
+
+    def count_constraint(
+        self,
+        count_over: Variable | Predicate,
+        condition: AGGREGATE_CONDITION_TYPE | list[AGGREGATE_CONDITION_TYPE],
+        count_variable: Variable | None = None,
+        when: Term | list[Term] | None = None,
+        **constraints: NUMBER,
+    ) -> None:
+        """
+        Create a constraint on the count of terms matching a condition.
+
+        Args:
+            count_over: Variable or predicate to count over
+            condition: The condition(s) to apply when counting
+            count_variable: Variable to bind the count to (optional)
+            when: Additional conditions for when the constraint applies
+            **constraints: Keyword arguments for count constraints, e.g.:
+                - exactly: Equal to this value
+                - not_equal: Not equal to this value
+                - at_least: Greater than or equal to this value
+                - at_most: Less than or equal to this value
+                - greater_than: Greater than this value
+                - less_than: Less than this value
+        """
+        # Create count variable if not provided
+        if count_variable is None:
+            count_variable = Variable("Count")  # TODO: Check for collisions?
+
+        # Create the count term
+        count_term = Count(count_over, condition=condition).assign_to(count_variable)
+
+        # Build rule body
+        if when is None:
+            rule_body = count_term
+        elif isinstance(when, list):
+            rule_body = [*when, count_term]
+        else:
+            rule_body = [when, count_term]
+
+        # Add constraints based on keywords
+        constraint_map = {
+            "exactly": lambda n, v: Equals(n, v),
+            "not_equal": lambda n, v: NotEquals(n, v),
+            "at_least": lambda n, v: n >= v,
+            "at_most": lambda n, v: n <= v,
+            "greater_than": lambda n, v: n > v,
+            "less_than": lambda n, v: n < v,
+        }
+
+        for constraint_type, value in constraints.items():
+            if constraint_type in constraint_map:
+                self.when(rule_body, constraint_map[constraint_type](count_variable, value))
+            else:
+                raise ValueError(f"Unknown constraint type: {constraint_type}. Must be one of {constraint_map.keys()}.")
 
 
 class Module:

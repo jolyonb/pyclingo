@@ -1,13 +1,7 @@
 from aspuzzle.solvers.base import Solver
-from aspuzzle.symbolset import SymbolSet, set_count_constraint
+from aspuzzle.symbolset import SymbolSet
 from aspuzzle.utils import read_grid
-from pyclingo import (
-    ANY,
-    Predicate,
-    create_variables,
-    Count,
-    Equals,
-)
+from pyclingo import ANY, Predicate, create_variables
 
 default_config = {
     "star_count": 1,
@@ -46,21 +40,19 @@ class Starbattle(Solver):
         puzzle.section("Star placement rules")
 
         # Per line (row or column): exactly star_count stars in each line
-        set_count_constraint(
-            grid=grid,
-            predicate=symbols["star"](cell),
+        puzzle.count_constraint(
+            count_over=cell,
+            condition=[symbols["star"](cell), grid.Line(direction=Dir, index=N, loc=cell)],
+            when=grid.Line(direction=Dir, index=N, loc=ANY),
             exactly=star_count,
-            count_conditions=grid.Line(direction=Dir, index=N, loc=cell),
-            rule_terms=grid.Line(direction=Dir, index=N, loc=ANY),
         )
 
         # Per region: exactly star_count stars in each region
-        set_count_constraint(
-            grid=grid,
-            predicate=symbols["star"](cell),
+        puzzle.count_constraint(
+            count_over=cell,
+            condition=[symbols["star"](cell), Region(loc=cell, id=N)],
+            when=Region(loc=ANY, id=N),
             exactly=star_count,
-            count_conditions=Region(loc=cell, id=N),
-            rule_terms=Region(loc=ANY, id=N),
         )
 
         # Rule 2: Stars cannot be touching (including diagonally)
