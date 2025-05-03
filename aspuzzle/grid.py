@@ -1,5 +1,5 @@
 from aspuzzle.puzzle import Module, Puzzle, cached_predicate
-from pyclingo import Not, Predicate, RangePool, create_variables
+from pyclingo import Not, Predicate, RangePool, create_variables, ExplicitPool
 from pyclingo.conditional_literal import ConditionalLiteral
 from pyclingo.value import ANY, SymbolicConstant, Variable
 
@@ -136,7 +136,7 @@ class Grid(Module):
 
         # Define the 4 orthogonal directions
         orthogonal_dirs = ["n", "e", "s", "w"]
-        self.fact(*[OrthogonalDirections(name=name) for name in orthogonal_dirs])
+        self.fact(OrthogonalDirections(ExplicitPool(orthogonal_dirs)))
 
         return OrthogonalDirections
 

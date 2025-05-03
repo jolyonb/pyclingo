@@ -1,0 +1,45 @@
+{
+  "puzzle_type": "Tents",
+  "grid_type": "RectangularGrid",
+  "grid_params": {
+    "rows": 6,
+    "cols": 6
+  },
+  "tree_grid": [
+    ".....T",
+    "...T..",
+    "T.....",
+    "...TT.",
+    "......",
+    "..T.T."
+  ],
+  "row_clues": [
+    1,
+    1,
+    0,
+    2,
+    1,
+    2
+  ],
+  "col_clues": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    2
+  ],
+  "solutions": [
+    {
+      "tent": [
+        "tent(cell(1, 5))",
+        "tent(cell(2, 3))",
+        "tent(cell(4, 1))",
+        "tent(cell(4, 6))",
+        "tent(cell(5, 4))",
+        "tent(cell(6, 2))",
+        "tent(cell(6, 6))"
+      ]
+    }
+  ]
+}
