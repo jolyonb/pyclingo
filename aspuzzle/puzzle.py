@@ -215,6 +215,9 @@ class Puzzle:
                 - greater_than: Greater than this value
                 - less_than: Less than this value
         """
+        if not constraints:
+            raise ValueError("Must provide at least one constraint!")
+
         # Create count variable if not provided
         if count_variable is None:
             count_variable = Variable("Count")  # TODO: Check for collisions?
