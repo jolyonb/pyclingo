@@ -24,9 +24,8 @@ class Starbattle(Solver):
 
         # Define regions
         puzzle.blank_line(segment="Regions")
-        regions = read_grid(config["regions"])
         puzzle.fact(
-            *[Region(loc=grid.Cell(row=r, col=c), id=region_id) for r, c, region_id in regions],
+            *[Region(loc=grid.Cell(row=r, col=c), id=region_id) for r, c, region_id in read_grid(config["regions"])],
             segment="Regions",
         )
 
@@ -36,7 +35,7 @@ class Starbattle(Solver):
         # Rule 1: Place star_count stars on each line (row/column/etc) and region
         puzzle.section("Star placement rules")
 
-        # Per line (row or column): exactly star_count stars in each line
+        # 1a) Per line (row or column): exactly star_count stars in each line
         puzzle.count_constraint(
             count_over=cell,
             condition=[symbols["star"](cell), grid.Line(direction=Dir, index=N, loc=cell)],
@@ -44,7 +43,7 @@ class Starbattle(Solver):
             exactly=star_count,
         )
 
-        # Per region: exactly star_count stars in each region
+        # 1b) Per region: exactly star_count stars in each region
         puzzle.count_constraint(
             count_over=cell,
             condition=[symbols["star"](cell), Region(loc=cell, id=N)],
@@ -52,6 +51,6 @@ class Starbattle(Solver):
             exactly=star_count,
         )
 
-        # Rule 2: Stars cannot be touching (including diagonally)
+        # Rule 2: Stars cannot share a vertex or edge
         puzzle.section("Star adjacency constraints")
         puzzle.forbid(symbols["star"](cell), symbols["star"](cell_adj), grid.vertex_sharing(suffix_2="adj"))

@@ -14,19 +14,23 @@ class Minesweeper(Solver):
         """Construct the rules of the puzzle."""
         puzzle, grid, config = self.pgc
 
-        # Read in clues
-        clues = read_grid(config["clue_grid"])
-
         # Define predicates
         Number = Predicate.define("number", ["loc", "num"], show=False)
         N = create_variables("N")
         cell = grid.cell()
         cell_adj = grid.cell(suffix="adj")
 
+        # Define clues
+        puzzle.blank_line(segment="Clues")
+        puzzle.fact(
+            *[Number(loc=grid.Cell(row=r, col=c), num=num) for r, c, num in read_grid(config["clue_grid"])],
+            segment="Clues",
+        )
+
         # Define mine placement
         symbols = SymbolSet(grid).add_symbol("mine").excluded_symbol(Number(loc=cell, num=ANY))
 
-        # Number constraints: each number indicates exactly how many mines are adjacent
+        # Rule 1: Each number indicates exactly how many mines are adjacent
         puzzle.section("Numbers indicate the number of adjacent mines")
         puzzle.count_constraint(
             count_over=cell_adj,
@@ -38,16 +42,7 @@ class Minesweeper(Solver):
             exactly=N,
         )
 
-        # Impose global mine count constraint
+        # (Optional) Rule 2: Global mine count constraint
         if config["num_mines"]:
             puzzle.section("Mine count constraint")
-            puzzle.count_constraint(
-                count_over=grid.cell(), condition=symbols["mine"](loc=grid.cell()), exactly=config["num_mines"]
-            )
-
-        # Add clues
-        puzzle.blank_line(segment="Clues")
-        puzzle.fact(
-            *[Number(loc=grid.Cell(row=r, col=c), num=num) for r, c, num in clues],
-            segment="Clues",
-        )
+            puzzle.count_constraint(count_over=cell, condition=symbols["mine"](loc=cell), exactly=config["num_mines"])
