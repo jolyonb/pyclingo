@@ -267,8 +267,8 @@ class Grid(Module):
             index_suffix = f"_{index_suffix}"
 
         D = Variable(f"D{direction_suffix}")
-        I = Variable(f"I{index_suffix}")
-        return self.Line(direction=D, index=I, loc=self.cell(suffix=loc_suffix))
+        Idx = Variable(f"Idx{index_suffix}")
+        return self.Line(direction=D, index=Idx, loc=self.cell(suffix=loc_suffix))
 
 
 def do_not_show_outside(pred: Predicate, grid: Grid) -> None:

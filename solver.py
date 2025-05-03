@@ -18,13 +18,13 @@ def solve(filename: str) -> None:
 
     # Create a grid object from the config
     if config["grid_type"] == "RectangularGrid":
-        grid = Grid(puzzle, **config['grid_params'])
+        grid = Grid(puzzle, **config["grid_params"])
     else:
         raise ValueError(f"Unknown grid type {config['grid_type']}")
 
     # Load the appropriate solver
     module = importlib.import_module(f"aspuzzle.solvers.{config['puzzle_type'].lower()}")
-    puzzle_class: type[Solver] = getattr(module, config['puzzle_type'])
+    puzzle_class: type[Solver] = getattr(module, config["puzzle_type"])
 
     # Construct the puzzle rules
     solver = puzzle_class(grid=grid, puzzle=puzzle, config=config)
