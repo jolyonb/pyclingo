@@ -7,6 +7,7 @@ from typing import Generator
 
 import clingo
 
+from pyclingo.clingo_handler import LogLevel, ClingoMessageHandler
 from pyclingo.predicate import Predicate
 from pyclingo.program_elements import BlankLine, Comment, ProgramElement, Rule
 from pyclingo.term import Term
@@ -217,19 +218,20 @@ class ASPProgram:
         if unregistered := used_constants - set(self._symbolic_constants.keys()):
             raise ValueError(f"Unregistered symbolic constants used in program: {', '.join(sorted(unregistered))}")
 
-    def solve(self, models: int = 0, timeout: int = 0) -> Generator[dict[type[Predicate], set[Predicate]], None, None]:
+    def solve(self, models: int = 0, timeout: int = 0, stop_on_log_level: LogLevel = LogLevel.INFO) -> Generator[dict[type[Predicate], set[Predicate]], None, None]:
         """
         Solve the ASP program and yield solutions as sets of Predicate objects.
 
         Args:
             models: Maximum number of models to compute (0 for all)
             timeout: Timeout in seconds (0 for no timeout)
+            stop_on_log_level: Log level at which to abort solving
 
         Yields:
             For each solution, a dictionary mapping Predicate types to sets of Predicate instances
 
         Raises:
-            RuntimeError: If an error occurs during solving
+            RuntimeError: If an error occurs during solving or grounding, or if log level threshold is exceeded
 
         Notes:
             After all models are yielded, solver statistics are stored in the
@@ -237,8 +239,14 @@ class ASPProgram:
         """
         tic = time.perf_counter()
 
+        # Render the ASP program first
+        asp_source = self.render()
+
+        # Create message handler with the ASP source and specified stop level
+        message_handler = ClingoMessageHandler(asp_source, stop_on_level=stop_on_log_level)
+
         # Configure and prepare the control object
-        control = clingo.Control()
+        control = clingo.Control(logger=message_handler.on_message)
         control.configuration.solve.models = models or 1000  # Maximum of 1000 rather than unlimited
         if timeout > 0:
             control.configuration.solve.timeout = timeout
@@ -247,10 +255,29 @@ class ASPProgram:
         predicate_types = {pred.get_name(): pred for pred in self._collect_predicates()}
 
         # Add and ground the program
-        control.add("base", [], self.render())
-        control.ground([("base", [])])
+        control.add("base", [], asp_source)
 
-        # Solve and yield models
+        try:
+            control.ground([("base", [])])
+        except RuntimeError as e:
+            # Handle grounding errors
+            error_msg = f"Grounding failed: {e}\n\n"
+            if formatted_messages := message_handler.format_all_messages():
+                error_msg += formatted_messages
+            raise RuntimeError(error_msg) from e
+
+        # Check for messages after grounding
+        if message_handler.messages:
+            print(message_handler.format_all_messages())
+
+            # Check if we should halt based on log level
+            if message_handler.should_halt:
+                raise RuntimeError(
+                    f"Grounding produced {message_handler.highest_level.name} level messages "
+                    f"(stop threshold: {stop_on_log_level.name})."
+                )
+
+        # Continue with solving
         self.exhausted = False
         self.solution_count = 0
         with control.solve(yield_=True) as handle:
