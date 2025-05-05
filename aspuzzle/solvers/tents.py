@@ -1,4 +1,5 @@
-from aspuzzle.solvers.base import Solver, read_grid
+from aspuzzle.grids.rectangulargrid import RectangularGrid, read_grid
+from aspuzzle.solvers.base import Solver
 from pyclingo import ANY, Choice, Equals, Not, Predicate, create_variables
 
 
@@ -8,6 +9,7 @@ class Tents(Solver):
     def construct_puzzle(self) -> None:
         """Construct the rules of the puzzle."""
         puzzle, grid, config = self.pgc
+        assert isinstance(grid, RectangularGrid)
 
         # Define predicates
         Tree = Predicate.define("tree", ["loc"], show=False)
@@ -22,7 +24,7 @@ class Tents(Solver):
 
         # Define trees from input
         puzzle.section("Trees", segment="Clues")
-        tree_locations = read_grid(config["tree_grid"])
+        _, _, tree_locations = read_grid(config["grid"])
         puzzle.fact(*[Tree(loc=grid.Cell(row=r, col=c)) for r, c, _ in tree_locations], segment="Clues")
 
         # Define expected row and column counts

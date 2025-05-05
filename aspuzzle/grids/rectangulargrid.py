@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import Any
 
 from aspuzzle.grids.base import Grid
@@ -20,6 +22,9 @@ class RectangularGrid(Grid):
     ):
         """Initialize a grid module with specified dimensions."""
         super().__init__(puzzle, name, primary_namespace)
+
+        assert isinstance(rows, (int, SymbolicConstant))
+        assert isinstance(cols, (int, SymbolicConstant))
 
         self.rows = rows
         self.cols = cols
@@ -353,6 +358,44 @@ class RectangularGrid(Grid):
 
         return AnchorPred
 
+    @classmethod
+    def from_config(
+        cls,
+        puzzle: Puzzle,
+        config: dict[str, Any],
+        name: str = "grid",
+        primary_namespace: bool = True,
+    ) -> RectangularGrid:
+        """Create a rectangular grid from configuration."""
+        # Get explicit grid parameters if provided
+        grid_params = config.get("grid_params", {}).copy()
+        grid: list[str] | None = config.get("grid")
+
+        # Determine rows
+        if "rows" in grid_params:
+            rows = grid_params["rows"]
+        elif grid is not None:
+            rows = len(grid)
+        else:
+            raise ValueError("Grid rows must be specified in grid_params or grid")
+
+        # Determine cols
+        if "cols" in grid_params:
+            cols = grid_params["cols"]
+        elif grid is not None:
+            cols = len(grid[0])
+        else:
+            raise ValueError("Grid cols must be specified in grid_params or grid")
+
+        # Create and return the grid
+        return cls(
+            puzzle,
+            rows=rows,
+            cols=cols,
+            name=name,
+            primary_namespace=primary_namespace,
+        )
+
 
 def do_not_show_outside(pred: Predicate, grid: RectangularGrid) -> None:
     """
@@ -361,3 +404,64 @@ def do_not_show_outside(pred: Predicate, grid: RectangularGrid) -> None:
     """
     # TODO: Move to base.py, when outside_grid is made an abstract method
     pred.__class__.set_show_directive(ConditionalLiteral(pred, [pred, Not(grid.outside_grid())]))
+
+
+def read_grid(data: list[str], map_to_integers: bool = False) -> tuple[int, int, list[tuple[int, int, int | str]]]:
+    """
+    Extract dimensions and clues from the input data, using 1-based indexing.
+
+    Args:
+        data: The input grid as a list of strings
+        map_to_integers: If True, map all symbols to unique integers (1-indexed)
+
+    Returns:
+        A tuple (rows, cols, clues) where:
+        - rows is the number of rows in the grid
+        - cols is the number of columns in the grid
+        - clues is a list of tuples (row, col, value)
+    """
+    # Calculate dimensions
+    rows = len(data)
+    cols = max(len(row) for row in data) if rows > 0 else 0
+
+    symbol_to_id = {}
+    if map_to_integers:
+        # First, collect all unique symbols
+        unique_symbols = set()
+        for row in data:
+            for char in row:
+                if char != ".":
+                    unique_symbols.add(char)
+
+        # Create mapping from symbols to integer IDs
+        # First map numbers to themselves (if they exist)
+        used_ids = set()
+
+        # Map numeric symbols first
+        for symbol in unique_symbols:
+            if symbol.isdigit():
+                id_num = int(symbol)
+                symbol_to_id[symbol] = id_num
+                used_ids.add(id_num)
+
+        # Map non-numeric symbols to unused integers
+        next_id = 1
+        for symbol in sorted(unique_symbols):  # Sort for consistency
+            if symbol not in symbol_to_id:
+                while next_id in used_ids:
+                    next_id += 1
+                symbol_to_id[symbol] = next_id
+                used_ids.add(next_id)
+                next_id += 1
+
+    clues = []
+    for r, line in enumerate(data):
+        for c, char in enumerate(line):
+            if char != ".":
+                if map_to_integers:
+                    value = symbol_to_id[char]
+                else:
+                    value = int(char) if char.isdigit() else char
+                clues.append((r + 1, c + 1, value))
+
+    return rows, cols, clues

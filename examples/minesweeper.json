@@ -1,18 +1,14 @@
 {
   "puzzle_type": "Minesweeper",
   "grid_type": "RectangularGrid",
-  "grid_params": {
-    "rows": 5,
-    "cols": 5
-  },
-  "num_mines": 7,
-  "clue_grid": [
+  "grid": [
     ".2...",
     "..32.",
     "3..2.",
     ".2..1",
     "..12."
   ],
+  "num_mines": 7,
   "solutions": [
     {
       "mine": [

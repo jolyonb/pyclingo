@@ -1,4 +1,5 @@
-from aspuzzle.solvers.base import Solver, read_grid
+from aspuzzle.grids.rectangulargrid import RectangularGrid, read_grid
+from aspuzzle.solvers.base import Solver
 from aspuzzle.symbolset import SymbolSet
 from pyclingo import ANY, Predicate, create_variables
 
@@ -12,6 +13,7 @@ class Starbattle(Solver):
     def construct_puzzle(self) -> None:
         """Construct the rules of the puzzle."""
         puzzle, grid, config = self.pgc
+        assert isinstance(grid, RectangularGrid)
 
         star_count = puzzle.register_symbolic_constant("star_count", config["star_count"])
 
@@ -23,8 +25,9 @@ class Starbattle(Solver):
 
         # Define regions
         puzzle.blank_line(segment="Regions")
+        _, _, grid_data = read_grid(config["grid"])
         puzzle.fact(
-            *[Region(loc=grid.Cell(row=r, col=c), id=region_id) for r, c, region_id in read_grid(config["regions"])],
+            *[Region(loc=grid.Cell(row=r, col=c), id=region_id) for r, c, region_id in grid_data],
             segment="Regions",
         )
 

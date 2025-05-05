@@ -1,4 +1,5 @@
-from aspuzzle.solvers.base import Solver, read_grid
+from aspuzzle.grids.rectangulargrid import RectangularGrid, read_grid
+from aspuzzle.solvers.base import Solver
 from aspuzzle.symbolset import SymbolSet
 from pyclingo import ANY, Predicate, create_variables
 
@@ -12,6 +13,7 @@ class Minesweeper(Solver):
     def construct_puzzle(self) -> None:
         """Construct the rules of the puzzle."""
         puzzle, grid, config = self.pgc
+        assert isinstance(grid, RectangularGrid)
 
         # Define predicates
         Number = Predicate.define("number", ["loc", "num"], show=False)
@@ -21,8 +23,9 @@ class Minesweeper(Solver):
 
         # Define clues
         puzzle.blank_line(segment="Clues")
+        _, _, grid_data = read_grid(config["grid"])
         puzzle.fact(
-            *[Number(loc=grid.Cell(row=r, col=c), num=num) for r, c, num in read_grid(config["clue_grid"])],
+            *[Number(loc=grid.Cell(row=r, col=c), num=num) for r, c, num in grid_data],
             segment="Clues",
         )
 

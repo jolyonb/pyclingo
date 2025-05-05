@@ -1,18 +1,14 @@
 {
   "puzzle_type": "Starbattle",
   "grid_type": "RectangularGrid",
-  "grid_params": {
-    "rows": 5,
-    "cols": 5
-  },
-  "star_count": 1,
-  "regions": [
+  "grid": [
     "aabbb",
     "caaad",
     "cccdd",
     "eeedd",
     "eeeee"
   ],
+  "star_count": 1,
   "solutions": [
     {
       "star": [

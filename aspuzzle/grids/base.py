@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
+from typing import Any
 
 from aspuzzle.puzzle import Module, Puzzle
 from pyclingo import Predicate
@@ -25,4 +28,16 @@ class Grid(Module, ABC):
     @abstractmethod
     def cell(self, suffix: str = "") -> Predicate:
         """Get a cell predicate for this grid with variable values."""
+        pass
+
+    @classmethod
+    @abstractmethod
+    def from_config(
+        cls,
+        puzzle: Puzzle,
+        config: dict[str, Any],
+        name: str = "grid",
+        primary_namespace: bool = True,
+    ) -> Grid:
+        """Create a grid from configuration."""
         pass

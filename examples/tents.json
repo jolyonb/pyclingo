@@ -1,11 +1,7 @@
 {
   "puzzle_type": "Tents",
   "grid_type": "RectangularGrid",
-  "grid_params": {
-    "rows": 6,
-    "cols": 6
-  },
-  "tree_grid": [
+  "grid": [
     ".....T",
     "...T..",
     "T.....",

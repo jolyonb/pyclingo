@@ -1,4 +1,5 @@
-from aspuzzle.solvers.base import Solver, read_grid
+from aspuzzle.grids.rectangulargrid import RectangularGrid, read_grid
+from aspuzzle.solvers.base import Solver
 from aspuzzle.symbolset import SymbolSet
 from pyclingo import ANY, Predicate, create_variables
 
@@ -12,6 +13,7 @@ class Starbattle_Shapeless(Solver):
     def construct_puzzle(self) -> None:
         """Construct the rules of the puzzle."""
         puzzle, grid, config = self.pgc
+        assert isinstance(grid, RectangularGrid)
 
         star_count = puzzle.register_symbolic_constant("star_count", config["star_count"])
 
@@ -23,8 +25,9 @@ class Starbattle_Shapeless(Solver):
 
         # Define excluded area
         puzzle.blank_line(segment="Excluded cells")
+        _, _, grid_data = read_grid(config["grid"])
         puzzle.fact(
-            *[Excluded(loc=grid.Cell(row=r, col=c)) for r, c, _ in read_grid(config["grid_layout"])],
+            *[Excluded(loc=grid.Cell(row=r, col=c)) for r, c, _ in grid_data],
             segment="Excluded cells",
         )
 

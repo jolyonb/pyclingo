@@ -1,18 +1,14 @@
 {
   "puzzle_type": "Stitches",
   "grid_type": "RectangularGrid",
-  "grid_params": {
-    "rows": 5,
-    "cols": 5
-  },
-  "stitch_count": 1,
-  "regions": [
+  "grid": [
     "accdd",
     "abccd",
     "abbcd",
     "eeeed",
     "eeeed"
   ],
+  "stitch_count": 1,
   "row_clues": [
     4,
     3,

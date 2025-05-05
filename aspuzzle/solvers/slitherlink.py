@@ -1,4 +1,5 @@
-from aspuzzle.solvers.base import Solver, read_grid
+from aspuzzle.grids.rectangulargrid import RectangularGrid, read_grid
+from aspuzzle.solvers.base import Solver
 from aspuzzle.symbolset import SymbolSet
 from pyclingo import Not, Predicate, create_variables
 
@@ -9,6 +10,7 @@ class Slitherlink(Solver):
     def construct_puzzle(self) -> None:
         """Construct the rules of the puzzle."""
         puzzle, grid, config = self.pgc
+        assert isinstance(grid, RectangularGrid)
 
         # Define predicates
         Clue = Predicate.define("clue", ["loc", "num"], show=False)
@@ -22,7 +24,7 @@ class Slitherlink(Solver):
 
         # Parse clues, sheep, and wolves from the grid
         puzzle.section("Grid data", segment="Clues")
-        grid_data = read_grid(config["clue_grid"])
+        _, _, grid_data = read_grid(config["grid"])
 
         # Define clues
         puzzle.fact(

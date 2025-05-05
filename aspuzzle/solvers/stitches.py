@@ -1,4 +1,5 @@
-from aspuzzle.solvers.base import Solver, read_grid
+from aspuzzle.grids.rectangulargrid import RectangularGrid, read_grid
+from aspuzzle.solvers.base import Solver
 from pyclingo import ANY, Choice, Count, Equals, Predicate, create_variables
 
 
@@ -11,6 +12,7 @@ class Stitches(Solver):
     def construct_puzzle(self) -> None:
         """Construct the rules of the puzzle."""
         puzzle, grid, config = self.pgc
+        assert isinstance(grid, RectangularGrid)
 
         # Register stitch count as a symbolic constant
         stitch_count = puzzle.register_symbolic_constant("stitch_count", config["stitch_count"])
@@ -29,7 +31,7 @@ class Stitches(Solver):
 
         # Parse regions from the input
         puzzle.section("Define regions", segment="Regions")
-        region_data = read_grid(config["regions"], map_to_integers=True)
+        _, _, region_data = read_grid(config["grid"], map_to_integers=True)
 
         # Create Region facts
         for r, c, region_id in region_data:

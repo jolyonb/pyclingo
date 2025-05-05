@@ -1,12 +1,7 @@
 {
   "puzzle_type": "Starbattle_Shapeless",
   "grid_type": "RectangularGrid",
-  "grid_params": {
-    "rows": 6,
-    "cols": 6
-  },
-  "star_count": 1,
-  "grid_layout": [
+  "grid": [
     "#..#..",
     "#...##",
     "......",
@@ -14,6 +9,7 @@
     "#...#.",
     ".#...#"
   ],
+  "star_count": 1,
   "solutions": [
     {
       "star": [
