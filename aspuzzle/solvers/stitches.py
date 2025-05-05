@@ -11,8 +11,7 @@ class Stitches(Solver):
 
     def construct_puzzle(self) -> None:
         """Construct the rules of the puzzle."""
-        puzzle, grid, config = self.pgc
-        grid_data = self.parse_grid(config["grid"])
+        puzzle, grid, config, grid_data = self.unpack_data
         assert isinstance(grid, RectangularGrid)
 
         # Register stitch count as a symbolic constant

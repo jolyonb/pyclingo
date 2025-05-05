@@ -43,9 +43,18 @@ class Solver(ABC):
         self.grid = grid_class.from_config(self.puzzle, self.config)
 
     @property
-    def pgc(self) -> tuple[Puzzle, Grid, dict[str, Any]]:
-        """Convenience property to get puzzle, grid, and config."""
-        return self.puzzle, self.grid, self.config
+    def unpack_data(self) -> tuple[Puzzle, Grid, dict[str, Any], list[tuple[int, int, int | str]]]:
+        """
+        Convenience property to get puzzle, grid, config, and parsed grid data.
+
+        Returns:
+            A tuple containing (puzzle, grid, config, grid_data)
+        """
+        if "grid" in self.config:
+            grid_data = self.grid.parse_grid(self.config["grid"])
+        else:
+            grid_data = []
+        return self.puzzle, self.grid, self.config, grid_data
 
     def validate(self) -> None:
         """Validate the puzzle configuration."""
@@ -71,12 +80,6 @@ class Solver(ABC):
     def validate_config(self) -> None:
         """Function to perform extra validation on the puzzle config as needed."""
         pass
-
-    def parse_grid(self, map_to_integers: bool = False) -> dict:
-        """Parse the grid data for this puzzle."""
-        if "grid" not in self.config:
-            raise ValueError("No grid data found in configuration")
-        return self.grid.parse_grid(self.config["grid"], map_to_integers=map_to_integers)
 
     @abstractmethod
     def construct_puzzle(self) -> None:

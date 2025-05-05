@@ -49,8 +49,9 @@ class Grid(Module, ABC):
 
         Args:
             grid_data: The raw grid data as a list of strings
+            map_to_integers: Whether to convert symbols to unique integers
 
         Returns:
-            A dictionary containing the parsed grid elements
+            List of (row, col, value) tuples for non-empty cells
         """
         pass

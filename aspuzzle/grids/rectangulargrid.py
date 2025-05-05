@@ -405,10 +405,7 @@ class RectangularGrid(Grid):
             map_to_integers: Whether to convert symbols to unique integers
 
         Returns:
-            A dictionary containing structured grid data with keys:
-                - dimensions: (rows, cols)
-                - cells: List of (row, col, value) tuples for non-empty cells
-                - by_symbol: Dict mapping symbols to lists of (row, col) positions
+            List of (row, col, value) tuples for non-empty cells
         """
         rows = self.rows
         cols = self.cols
