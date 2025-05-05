@@ -127,6 +127,11 @@ class Predicate(BasicTerm):
         """Get fields that represent predicate arguments (not starting with _)."""
         return [f for f in fields(cls) if not f.name.startswith("_")]
 
+    @classmethod
+    def field_names(cls) -> list[str]:
+        """Get field names that represent predicate arguments (not starting with _)."""
+        return [f.name for f in fields(cls) if not f.name.startswith("_")]
+
     @property
     def arguments(self) -> list[PREDICATE_FIELD_TYPE]:
         """Get the values of all argument fields."""
