@@ -33,7 +33,6 @@ class RectangularGrid(Grid):
     def Cell(self) -> type[Predicate]:
         """Get the Cell predicate for this grid."""
         Cell = Predicate.define("cell", ["row", "col"], namespace=self.namespace, show=False)
-        self._Cell = Cell  # To avoid circular definitions with Outside
 
         R, C = create_variables("R", "C")
 
@@ -396,6 +395,82 @@ class RectangularGrid(Grid):
             primary_namespace=primary_namespace,
         )
 
+    # In grids/rectangulargrid.py
+    def parse_grid(self, grid_data: list[str], map_to_integers: bool = False) -> list[tuple[int, int, str | int]]:
+        """
+        Parse a rectangular grid into organized structures, ignoring any "." characters.
+
+        Args:
+            grid_data: The raw grid data as a list of strings
+            map_to_integers: Whether to convert symbols to unique integers
+
+        Returns:
+            A dictionary containing structured grid data with keys:
+                - dimensions: (rows, cols)
+                - cells: List of (row, col, value) tuples for non-empty cells
+                - by_symbol: Dict mapping symbols to lists of (row, col) positions
+        """
+        rows = self.rows
+        cols = self.cols
+
+        # Validate grid dimensions
+        if len(grid_data) != rows:
+            raise ValueError(f"Expected {rows} rows in grid, got {len(grid_data)}")
+        for row in grid_data:
+            if len(row) != cols:
+                raise ValueError(f"Expected {cols} cols in row, got {len(row)}")
+
+        symbol_to_id = {}
+        if map_to_integers:
+            # First, collect all unique symbols
+            unique_symbols = set()
+            for row in grid_data:
+                for char in row:
+                    if char != ".":
+                        unique_symbols.add(char)
+
+            # Create mapping from symbols to integer IDs
+            # First map numbers to themselves (if they exist)
+            used_ids = set()
+
+            # Map numeric symbols first
+            for symbol in unique_symbols:
+                if symbol.isdigit():
+                    id_num = int(symbol)
+                    symbol_to_id[symbol] = id_num
+                    used_ids.add(id_num)
+
+            # Map non-numeric symbols to unused integers
+            next_id = 1
+            for symbol in sorted(unique_symbols):  # Sort for consistency
+                if symbol not in symbol_to_id:
+                    while next_id in used_ids:
+                        next_id += 1
+                    symbol_to_id[symbol] = next_id
+                    used_ids.add(next_id)
+                    next_id += 1
+
+        # Parse cells
+        cells = []
+
+        for r, line in enumerate(grid_data):
+            for c, char in enumerate(line):
+                # Special case: ignore "." characters
+                if char == ".":
+                    continue
+
+                # Process the value
+                if map_to_integers and char in symbol_to_id:
+                    value = symbol_to_id[char]
+                else:
+                    value = int(char) if char.isdigit() else char
+
+                # Add to cells list
+                cell_entry = (r + 1, c + 1, value)
+                cells.append(cell_entry)
+
+        return cells
+
 
 def do_not_show_outside(pred: Predicate, grid: RectangularGrid) -> None:
     """
@@ -404,64 +479,3 @@ def do_not_show_outside(pred: Predicate, grid: RectangularGrid) -> None:
     """
     # TODO: Move to base.py, when outside_grid is made an abstract method
     pred.__class__.set_show_directive(ConditionalLiteral(pred, [pred, Not(grid.outside_grid())]))
-
-
-def read_grid(data: list[str], map_to_integers: bool = False) -> tuple[int, int, list[tuple[int, int, int | str]]]:
-    """
-    Extract dimensions and clues from the input data, using 1-based indexing.
-
-    Args:
-        data: The input grid as a list of strings
-        map_to_integers: If True, map all symbols to unique integers (1-indexed)
-
-    Returns:
-        A tuple (rows, cols, clues) where:
-        - rows is the number of rows in the grid
-        - cols is the number of columns in the grid
-        - clues is a list of tuples (row, col, value)
-    """
-    # Calculate dimensions
-    rows = len(data)
-    cols = max(len(row) for row in data) if rows > 0 else 0
-
-    symbol_to_id = {}
-    if map_to_integers:
-        # First, collect all unique symbols
-        unique_symbols = set()
-        for row in data:
-            for char in row:
-                if char != ".":
-                    unique_symbols.add(char)
-
-        # Create mapping from symbols to integer IDs
-        # First map numbers to themselves (if they exist)
-        used_ids = set()
-
-        # Map numeric symbols first
-        for symbol in unique_symbols:
-            if symbol.isdigit():
-                id_num = int(symbol)
-                symbol_to_id[symbol] = id_num
-                used_ids.add(id_num)
-
-        # Map non-numeric symbols to unused integers
-        next_id = 1
-        for symbol in sorted(unique_symbols):  # Sort for consistency
-            if symbol not in symbol_to_id:
-                while next_id in used_ids:
-                    next_id += 1
-                symbol_to_id[symbol] = next_id
-                used_ids.add(next_id)
-                next_id += 1
-
-    clues = []
-    for r, line in enumerate(data):
-        for c, char in enumerate(line):
-            if char != ".":
-                if map_to_integers:
-                    value = symbol_to_id[char]
-                else:
-                    value = int(char) if char.isdigit() else char
-                clues.append((r + 1, c + 1, value))
-
-    return rows, cols, clues

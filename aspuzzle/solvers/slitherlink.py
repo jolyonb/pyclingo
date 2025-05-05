@@ -1,4 +1,4 @@
-from aspuzzle.grids.rectangulargrid import RectangularGrid, read_grid
+from aspuzzle.grids.rectangulargrid import RectangularGrid, do_not_show_outside
 from aspuzzle.solvers.base import Solver
 from aspuzzle.symbolset import SymbolSet
 from pyclingo import Not, Predicate, create_variables
@@ -11,6 +11,7 @@ class Slitherlink(Solver):
     def construct_puzzle(self) -> None:
         """Construct the rules of the puzzle."""
         puzzle, grid, config = self.pgc
+        grid_data = self.grid.parse_grid(config["grid"])
         assert isinstance(grid, RectangularGrid)
 
         # Define predicates
@@ -23,13 +24,10 @@ class Slitherlink(Solver):
         cell = grid.cell()
         cell_adj = grid.cell(suffix="adj")
 
-        # Parse clues, sheep, and wolves from the grid
-        puzzle.section("Grid data", segment="Clues")
-        _, _, grid_data = read_grid(config["grid"])
-
         # Define clues
+        puzzle.section("Grid data", segment="Clues")
         puzzle.fact(
-            *[Clue(loc=grid.Cell(row=r, col=c), num=v) for r, c, v in grid_data if isinstance(v, int) and 0 <= v <= 3],
+            *[Clue(loc=grid.Cell(row=r, col=c), num=v) for r, c, v in grid_data if v in (0, 1, 2, 3)],
             segment="Clues",
         )
 
@@ -49,6 +47,7 @@ class Slitherlink(Solver):
         # Rule 1: All outside border cells are outside
         puzzle.section("Outside border cells must be outside")
         puzzle.when(grid.OutsideGrid(C), symbols["outside"](C))
+        do_not_show_outside(symbols["outside"](cell), grid)
 
         # Rule 2: Sheep must be inside, wolves must be outside
         if sheep_facts:

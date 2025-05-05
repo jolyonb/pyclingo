@@ -41,3 +41,16 @@ class Grid(Module, ABC):
     ) -> Grid:
         """Create a grid from configuration."""
         pass
+
+    @abstractmethod
+    def parse_grid(self, grid_data: list[str], map_to_integers: bool = False) -> list[tuple[int, int, str | int]]:
+        """
+        Parse the grid data into a structured format.
+
+        Args:
+            grid_data: The raw grid data as a list of strings
+
+        Returns:
+            A dictionary containing the parsed grid elements
+        """
+        pass

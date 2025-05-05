@@ -72,6 +72,12 @@ class Solver(ABC):
         """Function to perform extra validation on the puzzle config as needed."""
         pass
 
+    def parse_grid(self, map_to_integers: bool = False) -> dict:
+        """Parse the grid data for this puzzle."""
+        if "grid" not in self.config:
+            raise ValueError("No grid data found in configuration")
+        return self.grid.parse_grid(self.config["grid"], map_to_integers=map_to_integers)
+
     @abstractmethod
     def construct_puzzle(self) -> None:
         """Construct the rules of the puzzle."""

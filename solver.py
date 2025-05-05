@@ -1,5 +1,6 @@
 import importlib
 import json
+import pathlib
 
 from aspuzzle.puzzle import Puzzle
 from aspuzzle.solvers.base import Solver
@@ -9,7 +10,16 @@ def solve(filename: str) -> None:
     """
     Loads the puzzle from the given filename and solves it.
     """
-    with open(filename) as f:
+    # Find the file to open
+    if not filename.endswith(".json"):
+        filename += ".json"
+    path = pathlib.Path(filename)
+
+    if not path.exists():
+        # Try in examples directory
+        path = path.parent / "examples" / filename
+
+    with open(path) as f:
         config = json.load(f)
 
     # Create a puzzle object
