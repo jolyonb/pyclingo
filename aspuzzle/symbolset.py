@@ -5,7 +5,7 @@ from typing import Optional, Self
 
 from aspuzzle.grid import Grid
 from aspuzzle.puzzle import Module
-from pyclingo import Choice, Not, Predicate, Variable
+from pyclingo import Choice, Not, Predicate, Variable, create_variables
 from pyclingo.expression import Comparison
 from pyclingo.negation import NegatedLiteral
 from pyclingo.pool import Pool
@@ -168,12 +168,82 @@ class SymbolSet(Module):
         # Add the condition that the cell is not excluded
         conditions: list[Predicate | NegatedLiteral] = [cell]
         conditions.extend(Not(excl) for excl in self._excluded_cells)
+
         # Add grid outside border to exclusions if it exists
-        if self.grid.include_outside_border:
-            conditions.append(Not(self.grid.outside()))
+        if self.grid.has_outside_border:
+            # This is safe to do because we're in the finalize method, which is
+            # called after all rules that might create the outside border have been defined.
+            conditions.append(Not(self.grid.outside_grid()))
 
         self.section("Place symbols in the grid")
         self.when(conditions, choice)
 
+    def make_contiguous(self, symbol_name: str, anchor_cell: Predicate = None) -> Self:
+        """
+        Make the specified symbol form a contiguous region.
+        For range symbols, each value in the range forms its own contiguous region.
 
-# TODO: Helper conditions for contiguous symbols
+        Args:
+            symbol_name: The name of the symbol to make contiguous
+            anchor_cell: Optional specific cell to use as the anchor (must have the same field structure as the symbol).
+                         If None, anchors will be automatically determined.
+
+        Returns:
+            Self for method chaining
+        """
+        # Verify the symbol exists
+        if symbol_name not in self._symbols:
+            raise KeyError(f"No symbol named '{symbol_name}' in this set")
+
+        symbol = self._symbols[symbol_name]
+        symbol_pred = symbol.predicate
+        fields = symbol_pred.field_names()
+        value_field = {symbol.value_field: Variable("V")} if symbol.is_range else {}
+
+        # Create Connected predicate with same fields as the symbol predicate
+        Connected = Predicate.define(
+            f"connected_{symbol_name}",
+            fields,
+            namespace=self.namespace,
+            show=False,
+        )
+
+        # Determine anchor if needed
+        if anchor_cell is None:
+            # Create an anchor for the symbol, handling all values in a range as needed
+            anchor_pred = self.grid.find_anchor_cell(
+                condition_predicate=symbol_pred,
+                cell_field="loc",
+                anchor_name=f"{symbol_name}_anchor",
+                fixed_fields=value_field,
+                preserved_fields=[symbol.value_field] if symbol.value_field else None,
+                segment=self._name,
+            )
+            anchor_cell = anchor_pred(loc=self.grid.cell(), **value_field)
+
+        # Validate anchor cell fields
+        if anchor_cell.field_names() != fields:
+            raise ValueError(
+                f"The anchor cell {anchor_cell} must have the same field structure as the symbol predicate {fields}."
+            )
+
+        self.section(f"Contiguity for {symbol_name}")
+
+        # Mark each anchor as connected, using whatever was provided in the anchor
+        self.when(anchor_cell, Connected(**{f: getattr(anchor_cell, f) for f in fields}))
+
+        # Propagate connectivity
+        C, C_adj = create_variables("C", "C_adj")
+        self.when(
+            [
+                Connected(loc=C, **value_field),
+                symbol_pred(loc=C_adj, **value_field),
+                self.grid.Orthogonal(cell1=C, cell2=C_adj),
+            ],
+            Connected(loc=C_adj, **value_field),
+        )
+
+        # Forbid symbol cells that aren't connected
+        self.forbid(symbol_pred(loc=C, **value_field), Not(Connected(loc=C, **value_field)))
+
+        return self

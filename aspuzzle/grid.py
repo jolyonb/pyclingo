@@ -1,5 +1,7 @@
+from typing import Any
+
 from aspuzzle.puzzle import Module, Puzzle, cached_predicate
-from pyclingo import Not, Predicate, RangePool, create_variables, ExplicitPool
+from pyclingo import ExplicitPool, Min, Not, Predicate, RangePool, create_variables
 from pyclingo.conditional_literal import ConditionalLiteral
 from pyclingo.value import ANY, SymbolicConstant, Variable
 
@@ -13,7 +15,6 @@ class Grid(Module):
         rows: int | SymbolicConstant,
         cols: int | SymbolicConstant,
         name: str = "grid",
-        include_outside_border: bool = False,
         primary_namespace: bool = True,
     ):
         """Initialize a grid module with specified dimensions."""
@@ -21,7 +22,7 @@ class Grid(Module):
 
         self.rows = rows
         self.cols = cols
-        self.include_outside_border = include_outside_border
+        self._has_outside_border: bool = False
 
     @cached_predicate
     def Cell(self) -> type[Predicate]:
@@ -33,18 +34,13 @@ class Grid(Module):
 
         # Define grid cells
         self.section("Define cells in the grid")
-        offset = 1 if self.include_outside_border else 0
         self.when(
             [
-                R.in_(RangePool(1 - offset, self.rows + offset)),
-                C.in_(RangePool(1 - offset, self.cols + offset)),
+                R.in_(RangePool(1, self.rows)),
+                C.in_(RangePool(1, self.cols)),
             ],
             Cell(R, C),
         )
-
-        if self.include_outside_border:
-            # Define the Outside predicate
-            _ = self.Outside
 
         return Cell
 
@@ -56,12 +52,9 @@ class Grid(Module):
         return self.Cell(row=R, col=C)
 
     @cached_predicate
-    def Outside(self) -> type[Predicate]:
-        """Get the Outside predicate identifying cells in the outside border."""
-        if not self.include_outside_border:
-            raise ValueError("Grid does not include outside border")
-
-        Outside = Predicate.define("outside", ["loc"], namespace=self.namespace, show=False)
+    def OutsideGrid(self) -> type[Predicate]:
+        """Get the OutsideGrid predicate identifying cells in the outside border."""
+        Outside = Predicate.define("outside_grid", ["loc"], namespace=self.namespace, show=False)
 
         R, C = create_variables("R", "C")
         cell = self.Cell(R, C)
@@ -84,12 +77,17 @@ class Grid(Module):
             ],
             Outside(loc=cell),
         )
+        # Create cell locations in the outside border
+        self.when(Outside(loc=cell), let=self.Cell(R, C))
+
+        # We've included the outside border
+        self._has_outside_border = True
 
         return Outside
 
-    def outside(self, suffix: str = "") -> Predicate:
-        """Get an outside predicate for this grid with variable values."""
-        return self.Outside(self.cell(suffix=suffix))
+    def outside_grid(self, suffix: str = "") -> Predicate:
+        """Get an outside_grid predicate for this grid with variable values."""
+        return self.OutsideGrid(self.cell(suffix=suffix))
 
     @cached_predicate
     def Direction(self) -> type[Predicate]:
@@ -270,10 +268,100 @@ class Grid(Module):
         Idx = Variable(f"Idx{index_suffix}")
         return self.Line(direction=D, index=Idx, loc=self.cell(suffix=loc_suffix))
 
+    @property
+    def has_outside_border(self) -> bool:
+        """Whether an outside border was included in the grid definition."""
+        return self._has_outside_border
+
+    def find_anchor_cell(
+        self,
+        condition_predicate: type[Predicate],
+        cell_field: str,
+        anchor_name: str,
+        fixed_fields: dict[str, Any] | None = None,
+        preserved_fields: list[str] | None = None,
+        segment: str | None = None,
+    ) -> type[Predicate]:
+        """
+        Find the lexicographically minimum cell that satisfies the given condition.
+        The anchor is the cell with minimum row, and among those, minimum column.
+
+        Args:
+            condition_predicate: The predicate class to check
+            cell_field: The name of the field that contains the cell location
+            anchor_name: Name for the anchor predicate
+            fixed_fields: Dictionary of field names to values for the condition predicate
+            preserved_fields: List of field names from fixed_fields to include in the anchor predicate
+            segment: Segment to publish these rules to
+
+        Returns:
+            The anchor predicate class that marks the anchor cell
+        """
+        self.puzzle.section(f"Find anchor cell for {condition_predicate.__name__}", segment=segment)
+
+        if fixed_fields is None:
+            fixed_fields = {}
+
+        if preserved_fields is None:
+            preserved_fields = []
+
+        # Validate that preserved fields are actually in fixed_fields
+        for field in preserved_fields:
+            if field not in fixed_fields:
+                raise ValueError(f"Preserved field '{field}' not found in fixed_fields")
+
+        # Define the anchor predicate with the cell field and any preserved fields
+        anchor_field_names = [cell_field] + preserved_fields
+        AnchorPred = Predicate.define(anchor_name, anchor_field_names, namespace=self.namespace, show=False)
+
+        R, C, MinR, MinC = create_variables("R", "C", "MinR", "MinC")
+        cell = self.Cell(row=R, col=C)
+
+        # Build the condition with fixed fields and cell
+        condition_args = {**fixed_fields, cell_field: cell}
+
+        # Find minimum row among cells that satisfy the condition
+        MinRowPred = Predicate.define(
+            f"min_row_for_{anchor_name}", ["row"] + preserved_fields, namespace=self.namespace, show=False
+        )
+
+        # Build arguments for MinRowPred
+        min_row_args = {"row": MinR}
+        for field in preserved_fields:
+            min_row_args[field] = fixed_fields[field]
+
+        # Find the minimum row
+        self.puzzle.when(
+            Min(R, condition=[condition_predicate(**condition_args), R.in_(RangePool(1, self.rows))]).assign_to(MinR),
+            MinRowPred(**min_row_args),
+            segment=segment,
+        )
+
+        # Find minimum column among cells in the minimum row
+        min_row_condition_args = {**fixed_fields, cell_field: self.Cell(row=MinR, col=C)}
+
+        # Build the final anchor predicate arguments
+        anchor_args = {cell_field: self.Cell(row=MinR, col=MinC)}
+        for field in preserved_fields:
+            anchor_args[field] = fixed_fields[field]
+
+        self.puzzle.when(
+            [
+                MinRowPred(**min_row_args),
+                Min(
+                    C, condition=[condition_predicate(**min_row_condition_args), C.in_(RangePool(1, self.rows))]
+                ).assign_to(MinC),
+            ],
+            AnchorPred(**anchor_args),
+            segment=segment,
+        )
+
+        return AnchorPred
+
 
 def do_not_show_outside(pred: Predicate, grid: Grid) -> None:
     """
     This helper function sets the show directive on a predicate to not display for cells outside the grid.
     The predicate must be instantiated with the grid.cell() location.
     """
-    pred.__class__.set_show_directive(ConditionalLiteral(pred, [pred, Not(grid.outside())]))
+    pred.__class__.set_show_directive(ConditionalLiteral(pred, [pred, Not(grid.outside_grid())]))

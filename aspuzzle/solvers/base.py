@@ -10,12 +10,20 @@ class Solver:
     default_config: dict[str, Any] = {}
     solver_name: str = "Puzzle solver"
 
-    def __init__(self, puzzle: Puzzle, grid: Grid, config: dict[str, Any]) -> None:
+    def __init__(self, puzzle: Puzzle, config: dict[str, Any]) -> None:
         self.puzzle = puzzle
         self.puzzle.name = self.solver_name
-        self.grid = grid
+        self.grid = None
         # Merge default config with instance config
         self.config = {**self.default_config, **config}
+
+    def create_grid(self) -> None:
+        """Create the grid for this puzzle. Can be overridden by subclasses."""
+        if self.config["grid_type"] == "RectangularGrid":
+            grid = Grid(self.puzzle, **self.config["grid_params"])
+        else:
+            raise ValueError(f"Unknown grid type {self.config['grid_type']}")
+        self.grid = grid
 
     @property
     def pgc(self) -> tuple[Puzzle, Grid, dict[str, Any]]:

@@ -7,7 +7,7 @@ from typing import Generator
 
 import clingo
 
-from pyclingo.clingo_handler import LogLevel, ClingoMessageHandler
+from pyclingo.clingo_handler import ClingoMessageHandler, LogLevel
 from pyclingo.predicate import Predicate
 from pyclingo.program_elements import BlankLine, Comment, ProgramElement, Rule
 from pyclingo.term import Term
@@ -218,7 +218,9 @@ class ASPProgram:
         if unregistered := used_constants - set(self._symbolic_constants.keys()):
             raise ValueError(f"Unregistered symbolic constants used in program: {', '.join(sorted(unregistered))}")
 
-    def solve(self, models: int = 0, timeout: int = 0, stop_on_log_level: LogLevel = LogLevel.INFO) -> Generator[dict[type[Predicate], set[Predicate]], None, None]:
+    def solve(
+        self, models: int = 0, timeout: int = 0, stop_on_log_level: LogLevel = LogLevel.INFO
+    ) -> Generator[dict[type[Predicate], set[Predicate]], None, None]:
         """
         Solve the ASP program and yield solutions as sets of Predicate objects.
 
