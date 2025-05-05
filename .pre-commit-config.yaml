@@ -1,0 +1,25 @@
+repos:
+  - repo: local
+    hooks:
+      # Run the ruff linter
+      - id: ruff
+        name: ruff (linter)
+        description: "Run 'ruff' for extremely fast Python linting"
+        entry: ruff check
+        language: system
+        types: [python]
+        args: [--fix]
+
+      # Run the ruff formatter
+      - id: ruff-format
+        name: ruff (formatter)
+        description: "Run 'ruff format' for extremely fast Python formatting"
+        entry: ruff format
+        language: system
+        types: [python]
+
+  # Verify that the pre-commit configuration is valid
+  - repo: https://github.com/pre-commit/pre-commit
+    rev: v3.5.0
+    hooks:
+      - id: validate_manifest
