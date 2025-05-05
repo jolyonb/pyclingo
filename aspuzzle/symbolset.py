@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional, Self
 
-from aspuzzle.grid import Grid
+from aspuzzle.grids.base import Grid
 from aspuzzle.puzzle import Module
 from pyclingo import Choice, Not, Predicate, Variable, create_variables
 from pyclingo.expression import Comparison

@@ -1,34 +1,10 @@
-from abc import ABC, abstractmethod
 from typing import Any
 
-from aspuzzle.puzzle import Module, Puzzle, cached_predicate
+from aspuzzle.grids.base import Grid
+from aspuzzle.puzzle import Puzzle, cached_predicate
 from pyclingo import ExplicitPool, Min, Not, Predicate, RangePool, create_variables
 from pyclingo.conditional_literal import ConditionalLiteral
 from pyclingo.value import ANY, SymbolicConstant, Variable
-
-
-class Grid(Module, ABC):
-    """Abstract base class for all grid types in puzzles."""
-
-    def __init__(
-        self,
-        puzzle: Puzzle,
-        name: str = "grid",
-        primary_namespace: bool = True,
-    ):
-        """Initialize a base grid module."""
-        super().__init__(puzzle, name, primary_namespace)
-        self._has_outside_border: bool = False
-
-    @property
-    def has_outside_border(self) -> bool:
-        """Whether an outside border was included in the grid definition."""
-        return self._has_outside_border
-
-    @abstractmethod
-    def cell(self, suffix: str = "") -> Predicate:
-        """Get a cell predicate for this grid with variable values."""
-        pass
 
 
 class RectangularGrid(Grid):
@@ -383,4 +359,5 @@ def do_not_show_outside(pred: Predicate, grid: RectangularGrid) -> None:
     This helper function sets the show directive on a predicate to not display for cells outside the grid.
     The predicate must be instantiated with the grid.cell() location.
     """
+    # TODO: Move to base.py, when outside_grid is made an abstract method
     pred.__class__.set_show_directive(ConditionalLiteral(pred, [pred, Not(grid.outside_grid())]))

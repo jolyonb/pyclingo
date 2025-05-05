@@ -1,14 +1,16 @@
+import importlib
 import json
 import pprint
 from typing import Any
 
-from aspuzzle.grid import RectangularGrid
+from aspuzzle.grids.base import Grid
 from aspuzzle.puzzle import Puzzle
 
 
 class Solver:
     default_config: dict[str, Any] = {}
     solver_name: str = "Puzzle solver"
+    supported_grid_types: list[str] = ["RectangularGrid"]  # Default supported grid type
 
     def __init__(self, puzzle: Puzzle, config: dict[str, Any]) -> None:
         self.puzzle = puzzle
@@ -19,14 +21,27 @@ class Solver:
 
     def create_grid(self) -> None:
         """Create the grid for this puzzle. Can be overridden by subclasses."""
-        if self.config["grid_type"] == "RectangularGrid":
-            grid = RectangularGrid(self.puzzle, **self.config["grid_params"])
-        else:
-            raise ValueError(f"Unknown grid type {self.config['grid_type']}")
-        self.grid = grid
+        grid_type = self.config.get("grid_type", "RectangularGrid")
+
+        # Check if the specified grid type is supported
+        if grid_type not in self.supported_grid_types:
+            supported = ", ".join(self.supported_grid_types)
+            raise ValueError(
+                f"Grid type '{grid_type}' is not supported by {self.solver_name}. Supported types: {supported}"
+            )
+
+        # Import the grid class dynamically
+        try:
+            grid_module = importlib.import_module(f"aspuzzle.grids.{grid_type.lower()}")
+            grid_class = getattr(grid_module, grid_type)
+        except (ImportError, AttributeError) as e:
+            raise ValueError(f"Failed to import grid type {grid_type}: {e}")
+
+        # Create the grid
+        self.grid = grid_class(self.puzzle, **self.config["grid_params"])
 
     @property
-    def pgc(self) -> tuple[Puzzle, RectangularGrid, dict[str, Any]]:
+    def pgc(self) -> tuple[Puzzle, Grid, dict[str, Any]]:
         """Convenience property to get puzzle, grid, and config."""
         return self.puzzle, self.grid, self.config
 

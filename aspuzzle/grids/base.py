@@ -1,0 +1,28 @@
+from abc import ABC, abstractmethod
+
+from aspuzzle.puzzle import Module, Puzzle
+from pyclingo import Predicate
+
+
+class Grid(Module, ABC):
+    """Abstract base class for all grid types in puzzles."""
+
+    def __init__(
+        self,
+        puzzle: Puzzle,
+        name: str = "grid",
+        primary_namespace: bool = True,
+    ):
+        """Initialize a base grid module."""
+        super().__init__(puzzle, name, primary_namespace)
+        self._has_outside_border: bool = False
+
+    @property
+    def has_outside_border(self) -> bool:
+        """Whether an outside border was included in the grid definition."""
+        return self._has_outside_border
+
+    @abstractmethod
+    def cell(self, suffix: str = "") -> Predicate:
+        """Get a cell predicate for this grid with variable values."""
+        pass
