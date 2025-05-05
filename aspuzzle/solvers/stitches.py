@@ -27,8 +27,6 @@ class Stitches(Solver):
         Dir, Counter, N, A, B = create_variables("Dir", "Counter", "N", "A", "B")
         Id1, Id2 = create_variables("Id1", "Id2")
         cell = grid.cell()
-        cell1 = grid.cell(suffix="1")
-        cell2 = grid.cell(suffix="2")
 
         # Parse regions from the input
         puzzle.section("Define regions", segment="Regions")

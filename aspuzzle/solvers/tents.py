@@ -24,9 +24,7 @@ class Tents(Solver):
         # Define trees from input
         puzzle.section("Trees", segment="Clues")
         tree_locations = read_grid(config["tree_grid"])
-        puzzle.fact(
-            *[Tree(loc=grid.Cell(row=r, col=c)) for r, c, _ in tree_locations], segment="Clues"
-        )
+        puzzle.fact(*[Tree(loc=grid.Cell(row=r, col=c)) for r, c, _ in tree_locations], segment="Clues")
 
         # Define expected row and column counts
         puzzle.section("Tent counts", segment="Clues")
