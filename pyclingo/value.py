@@ -619,15 +619,7 @@ ANY = Variable("_")
 
 
 @overload
-def create_variables(name: str) -> Variable: ...
-
-
-@overload
-def create_variables(name1: str, name2: str) -> tuple[Variable, Variable]: ...
-
-
-@overload
-def create_variables(name1: str, name2: str, name3: str) -> tuple[Variable, Variable, Variable]: ...
+def create_variables(names: str) -> Variable: ...
 
 
 @overload

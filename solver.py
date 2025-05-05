@@ -16,8 +16,8 @@ def solve(filename: str) -> None:
     path = pathlib.Path(filename)
 
     if not path.exists():
-        # Try in examples directory
-        path = path.parent / "examples" / filename
+        # Try looking in the puzzles directory
+        path = path.parent / "puzzles" / filename
 
     with open(path) as f:
         config = json.load(f)

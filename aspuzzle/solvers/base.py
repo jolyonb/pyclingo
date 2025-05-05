@@ -12,7 +12,7 @@ class Solver(ABC):
     default_config: dict[str, Any] = {}
     solver_name: str = "Puzzle solver"
     supported_grid_types: list[str] = ["RectangularGrid"]  # Default supported grid type
-    supported_symbols: list[str] = []  # List of supported symbols in the grid definition
+    supported_symbols: list[str | int] = []  # List of supported symbols in the grid definition
     map_grid_to_integers: bool = False  # Controls how the grid is read
 
     def __init__(self, puzzle: Puzzle, config: dict[str, Any]) -> None:

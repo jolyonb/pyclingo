@@ -457,6 +457,7 @@ class RectangularGrid(Grid):
                     continue
 
                 # Process the value
+                value: int | str
                 if map_to_integers and char in symbol_to_id:
                     value = symbol_to_id[char]
                 else:
