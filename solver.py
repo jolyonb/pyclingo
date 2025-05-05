@@ -25,6 +25,9 @@ def solve(filename: str) -> None:
     # Create a grid object
     solver.create_grid()
 
+    # Validate the config
+    solver.validate()
+
     solver.construct_puzzle()
 
     # Solve the puzzle

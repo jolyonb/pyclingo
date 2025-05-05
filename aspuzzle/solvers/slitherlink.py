@@ -6,6 +6,7 @@ from pyclingo import Not, Predicate, create_variables
 
 class Slitherlink(Solver):
     solver_name = "Slitherlink puzzle solver"
+    supported_symbols = list(range(4)) + [".", "S", "W"]
 
     def construct_puzzle(self) -> None:
         """Construct the rules of the puzzle."""

@@ -12,6 +12,7 @@ class Solver(ABC):
     default_config: dict[str, Any] = {}
     solver_name: str = "Puzzle solver"
     supported_grid_types: list[str] = ["RectangularGrid"]  # Default supported grid type
+    supported_symbols: list[str] = []  # List of supported symbols in the grid definition
 
     def __init__(self, puzzle: Puzzle, config: dict[str, Any]) -> None:
         self.puzzle = puzzle
@@ -45,6 +46,31 @@ class Solver(ABC):
     def pgc(self) -> tuple[Puzzle, Grid, dict[str, Any]]:
         """Convenience property to get puzzle, grid, and config."""
         return self.puzzle, self.grid, self.config
+
+    def validate(self) -> None:
+        """Validate the puzzle configuration."""
+        self.validate_grid_symbols()
+        self.validate_config()
+
+    def validate_grid_symbols(self) -> None:
+        """Validate that the grid contains only supported symbols."""
+        if not self.supported_symbols or "grid" not in self.config:
+            return  # Nothing to validate
+
+        # Check each cell against supported symbols
+        for r, row in enumerate(self.config["grid"]):
+            for c, symbol in enumerate(row):
+                if symbol.isdigit():
+                    symbol = int(symbol)
+                if symbol not in self.supported_symbols:
+                    raise ValueError(
+                        f"Unsupported symbol '{symbol}' at position ({r + 1}, {c + 1}). "
+                        f"Supported symbols: {', '.join(str(s) for s in self.supported_symbols)}"
+                    )
+
+    def validate_config(self) -> None:
+        """Function to perform extra validation on the puzzle config as needed."""
+        pass
 
     @abstractmethod
     def construct_puzzle(self) -> None:

@@ -9,6 +9,7 @@ class Minesweeper(Solver):
     default_config = {
         "num_mines": None,
     }
+    supported_symbols = list(range(10)) + [".", "*"]
 
     def construct_puzzle(self) -> None:
         """Construct the rules of the puzzle."""

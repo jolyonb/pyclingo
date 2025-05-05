@@ -9,6 +9,7 @@ class Starbattle_Shapeless(Solver):
     default_config = {
         "star_count": 1,
     }
+    supported_symbols = [".", "#"]
 
     def construct_puzzle(self) -> None:
         """Construct the rules of the puzzle."""

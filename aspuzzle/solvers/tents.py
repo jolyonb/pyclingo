@@ -5,6 +5,7 @@ from pyclingo import ANY, Choice, Equals, Not, Predicate, create_variables
 
 class Tents(Solver):
     solver_name = "Tents puzzle solver"
+    supported_symbols = [".", "t", "T"]
 
     def construct_puzzle(self) -> None:
         """Construct the rules of the puzzle."""
