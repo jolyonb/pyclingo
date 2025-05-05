@@ -1,5 +1,4 @@
-from aspuzzle.solvers.base import Solver
-from aspuzzle.utils import read_grid
+from aspuzzle.solvers.base import Solver, read_grid
 from pyclingo import ANY, Choice, Equals, Not, Predicate, create_variables
 
 
