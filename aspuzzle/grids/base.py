@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import Any, TypeAlias
 
 from aspuzzle.puzzle import Module, Puzzle
 from pyclingo import Predicate
+
+GridCellData: TypeAlias = tuple[int, int, int | str]
 
 
 class Grid(Module, ABC):
@@ -43,7 +45,7 @@ class Grid(Module, ABC):
         pass
 
     @abstractmethod
-    def parse_grid(self, grid_data: list[str], map_to_integers: bool = False) -> list[tuple[int, int, str | int]]:
+    def parse_grid(self, grid_data: list[str], map_to_integers: bool = False) -> list[GridCellData]:
         """
         Parse the grid data into a structured format.
 

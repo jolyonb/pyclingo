@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from aspuzzle.grids.base import Grid
+from aspuzzle.grids.base import Grid, GridCellData
 from aspuzzle.puzzle import Puzzle, cached_predicate
 from pyclingo import ExplicitPool, Min, Not, Predicate, RangePool, create_variables
 from pyclingo.conditional_literal import ConditionalLiteral
@@ -396,7 +396,7 @@ class RectangularGrid(Grid):
         )
 
     # In grids/rectangulargrid.py
-    def parse_grid(self, grid_data: list[str], map_to_integers: bool = False) -> list[tuple[int, int, str | int]]:
+    def parse_grid(self, grid_data: list[str], map_to_integers: bool = False) -> list[GridCellData]:
         """
         Parse a rectangular grid into organized structures, ignoring any "." characters.
 
