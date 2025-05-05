@@ -1,7 +1,7 @@
 from aspuzzle.solvers.base import Solver
 from aspuzzle.symbolset import SymbolSet
 from aspuzzle.utils import read_grid
-from pyclingo import Predicate, create_variables, Not
+from pyclingo import Not, Predicate, create_variables
 
 
 class Slitherlink(Solver):
