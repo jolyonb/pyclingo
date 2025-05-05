@@ -6,9 +6,7 @@ from pyclingo import ANY, Predicate, create_variables
 
 class Starbattle(Solver):
     solver_name = "Starbattle puzzle solver"
-    default_config = {
-        "star_count": 1,
-    }
+    default_config = {"star_count": 1}
 
     def construct_puzzle(self) -> None:
         """Construct the rules of the puzzle."""

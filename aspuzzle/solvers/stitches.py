@@ -5,9 +5,7 @@ from pyclingo import ANY, Choice, Count, Equals, Predicate, create_variables
 
 class Stitches(Solver):
     solver_name = "Stitches puzzle solver"
-    default_config = {
-        "stitch_count": 1,
-    }
+    default_config = {"stitch_count": 1}
 
     def construct_puzzle(self) -> None:
         """Construct the rules of the puzzle."""

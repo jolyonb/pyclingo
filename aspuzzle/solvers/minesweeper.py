@@ -6,10 +6,8 @@ from pyclingo import ANY, Predicate, create_variables
 
 class Minesweeper(Solver):
     solver_name = "Minesweeper puzzle solver"
-    default_config = {
-        "num_mines": None,
-    }
     supported_symbols = list(range(10)) + ["."]
+    default_config = {"num_mines": None}
 
     def construct_puzzle(self) -> None:
         """Construct the rules of the puzzle."""

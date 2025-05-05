@@ -6,10 +6,8 @@ from pyclingo import ANY, Predicate, create_variables
 
 class Starbattle_Shapeless(Solver):
     solver_name = "Shapeless Starbattle puzzle solver"
-    default_config = {
-        "star_count": 1,
-    }
     supported_symbols = [".", "#"]
+    default_config = {"star_count": 1}
 
     def construct_puzzle(self) -> None:
         """Construct the rules of the puzzle."""
