@@ -13,7 +13,6 @@ pyright = "^1.1.399"
 clingo = "^5.8.0"
 pre-commit = "^4.2.0"
 
-
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
@@ -28,7 +27,7 @@ check_untyped_defs = true
 disallow_untyped_decorators = true
 no_implicit_optional = true
 strict_optional = true
-files = ["pyclingo", "scripts"]
+files = ["pyclingo", "aspuzzle"]
 
 [tool.pyright]
 include = [

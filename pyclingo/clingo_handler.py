@@ -94,13 +94,15 @@ class ClingoMessageHandler:
             self._highest_level = current_level
 
     @property
-    def highest_level(self) -> LogLevel:
+    def highest_level(self) -> LogLevel | None:
         """Get the highest log level encountered."""
         return self._highest_level
 
     @property
     def should_halt(self) -> bool:
         """Determine if execution should halt based on log levels."""
+        if self._highest_level is None:
+            return False
         return self._highest_level >= self.stop_on_level
 
     def format_message(self, msg: ClingoMessage) -> str:
