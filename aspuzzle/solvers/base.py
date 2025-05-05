@@ -13,6 +13,7 @@ class Solver(ABC):
     solver_name: str = "Puzzle solver"
     supported_grid_types: list[str] = ["RectangularGrid"]  # Default supported grid type
     supported_symbols: list[str] = []  # List of supported symbols in the grid definition
+    map_grid_to_integers: bool = False  # Controls how the grid is read
 
     def __init__(self, puzzle: Puzzle, config: dict[str, Any]) -> None:
         self.puzzle = puzzle
@@ -20,6 +21,7 @@ class Solver(ABC):
         self.grid = None
         # Merge default config with instance config
         self.config = {**self.default_config, **config}
+        self._grid_data = None
 
     def create_grid(self) -> None:
         """Create the grid for this puzzle. Can be overridden by subclasses."""
@@ -42,6 +44,26 @@ class Solver(ABC):
         # Let the grid create itself from the config
         self.grid = grid_class.from_config(self.puzzle, self.config)
 
+        # After grid is created, parse the grid data if available
+        if "grid" in self.config and self.grid is not None:
+            self._grid_data = self.grid.parse_grid(self.config["grid"], map_to_integers=self.map_grid_to_integers)
+
+    @property
+    def grid_data(self) -> list[tuple[int, int, int | str]]:
+        """
+        Get the parsed grid data, using the provided mapping strategy.
+        Lazy-loads and caches the data on first access.
+
+        Returns:
+            The parsed grid data
+        """
+        if self._grid_data is None:
+            if "grid" not in self.config:
+                self._grid_data = []
+            else:
+                self._grid_data = self.grid.parse_grid(self.config["grid"], map_to_integers=self.map_grid_to_integers)
+        return self._grid_data
+
     @property
     def unpack_data(self) -> tuple[Puzzle, Grid, dict[str, Any], list[tuple[int, int, int | str]]]:
         """
@@ -50,11 +72,7 @@ class Solver(ABC):
         Returns:
             A tuple containing (puzzle, grid, config, grid_data)
         """
-        if "grid" in self.config:
-            grid_data = self.grid.parse_grid(self.config["grid"])
-        else:
-            grid_data = []
-        return self.puzzle, self.grid, self.config, grid_data
+        return self.puzzle, self.grid, self.config, self.grid_data
 
     def validate(self) -> None:
         """Validate the puzzle configuration."""

@@ -90,3 +90,28 @@ class Stitches(Solver):
             when=ExpectedCounts(dir=Dir, index=N, count=Counter),
             exactly=Counter,
         )
+
+    def validate_config(self) -> None:
+        """Validate the puzzle configuration."""
+        # Check if row and column clues exist
+        if "row_clues" not in self.config:
+            raise ValueError("Missing row_clues in puzzle configuration")
+        if "col_clues" not in self.config:
+            raise ValueError("Missing col_clues in puzzle configuration")
+
+        # Validate clue lengths match grid dimensions
+        if len(self.config["row_clues"]) != self.grid.rows:
+            raise ValueError(f"Expected {self.grid.rows} row clues, got {len(self.config['row_clues'])}")
+        if len(self.config["col_clues"]) != self.grid.cols:
+            raise ValueError(f"Expected {self.grid.cols} column clues, got {len(self.config['col_clues'])}")
+
+        # Validate that row and column clue sums match
+        row_sum = sum(self.config["row_clues"])
+        col_sum = sum(self.config["col_clues"])
+
+        if row_sum != col_sum:
+            raise ValueError(f"Sum of row clues ({row_sum}) doesn't match sum of column clues ({col_sum})")
+
+        # For Stitches, the sum of clues should be equal to the number of stitches,
+        # which is the number of region boundaries times stitch_count * 2.
+        # I don't want to do this here though, because it requires a python implementation of finding region boundaries.

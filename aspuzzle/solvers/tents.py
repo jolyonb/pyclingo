@@ -87,3 +87,30 @@ class Tents(Solver):
         # Rule 5: Tents cannot share a vertex
         puzzle.section("Tent adjacency constraints")
         puzzle.forbid(Tent(A), Tent(B), grid.VertexSharing(A, B))
+
+    def validate_config(self) -> None:
+        """Validate the puzzle configuration."""
+        # Check if row and column clues exist
+        if "row_clues" not in self.config:
+            raise ValueError("Missing row_clues in puzzle configuration")
+        if "col_clues" not in self.config:
+            raise ValueError("Missing col_clues in puzzle configuration")
+
+        # Validate clue lengths match grid dimensions
+        if len(self.config["row_clues"]) != self.grid.rows:
+            raise ValueError(f"Expected {self.grid.rows} row clues, got {len(self.config['row_clues'])}")
+        if len(self.config["col_clues"]) != self.grid.cols:
+            raise ValueError(f"Expected {self.grid.cols} column clues, got {len(self.config['col_clues'])}")
+
+        # Count the number of trees in the grid
+        tree_count = len(self.grid_data)
+
+        # Validate that row and column clue sums match the tree count
+        row_sum = sum(self.config["row_clues"])
+        col_sum = sum(self.config["col_clues"])
+
+        if row_sum != col_sum:
+            raise ValueError(f"Sum of row clues ({row_sum}) doesn't match sum of column clues ({col_sum})")
+
+        if row_sum != tree_count:
+            raise ValueError(f"Sum of clues ({row_sum}) doesn't match number of trees ({tree_count})")
