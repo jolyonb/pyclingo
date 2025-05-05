@@ -1,3 +1,4 @@
+from abc import ABC, abstractmethod
 from typing import Any
 
 from aspuzzle.puzzle import Module, Puzzle, cached_predicate
@@ -6,8 +7,32 @@ from pyclingo.conditional_literal import ConditionalLiteral
 from pyclingo.value import ANY, SymbolicConstant, Variable
 
 
-class Grid(Module):
-    """Module for grid-based puzzles with rows and columns. Note that this uses 1-based indexing!"""
+class Grid(Module, ABC):
+    """Abstract base class for all grid types in puzzles."""
+
+    def __init__(
+        self,
+        puzzle: Puzzle,
+        name: str = "grid",
+        primary_namespace: bool = True,
+    ):
+        """Initialize a base grid module."""
+        super().__init__(puzzle, name, primary_namespace)
+        self._has_outside_border: bool = False
+
+    @property
+    def has_outside_border(self) -> bool:
+        """Whether an outside border was included in the grid definition."""
+        return self._has_outside_border
+
+    @abstractmethod
+    def cell(self, suffix: str = "") -> Predicate:
+        """Get a cell predicate for this grid with variable values."""
+        pass
+
+
+class RectangularGrid(Grid):
+    """Module for rectangular grid-based puzzles with rows and columns. Note that this uses 1-based indexing!"""
 
     def __init__(
         self,
@@ -22,7 +47,6 @@ class Grid(Module):
 
         self.rows = rows
         self.cols = cols
-        self._has_outside_border: bool = False
 
     @cached_predicate
     def Cell(self) -> type[Predicate]:
@@ -268,11 +292,6 @@ class Grid(Module):
         Idx = Variable(f"Idx{index_suffix}")
         return self.Line(direction=D, index=Idx, loc=self.cell(suffix=loc_suffix))
 
-    @property
-    def has_outside_border(self) -> bool:
-        """Whether an outside border was included in the grid definition."""
-        return self._has_outside_border
-
     def find_anchor_cell(
         self,
         condition_predicate: type[Predicate],
@@ -359,7 +378,7 @@ class Grid(Module):
         return AnchorPred
 
 
-def do_not_show_outside(pred: Predicate, grid: Grid) -> None:
+def do_not_show_outside(pred: Predicate, grid: RectangularGrid) -> None:
     """
     This helper function sets the show directive on a predicate to not display for cells outside the grid.
     The predicate must be instantiated with the grid.cell() location.

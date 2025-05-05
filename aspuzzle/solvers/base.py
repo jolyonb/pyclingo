@@ -2,7 +2,7 @@ import json
 import pprint
 from typing import Any
 
-from aspuzzle.grid import Grid
+from aspuzzle.grid import RectangularGrid
 from aspuzzle.puzzle import Puzzle
 
 
@@ -20,13 +20,13 @@ class Solver:
     def create_grid(self) -> None:
         """Create the grid for this puzzle. Can be overridden by subclasses."""
         if self.config["grid_type"] == "RectangularGrid":
-            grid = Grid(self.puzzle, **self.config["grid_params"])
+            grid = RectangularGrid(self.puzzle, **self.config["grid_params"])
         else:
             raise ValueError(f"Unknown grid type {self.config['grid_type']}")
         self.grid = grid
 
     @property
-    def pgc(self) -> tuple[Puzzle, Grid, dict[str, Any]]:
+    def pgc(self) -> tuple[Puzzle, RectangularGrid, dict[str, Any]]:
         """Convenience property to get puzzle, grid, and config."""
         return self.puzzle, self.grid, self.config
 
