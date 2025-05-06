@@ -18,6 +18,22 @@ repos:
         language: system
         types: [python]
 
+      # Run mypy
+      - id: mypy
+        name: mypy
+        description: "Run 'mypy' to get static type checking"
+        entry: mypy
+        language: system
+        types: [python]
+
+      # Run pyright
+      - id: pyright
+        name: pyright
+        description: "Run 'pyright' to get static type checking"
+        entry: pyright
+        language: system
+        types: [python]
+
   # Verify that the pre-commit configuration is valid
   - repo: https://github.com/pre-commit/pre-commit
     rev: v3.5.0
