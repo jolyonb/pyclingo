@@ -1,6 +1,5 @@
 from aspuzzle.solvers.base import Solver
 from pyclingo import ANY, Choice, Equals, Not, Predicate, create_variables
-from pyclingo.value import SymbolicConstant
 
 
 class Tents(Solver):
@@ -105,10 +104,7 @@ class Tents(Solver):
             expected_count = grid.get_line_count(direction)
             actual_count = len(self.config[clue_key])
 
-            if isinstance(expected_count, SymbolicConstant):
-                # Can't verify if we have a symbolic constant
-                pass
-            elif actual_count == expected_count:
+            if actual_count == expected_count:
                 line_sums.append((direction, sum(self.config[clue_key])))
             else:
                 raise ValueError(f"Expected {expected_count} {clue_key}, got {actual_count}")

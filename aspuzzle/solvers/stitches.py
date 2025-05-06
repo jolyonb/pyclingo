@@ -1,6 +1,5 @@
 from aspuzzle.solvers.base import Solver
 from pyclingo import ANY, Choice, Count, Equals, Predicate, create_variables
-from pyclingo.value import SymbolicConstant
 
 
 class Stitches(Solver):
@@ -106,10 +105,7 @@ class Stitches(Solver):
             expected_count = grid.get_line_count(direction)
             actual_count = len(self.config[clue_key])
 
-            if isinstance(expected_count, SymbolicConstant):
-                # Can't verify
-                pass
-            elif actual_count == expected_count:
+            if actual_count == expected_count:
                 # Calculate sum of clues
                 line_sums.append((direction, sum(self.config[clue_key])))
             else:

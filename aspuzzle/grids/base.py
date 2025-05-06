@@ -6,7 +6,6 @@ from typing import Any, TypeAlias
 from aspuzzle.puzzle import Module, Puzzle, cached_predicate
 from pyclingo import ANY, ExplicitPool, Not, Predicate, Variable, create_variables
 from pyclingo.conditional_literal import ConditionalLiteral
-from pyclingo.value import SymbolicConstant
 
 GridCellData: TypeAlias = tuple[int, int, int | str]
 
@@ -87,7 +86,7 @@ class Grid(Module, ABC):
         pass
 
     @abstractmethod
-    def get_line_count(self, direction: str) -> int | SymbolicConstant:  # TODO: should this not be SymbolicConstant?
+    def get_line_count(self, direction: str) -> int:
         """Returns the number of lines in the specified direction"""
         pass
 

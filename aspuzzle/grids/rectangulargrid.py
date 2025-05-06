@@ -5,7 +5,6 @@ from typing import Any
 from aspuzzle.grids.base import Grid, GridCellData
 from aspuzzle.puzzle import Puzzle, cached_predicate
 from pyclingo import Min, Predicate, RangePool, create_variables
-from pyclingo.value import SymbolicConstant
 
 
 class RectangularGrid(Grid):
@@ -14,16 +13,16 @@ class RectangularGrid(Grid):
     def __init__(
         self,
         puzzle: Puzzle,
-        rows: int | SymbolicConstant,
-        cols: int | SymbolicConstant,
+        rows: int,
+        cols: int,
         name: str = "grid",
         primary_namespace: bool = True,
     ):
         """Initialize a grid module with specified dimensions."""
         super().__init__(puzzle, name, primary_namespace)
 
-        assert isinstance(rows, (int, SymbolicConstant))
-        assert isinstance(cols, (int, SymbolicConstant))
+        assert isinstance(rows, int)
+        assert isinstance(cols, int)
 
         self.rows = rows
         self.cols = cols
@@ -67,7 +66,7 @@ class RectangularGrid(Grid):
         """Returns descriptions for rectangular grid lines"""
         return {"e": "row", "s": "column"}
 
-    def get_line_count(self, direction: str) -> int | SymbolicConstant:
+    def get_line_count(self, direction: str) -> int:
         """Returns the number of lines in the specified direction for a rectangular grid"""
         if direction == "e":  # rows
             return self.rows
