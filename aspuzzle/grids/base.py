@@ -138,14 +138,61 @@ class Grid(Module, ABC):
         return OrthogonalDirections
 
     @property
-    @abstractmethod
+    @cached_predicate
     def Orthogonal(self) -> type[Predicate]:
         """Get the orthogonal adjacency predicate (cells that share an edge)."""
+        Orthogonal = Predicate.define("orthogonal", ["cell1", "cell2"], namespace=self.namespace, show=False)
+
+        D = create_variables("D")
+        cell = self.cell()
+        vector = self.cell(suffix="vec")
+        cell_plus_vector = self.add_vector_to_cell(cell, vector)
+
+        # Initialize predicates that we'll need
+        _ = self.Direction
+        _ = self.OrthogonalDirections
+
+        self.section("Orthogonal adjacency definition")
+
+        # Define cells that share an edge (orthogonally adjacent)
+        self.when(
+            [
+                cell,
+                self.OrthogonalDirections(D),
+                self.Direction(D, vector=vector),
+                cell_plus_vector,
+            ],
+            Orthogonal(cell1=cell, cell2=cell_plus_vector),
+        )
+
+        return Orthogonal
 
     @property
-    @abstractmethod
+    @cached_predicate
     def VertexSharing(self) -> type[Predicate]:
         """Get the vertex-sharing adjacency predicate."""
+        VertexSharing = Predicate.define("vertex_sharing", ["cell1", "cell2"], namespace=self.namespace, show=False)
+
+        cell = self.cell()
+        vector = self.cell(suffix="vec")
+        cell_plus_vector = self.add_vector_to_cell(cell, vector)
+
+        # Initialize predicates that we'll need
+        _ = self.Direction
+
+        self.section("Vertex-sharing adjacency definition")
+
+        # Define cells that share a vertex
+        self.when(
+            [
+                cell,
+                self.Direction(ANY, vector=vector),
+                cell_plus_vector,
+            ],
+            VertexSharing(cell1=cell, cell2=cell_plus_vector),
+        )
+
+        return VertexSharing
 
     @property
     @abstractmethod

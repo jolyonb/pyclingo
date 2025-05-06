@@ -5,11 +5,28 @@ from typing import Any
 from aspuzzle.grids.base import Grid, GridCellData
 from aspuzzle.puzzle import Puzzle, cached_predicate
 from pyclingo import Min, Predicate, RangePool, create_variables
-from pyclingo.value import ANY, SymbolicConstant
+from pyclingo.value import SymbolicConstant
 
 
 class RectangularGrid(Grid):
     """Module for rectangular grid-based puzzles with rows and columns. Note that this uses 1-based indexing!"""
+
+    def __init__(
+        self,
+        puzzle: Puzzle,
+        rows: int | SymbolicConstant,
+        cols: int | SymbolicConstant,
+        name: str = "grid",
+        primary_namespace: bool = True,
+    ):
+        """Initialize a grid module with specified dimensions."""
+        super().__init__(puzzle, name, primary_namespace)
+
+        assert isinstance(rows, (int, SymbolicConstant))
+        assert isinstance(cols, (int, SymbolicConstant))
+
+        self.rows = rows
+        self.cols = cols
 
     @property
     def cell_fields(self) -> list[str]:
@@ -58,23 +75,6 @@ class RectangularGrid(Grid):
             return self.cols
         else:
             raise ValueError(f"Unknown direction: {direction}")
-
-    def __init__(
-        self,
-        puzzle: Puzzle,
-        rows: int | SymbolicConstant,
-        cols: int | SymbolicConstant,
-        name: str = "grid",
-        primary_namespace: bool = True,
-    ):
-        """Initialize a grid module with specified dimensions."""
-        super().__init__(puzzle, name, primary_namespace)
-
-        assert isinstance(rows, (int, SymbolicConstant))
-        assert isinstance(cols, (int, SymbolicConstant))
-
-        self.rows = rows
-        self.cols = cols
 
     @property
     @cached_predicate
@@ -130,64 +130,6 @@ class RectangularGrid(Grid):
         self._has_outside_border = True
 
         return Outside
-
-    @property
-    @cached_predicate
-    def Orthogonal(self) -> type[Predicate]:
-        """Get the orthogonal adjacency predicate (cells that share an edge)."""
-        Orthogonal = Predicate.define("orthogonal", ["cell1", "cell2"], namespace=self.namespace, show=False)
-
-        R, C = create_variables("R", "C")
-        Dir, DR, DC = create_variables("Dir", "DR", "DC")
-        cell = self.Cell(row=R, col=C)
-        adj_cell = self.Cell(row=R + DR, col=C + DC)
-
-        # Initialize predicates that we'll need
-        _ = self.Direction
-        _ = self.OrthogonalDirections
-
-        self.section("Orthogonal adjacency definition")
-
-        # Define cells that share an edge (orthogonally adjacent)
-        self.when(
-            [
-                cell,
-                self.OrthogonalDirections(Dir),
-                self.Direction(Dir, vector=self.Cell(row=DR, col=DC)),
-                adj_cell,
-            ],
-            Orthogonal(cell1=cell, cell2=adj_cell),
-        )
-
-        return Orthogonal
-
-    @property
-    @cached_predicate
-    def VertexSharing(self) -> type[Predicate]:
-        """Get the vertex-sharing adjacency predicate."""
-        VertexSharing = Predicate.define("vertex_sharing", ["cell1", "cell2"], namespace=self.namespace, show=False)
-
-        R, C = create_variables("R", "C")
-        Dir, DR, DC = create_variables("Dir", "DR", "DC")
-        cell = self.Cell(row=R, col=C)
-        adj_cell = self.Cell(row=R + DR, col=C + DC)
-
-        # Initialize predicates that we'll need
-        _ = self.Direction
-
-        self.section("Vertex-sharing adjacency definition")
-
-        # Define cells that share a vertex
-        self.when(
-            [
-                cell,
-                self.Direction(ANY, vector=self.Cell(row=DR, col=DC)),
-                adj_cell,
-            ],
-            VertexSharing(cell1=cell, cell2=adj_cell),
-        )
-
-        return VertexSharing
 
     @property
     @cached_predicate
