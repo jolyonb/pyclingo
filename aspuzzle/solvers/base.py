@@ -16,13 +16,14 @@ class Solver(ABC):
     map_grid_to_integers: bool = False  # Controls how the grid is read
     _grid_data: list[GridCellData] | None = None
 
-    def __init__(self, puzzle: Puzzle, config: dict[str, Any]) -> None:
-        self.puzzle = puzzle
+    def __init__(self, config: dict[str, Any]) -> None:
+        self.puzzle = Puzzle()
         self.puzzle.name = self.solver_name
         # Merge default config with instance config
         self.config = {**self.default_config, **config}
 
         self.create_grid()
+        self.validate()
 
     def create_grid(self) -> None:
         """Create the grid for this puzzle. Can be overridden by subclasses."""

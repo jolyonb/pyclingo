@@ -2,7 +2,6 @@ import importlib
 import json
 import pathlib
 
-from aspuzzle.puzzle import Puzzle
 from aspuzzle.solvers.base import Solver
 
 
@@ -22,19 +21,14 @@ def solve(filename: str) -> None:
     with open(path) as f:
         config = json.load(f)
 
-    # Create a puzzle object
-    puzzle = Puzzle()
-
     # Load the appropriate solver
     module = importlib.import_module(f"aspuzzle.solvers.{config['puzzle_type'].lower()}")
     puzzle_class: type[Solver] = getattr(module, config["puzzle_type"])
 
+    # Initialize the puzzle class
+    solver = puzzle_class(config)
+
     # Construct the puzzle rules
-    solver = puzzle_class(puzzle=puzzle, config=config)
-
-    # Validate the config
-    solver.validate()
-
     solver.construct_puzzle()
 
     # Solve the puzzle
