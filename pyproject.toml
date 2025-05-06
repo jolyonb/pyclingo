@@ -1,16 +1,21 @@
-[tool.poetry]
+[project]
 name = "pyclingo"
 version = "0.1.0"
 description = "A python wrapper for clingo with ASP puzzle solving capabilities"
-authors = ["Jolyon Bloomfield <jkb84@cornell.edu>"]
+license = { text = "MIT" }
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{ name = "Jolyon Bloomfield", email = "jkb84@cornell.edu" }]
 
 [tool.poetry.dependencies]
 python = "^3.11"
-ruff = "^0.11.8"
-mypy = "^1.15.0"
-pyright = "^1.1.400"
 clingo = "^5.8.0"
+
+[tool.poetry.group.dev.dependencies]
+mypy = "^1.15.0"
 pre-commit = "^4.2.0"
+pyright = "^1.1.400"
+ruff = "^0.11.8"
 
 [build-system]
 requires = ["poetry-core"]
@@ -29,10 +34,7 @@ strict_optional = true
 files = ["pyclingo", "aspuzzle"]
 
 [tool.pyright]
-include = [
-  "pyclingo",
-  "aspuzzle",
-]
+include = ["pyclingo", "aspuzzle"]
 
 [tool.ruff]
 line-length = 120
@@ -42,5 +44,5 @@ select = ["E", "F", "W", "Q", "I"]
 fixable = ["ALL"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["pyclingo"]
+known-first-party = ["pyclingo", "aspuzzle"]
 section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
