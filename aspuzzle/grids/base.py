@@ -6,6 +6,7 @@ from typing import Any, TypeAlias
 from aspuzzle.puzzle import Module, Puzzle, cached_predicate
 from pyclingo import ANY, ExplicitPool, Not, Predicate, Variable, create_variables
 from pyclingo.conditional_literal import ConditionalLiteral
+from pyclingo.value import SymbolicConstant
 
 GridCellData: TypeAlias = tuple[int, int, int | str]
 
@@ -73,6 +74,22 @@ class Grid(Module, ABC):
     @abstractmethod
     def orthogonal_direction_names(self) -> list[str]:
         """Returns the list of orthogonal direction names for this grid"""
+
+    @property
+    @abstractmethod
+    def line_direction_names(self) -> list[str]:
+        """Returns the list of line direction names for this grid"""
+
+    @property
+    @abstractmethod
+    def line_direction_descriptions(self) -> dict[str, str]:
+        """Returns human-readable descriptions of line directions"""
+        pass
+
+    @abstractmethod
+    def get_line_count(self, direction: str) -> int | SymbolicConstant:
+        """Returns the number of lines in the specified direction"""
+        pass
 
     @property
     @abstractmethod
@@ -211,6 +228,19 @@ class Grid(Module, ABC):
         D = Variable(f"D{direction_suffix}")
         Idx = Variable(f"Idx{index_suffix}")
         return self.Line(direction=D, index=Idx, loc=self.cell(suffix=loc_suffix))
+
+    @abstractmethod
+    def add_vector_to_cell(self, cell_pred: Predicate, vector_pred: Predicate) -> Predicate:
+        """
+        Add a vector to a cell, returning the new cell location.
+
+        Args:
+            cell_pred: The starting cell predicate
+            vector_pred: The vector predicate (as defined in Direction)
+
+        Returns:
+            A new Cell predicate with the vector added
+        """
 
 
 def do_not_show_outside(pred: Predicate, grid: Grid) -> None:

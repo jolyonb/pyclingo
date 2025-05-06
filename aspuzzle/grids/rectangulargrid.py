@@ -40,6 +40,25 @@ class RectangularGrid(Grid):
         """Returns the list of orthogonal direction names for this grid"""
         return ["n", "e", "s", "w"]
 
+    @property
+    def line_direction_names(self) -> list[str]:
+        """Returns the list of line direction names for rectangular grid"""
+        return ["e", "s"]  # e for rows, s for columns
+
+    @property
+    def line_direction_descriptions(self) -> dict[str, str]:
+        """Returns descriptions for rectangular grid lines"""
+        return {"e": "row", "s": "column"}
+
+    def get_line_count(self, direction: str) -> int | SymbolicConstant:
+        """Returns the number of lines in the specified direction for a rectangular grid"""
+        if direction == "e":  # rows
+            return self.rows
+        elif direction == "s":  # columns
+            return self.cols
+        else:
+            raise ValueError(f"Unknown direction: {direction}")
+
     def __init__(
         self,
         puzzle: Puzzle,
@@ -398,3 +417,14 @@ class RectangularGrid(Grid):
                 cells.append(cell_entry)
 
         return cells
+
+    def add_vector_to_cell(self, cell_pred: Predicate, vector_pred: Predicate) -> Predicate:
+        """Add a vector to a cell in rectangular coordinates."""
+        # Extract coordinates
+        row = getattr(cell_pred, "row")
+        col = getattr(cell_pred, "col")
+        dr = getattr(vector_pred, "row")
+        dc = getattr(vector_pred, "col")
+
+        # Create new cell with added coordinates
+        return self.Cell(row=row + dr, col=col + dc)
