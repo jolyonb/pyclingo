@@ -4,7 +4,7 @@ from typing import Any
 
 from aspuzzle.grids.base import Grid, GridCellData
 from aspuzzle.puzzle import Puzzle, cached_predicate
-from pyclingo import ExplicitPool, Min, Predicate, RangePool, create_variables
+from pyclingo import Min, Predicate, RangePool, create_variables
 from pyclingo.value import ANY, SymbolicConstant
 
 
@@ -34,6 +34,11 @@ class RectangularGrid(Grid):
             ("w", (0, -1)),
             ("nw", (-1, -1)),
         ]
+
+    @property
+    def orthogonal_direction_names(self) -> list[str]:
+        """Returns the list of orthogonal direction names for this grid"""
+        return ["n", "e", "s", "w"]
 
     def __init__(
         self,
@@ -106,44 +111,6 @@ class RectangularGrid(Grid):
         self._has_outside_border = True
 
         return Outside
-
-    @property
-    @cached_predicate
-    def Direction(self) -> type[Predicate]:
-        """Get the Direction predicate for this grid, defining all possible directions as vectors."""
-        Direction = Predicate.define("direction", ["name", "vector"], namespace=self.namespace, show=False)
-
-        self.section("Define directions in the grid")
-
-        # Define the 8 cardinal and intercardinal directions
-        directions = [
-            ("n", -1, 0),
-            ("ne", -1, 1),
-            ("e", 0, 1),
-            ("se", 1, 1),
-            ("s", 1, 0),
-            ("sw", 1, -1),
-            ("w", 0, -1),
-            ("nw", -1, -1),
-        ]
-
-        self.fact(*[Direction(name=name, vector=self.Cell(row=dr, col=dc)) for name, dr, dc in directions])
-
-        return Direction
-
-    @property
-    @cached_predicate
-    def OrthogonalDirections(self) -> type[Predicate]:
-        """Get the OrthogonalDirections predicate, identifying orthogonal directions (N,S,E,W)."""
-        OrthogonalDirections = Predicate.define("orthogonal_directions", ["name"], namespace=self.namespace, show=False)
-
-        self.section("Orthogonal directions")
-
-        # Define the 4 orthogonal directions
-        orthogonal_dirs = ["n", "e", "s", "w"]
-        self.fact(OrthogonalDirections(ExplicitPool(orthogonal_dirs)))
-
-        return OrthogonalDirections
 
     @property
     @cached_predicate

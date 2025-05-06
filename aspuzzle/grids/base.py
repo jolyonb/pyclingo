@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from typing import Any, TypeAlias
 
 from aspuzzle.puzzle import Module, Puzzle, cached_predicate
-from pyclingo import ANY, Not, Predicate, Variable, create_variables
+from pyclingo import ANY, ExplicitPool, Not, Predicate, Variable, create_variables
 from pyclingo.conditional_literal import ConditionalLiteral
 
 GridCellData: TypeAlias = tuple[int, int, int | str]
@@ -71,6 +71,11 @@ class Grid(Module, ABC):
 
     @property
     @abstractmethod
+    def orthogonal_direction_names(self) -> list[str]:
+        """Returns the list of orthogonal direction names for this grid"""
+
+    @property
+    @abstractmethod
     def Cell(self) -> type[Predicate]:
         """Get the Cell predicate for this grid."""
 
@@ -101,19 +106,19 @@ class Grid(Module, ABC):
     def Directions(self) -> type[Predicate]:
         """Get the Directions predicate, identifying all directions."""
         Directions = Predicate.define("directions", ["name"], namespace=self.namespace, show=False)
-
         self.section("All directions")
-
-        # Define Directions for each direction vector
         N = Variable("N")
         self.when(self.Direction(name=N, vector=ANY), Directions(name=N))
-
         return Directions
 
     @property
-    @abstractmethod
+    @cached_predicate
     def OrthogonalDirections(self) -> type[Predicate]:
-        """Get the OrthogonalDirections predicate, identifying orthogonal direction."""
+        """Get the OrthogonalDirections predicate, identifying orthogonal directions."""
+        OrthogonalDirections = Predicate.define("orthogonal_directions", ["name"], namespace=self.namespace, show=False)
+        self.section("Orthogonal directions")
+        self.fact(OrthogonalDirections(ExplicitPool(self.orthogonal_direction_names)))
+        return OrthogonalDirections
 
     @property
     @abstractmethod
