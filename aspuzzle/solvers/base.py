@@ -11,7 +11,7 @@ from aspuzzle.puzzle import Puzzle
 class Solver(ABC):
     default_config: dict[str, Any] = {}
     solver_name: str = "Puzzle solver"
-    supported_grid_types: list[str] = ["RectangularGrid"]  # Default supported grid type
+    supported_grid_types: tuple[type] = (Grid,)  # Support all grids by default
     supported_symbols: list[str | int] = []  # List of supported symbols in the grid definition
     grid: Grid
     map_grid_to_integers: bool = False  # Controls how the grid is read
@@ -30,23 +30,25 @@ class Solver(ABC):
 
     def create_grid(self) -> None:
         """Create the grid for this puzzle. Can be overridden by subclasses."""
-        grid_type = self.config.get("grid_type", "RectangularGrid")
-
-        # Check if the specified grid type is supported
-        if grid_type not in self.supported_grid_types:
-            supported = ", ".join(self.supported_grid_types)
-            raise ValueError(
-                f"Grid type '{grid_type}' is not supported by {self.solver_name}. Supported types: {supported}"
-            )
+        grid_type_name = self.config.get("grid_type", "RectangularGrid")
 
         # Import the grid class dynamically
         try:
-            grid_module = importlib.import_module(f"aspuzzle.grids.{grid_type.lower()}")
-            grid_class = getattr(grid_module, grid_type)
+            grid_module = importlib.import_module(f"aspuzzle.grids.{grid_type_name.lower()}")
+            grid_class = getattr(grid_module, grid_type_name)
         except (ImportError, AttributeError) as e:
-            raise ValueError(f"Failed to import grid type {grid_type}: {e}") from e
+            raise ValueError(f"Failed to import grid type {grid_type_name}: {e}") from e
+
+        # Check if the imported grid class is supported based on type inheritance
+        if not issubclass(grid_class, self.supported_grid_types):
+            supported_names = ", ".join(t.__name__ for t in self.supported_grid_types)
+            raise ValueError(
+                f"Grid type '{grid_type_name}' is not supported by {self.solver_name}. "
+                f"Supported types: {supported_names}"
+            )
 
         # Let the grid create itself from the config
+        assert issubclass(grid_class, Grid)
         self.grid = grid_class.from_config(self.puzzle, self.config)
 
     @property
