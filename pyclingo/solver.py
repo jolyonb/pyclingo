@@ -3,7 +3,7 @@ from __future__ import annotations
 import time
 from collections import defaultdict
 from datetime import datetime
-from typing import Generator
+from typing import Generator, Sequence
 
 import clingo
 
@@ -51,9 +51,9 @@ class ASPProgram:
         for predicate in predicates:
             self._segments[segment or self.default_segment].append(Rule(head=predicate))
 
-    def when(self, conditions: Term | list[Term], let: Term, segment: str | None = None) -> None:
+    def when(self, conditions: Term | Sequence[Term], let: Term, segment: str | None = None) -> None:
         """Create a clingo rule which sets the let term when all conditions are satisfied."""
-        condition_list = conditions if isinstance(conditions, list) else [conditions]
+        condition_list = list(conditions) if isinstance(conditions, Sequence) else [conditions]
         assert all(isinstance(condition, Term) for condition in condition_list)
         assert isinstance(let, Term)
         self._segments[segment or self.default_segment].append(Rule(head=let, body=condition_list))
