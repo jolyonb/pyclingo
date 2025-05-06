@@ -3,13 +3,12 @@ name = "pyclingo"
 version = "0.1.0"
 description = ""
 authors = ["Jolyon Bloomfield <jkb84@cornell.edu>"]
-readme = "README.md"
 
 [tool.poetry.dependencies]
 python = "^3.11"
-ruff = "^0.11.2"
+ruff = "^0.11.8"
 mypy = "^1.15.0"
-pyright = "^1.1.399"
+pyright = "^1.1.400"
 clingo = "^5.8.0"
 pre-commit = "^4.2.0"
 
@@ -32,7 +31,7 @@ files = ["pyclingo", "aspuzzle"]
 [tool.pyright]
 include = [
   "pyclingo",
-  "scripts",
+  "aspuzzle",
 ]
 
 [tool.ruff]
