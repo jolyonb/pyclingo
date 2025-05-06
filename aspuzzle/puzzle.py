@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from functools import wraps
-from typing import TYPE_CHECKING, Any, Callable, Generator, TypeVar, cast
+from typing import TYPE_CHECKING, Any, Callable, Generator, Sequence, TypeVar, cast
 
 from pyclingo import ASPProgram, Count, Equals, NotEquals, Predicate
 from pyclingo.term import Term
@@ -77,7 +77,7 @@ class Puzzle:
         """
         self._program.fact(*predicates, segment=segment)
 
-    def when(self, conditions: Term | list[Term], let: Term, segment: str | None = None) -> None:
+    def when(self, conditions: Term | Sequence[Term], let: Term, segment: str | None = None) -> None:
         """
         Create a rule which sets the 'let' term when all conditions are satisfied.
 
@@ -312,7 +312,7 @@ class Module:
         """
         self._puzzle.fact(*predicates, segment=self._name)
 
-    def when(self, conditions: Term | list[Term], let: Term) -> None:
+    def when(self, conditions: Term | Sequence[Term], let: Term) -> None:
         """
         Create a rule in this module's segment.
 

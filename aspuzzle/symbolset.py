@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional, Self, cast
+from typing import Optional, Self
 
 from aspuzzle.grids.base import Grid
 from aspuzzle.puzzle import Module
@@ -9,7 +9,6 @@ from pyclingo import Choice, Not, Predicate, Variable, create_variables
 from pyclingo.expression import Comparison
 from pyclingo.negation import NegatedLiteral
 from pyclingo.pool import Pool
-from pyclingo.term import Term
 
 
 @dataclass
@@ -178,7 +177,7 @@ class SymbolSet(Module):
             conditions.append(Not(self.grid.outside_grid()))
 
         self.section("Place symbols in the grid")
-        self.when(cast(list[Term], conditions), choice)
+        self.when(conditions, choice)
 
     def make_contiguous(self, symbol_name: str, anchor_cell: Predicate | None = None) -> Self:
         """
