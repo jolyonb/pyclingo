@@ -1,3 +1,4 @@
+import argparse
 import importlib
 import json
 import pathlib
@@ -36,8 +37,6 @@ def solve(filename: str) -> None:
 
 
 if __name__ == "__main__":
-    import argparse
-
     parser = argparse.ArgumentParser()
     parser.add_argument("filename")
     args = parser.parse_args()

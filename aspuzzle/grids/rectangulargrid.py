@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, cast
+from typing import Any
 
 from aspuzzle.grids.base import Grid, GridCellData
 from aspuzzle.puzzle import Puzzle, cached_predicate
@@ -53,7 +53,7 @@ class RectangularGrid(Grid):
         if suffix:
             suffix = f"_{suffix}"
         R, C = create_variables(f"R{suffix}", f"C{suffix}")
-        return cast(Predicate, self.Cell(row=R, col=C))
+        return self.Cell(row=R, col=C)
 
     @property
     @cached_predicate
@@ -134,7 +134,7 @@ class RectangularGrid(Grid):
             name_suffix = f"_{name_suffix}"
 
         N = Variable(f"N{name_suffix}")
-        return cast(Predicate, self.Direction(name=N, vector=self.cell(suffix=vector_suffix)))
+        return self.Direction(name=N, vector=self.cell(suffix=vector_suffix))
 
     def directions(self, name_suffix: str = "") -> Predicate:
         """Get an orthogonal direction predicate, listing the names of all directions."""
@@ -142,7 +142,7 @@ class RectangularGrid(Grid):
             name_suffix = f"_{name_suffix}"
 
         N = Variable(f"N{name_suffix}")
-        return cast(Predicate, self.Directions(name=N))
+        return self.Directions(name=N)
 
     def orthogonal_directions(self, name_suffix: str = "") -> Predicate:
         """Get an orthogonal direction predicate, listing the names of orthogonal directions."""
@@ -150,7 +150,7 @@ class RectangularGrid(Grid):
             name_suffix = f"_{name_suffix}"
 
         N = Variable(f"N{name_suffix}")
-        return cast(Predicate, self.OrthogonalDirections(name=N))
+        return self.OrthogonalDirections(name=N)
 
     @property
     @cached_predicate
@@ -184,7 +184,7 @@ class RectangularGrid(Grid):
 
     def orthogonal(self, suffix_1: str = "", suffix_2: str = "adj") -> Predicate:
         """Get the orthogonal adjacency predicate with variable values."""
-        return cast(Predicate, self.Orthogonal(cell1=self.cell(suffix_1), cell2=self.cell(suffix_2)))
+        return self.Orthogonal(cell1=self.cell(suffix_1), cell2=self.cell(suffix_2))
 
     @property
     @cached_predicate
@@ -216,7 +216,7 @@ class RectangularGrid(Grid):
 
     def vertex_sharing(self, suffix_1: str = "", suffix_2: str = "adj") -> Predicate:
         """Get the vertex-sharing adjacency predicate with variable values."""
-        return cast(Predicate, self.VertexSharing(cell1=self.cell(suffix_1), cell2=self.cell(suffix_2)))
+        return self.VertexSharing(cell1=self.cell(suffix_1), cell2=self.cell(suffix_2))
 
     @property
     @cached_predicate
@@ -259,7 +259,7 @@ class RectangularGrid(Grid):
 
         D = Variable(f"D{direction_suffix}")
         Idx = Variable(f"Idx{index_suffix}")
-        return cast(Predicate, self.Line(direction=D, index=Idx, loc=self.cell(suffix=loc_suffix)))
+        return self.Line(direction=D, index=Idx, loc=self.cell(suffix=loc_suffix))
 
     def find_anchor_cell(
         self,
