@@ -35,7 +35,10 @@ repos:
         types: [python]
 
   # Verify that the pre-commit configuration is valid
-  - repo: https://github.com/pre-commit/pre-commit
-    rev: v3.5.0
+  - repo: local
     hooks:
-      - id: validate_manifest
+      - id: validate-manifest
+        name: validate pre-commit config
+        entry: pre-commit validate-config
+        language: system
+        pass_filenames: false
