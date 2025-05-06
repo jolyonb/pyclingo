@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 from aspuzzle.grids.base import Grid, GridCellData
 from aspuzzle.puzzle import Puzzle, cached_predicate
@@ -53,7 +53,7 @@ class RectangularGrid(Grid):
         if suffix:
             suffix = f"_{suffix}"
         R, C = create_variables(f"R{suffix}", f"C{suffix}")
-        return self.Cell(row=R, col=C)
+        return cast(Predicate, self.Cell(row=R, col=C))
 
     @cached_predicate
     def OutsideGrid(self) -> type[Predicate]:
@@ -91,7 +91,7 @@ class RectangularGrid(Grid):
 
     def outside_grid(self, suffix: str = "") -> Predicate:
         """Get an outside_grid predicate for this grid with variable values."""
-        return self.OutsideGrid(self.cell(suffix=suffix))
+        return cast(Predicate, self.OutsideGrid(self.cell(suffix=suffix)))
 
     @cached_predicate
     def Direction(self) -> type[Predicate]:
@@ -148,7 +148,7 @@ class RectangularGrid(Grid):
             name_suffix = f"_{name_suffix}"
 
         N = Variable(f"N{name_suffix}")
-        return self.Direction(name=N, vector=self.cell(suffix=vector_suffix))
+        return cast(Predicate, self.Direction(name=N, vector=self.cell(suffix=vector_suffix)))
 
     def directions(self, name_suffix: str = "") -> Predicate:
         """Get an orthogonal direction predicate, listing the names of all directions."""
@@ -156,7 +156,7 @@ class RectangularGrid(Grid):
             name_suffix = f"_{name_suffix}"
 
         N = Variable(f"N{name_suffix}")
-        return self.Directions(name=N)
+        return cast(Predicate, self.Directions(name=N))
 
     def orthogonal_directions(self, name_suffix: str = "") -> Predicate:
         """Get an orthogonal direction predicate, listing the names of orthogonal directions."""
@@ -164,7 +164,7 @@ class RectangularGrid(Grid):
             name_suffix = f"_{name_suffix}"
 
         N = Variable(f"N{name_suffix}")
-        return self.OrthogonalDirections(name=N)
+        return cast(Predicate, self.OrthogonalDirections(name=N))
 
     @cached_predicate
     def Orthogonal(self) -> type[Predicate]:
@@ -197,7 +197,7 @@ class RectangularGrid(Grid):
 
     def orthogonal(self, suffix_1: str = "", suffix_2: str = "adj") -> Predicate:
         """Get the orthogonal adjacency predicate with variable values."""
-        return self.Orthogonal(cell1=self.cell(suffix_1), cell2=self.cell(suffix_2))
+        return cast(Predicate, self.Orthogonal(cell1=self.cell(suffix_1), cell2=self.cell(suffix_2)))
 
     @cached_predicate
     def VertexSharing(self) -> type[Predicate]:
@@ -228,7 +228,7 @@ class RectangularGrid(Grid):
 
     def vertex_sharing(self, suffix_1: str = "", suffix_2: str = "adj") -> Predicate:
         """Get the vertex-sharing adjacency predicate with variable values."""
-        return self.VertexSharing(cell1=self.cell(suffix_1), cell2=self.cell(suffix_2))
+        return cast(Predicate, self.VertexSharing(cell1=self.cell(suffix_1), cell2=self.cell(suffix_2)))
 
     @cached_predicate
     def Line(self) -> type[Predicate]:
@@ -270,7 +270,7 @@ class RectangularGrid(Grid):
 
         D = Variable(f"D{direction_suffix}")
         Idx = Variable(f"Idx{index_suffix}")
-        return self.Line(direction=D, index=Idx, loc=self.cell(suffix=loc_suffix))
+        return cast(Predicate, self.Line(direction=D, index=Idx, loc=self.cell(suffix=loc_suffix)))
 
     def find_anchor_cell(
         self,
