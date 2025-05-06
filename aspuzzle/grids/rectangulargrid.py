@@ -5,11 +5,35 @@ from typing import Any
 from aspuzzle.grids.base import Grid, GridCellData
 from aspuzzle.puzzle import Puzzle, cached_predicate
 from pyclingo import ExplicitPool, Min, Predicate, RangePool, create_variables
-from pyclingo.value import ANY, SymbolicConstant, Variable
+from pyclingo.value import ANY, SymbolicConstant
 
 
 class RectangularGrid(Grid):
     """Module for rectangular grid-based puzzles with rows and columns. Note that this uses 1-based indexing!"""
+
+    @property
+    def cell_fields(self) -> list[str]:
+        """Returns the list of field names associated with the Cell predicate for this grid"""
+        return ["row", "col"]
+
+    @property
+    def cell_var_names(self) -> list[str]:
+        """Returns the default list of variable names for the Cell predicate for this grid"""
+        return ["R", "C"]
+
+    @property
+    def direction_vectors(self) -> list[tuple[str, tuple[int, ...]]]:
+        """Returns the list of directions and vectors for this grid"""
+        return [
+            ("n", (-1, 0)),
+            ("ne", (-1, 1)),
+            ("e", (0, 1)),
+            ("se", (1, 1)),
+            ("s", (1, 0)),
+            ("sw", (1, -1)),
+            ("w", (0, -1)),
+            ("nw", (-1, -1)),
+        ]
 
     def __init__(
         self,
@@ -32,7 +56,7 @@ class RectangularGrid(Grid):
     @cached_predicate
     def Cell(self) -> type[Predicate]:
         """Get the Cell predicate for this grid."""
-        Cell = Predicate.define("cell", ["row", "col"], namespace=self.namespace, show=False)
+        Cell = Predicate.define("cell", self.cell_fields, namespace=self.namespace, show=False)
 
         R, C = create_variables("R", "C")
 
@@ -47,13 +71,6 @@ class RectangularGrid(Grid):
         )
 
         return Cell
-
-    def cell(self, suffix: str = "") -> Predicate:
-        """Get a cell predicate for this grid with variable values."""
-        if suffix:
-            suffix = f"_{suffix}"
-        R, C = create_variables(f"R{suffix}", f"C{suffix}")
-        return self.Cell(row=R, col=C)
 
     @property
     @cached_predicate
@@ -128,30 +145,6 @@ class RectangularGrid(Grid):
 
         return OrthogonalDirections
 
-    def direction(self, name_suffix: str = "", vector_suffix: str = "vec") -> Predicate:
-        """Get a direction predicate including names and vectors."""
-        if name_suffix:
-            name_suffix = f"_{name_suffix}"
-
-        N = Variable(f"N{name_suffix}")
-        return self.Direction(name=N, vector=self.cell(suffix=vector_suffix))
-
-    def directions(self, name_suffix: str = "") -> Predicate:
-        """Get an orthogonal direction predicate, listing the names of all directions."""
-        if name_suffix:
-            name_suffix = f"_{name_suffix}"
-
-        N = Variable(f"N{name_suffix}")
-        return self.Directions(name=N)
-
-    def orthogonal_directions(self, name_suffix: str = "") -> Predicate:
-        """Get an orthogonal direction predicate, listing the names of orthogonal directions."""
-        if name_suffix:
-            name_suffix = f"_{name_suffix}"
-
-        N = Variable(f"N{name_suffix}")
-        return self.OrthogonalDirections(name=N)
-
     @property
     @cached_predicate
     def Orthogonal(self) -> type[Predicate]:
@@ -182,10 +175,6 @@ class RectangularGrid(Grid):
 
         return Orthogonal
 
-    def orthogonal(self, suffix_1: str = "", suffix_2: str = "adj") -> Predicate:
-        """Get the orthogonal adjacency predicate with variable values."""
-        return self.Orthogonal(cell1=self.cell(suffix_1), cell2=self.cell(suffix_2))
-
     @property
     @cached_predicate
     def VertexSharing(self) -> type[Predicate]:
@@ -213,10 +202,6 @@ class RectangularGrid(Grid):
         )
 
         return VertexSharing
-
-    def vertex_sharing(self, suffix_1: str = "", suffix_2: str = "adj") -> Predicate:
-        """Get the vertex-sharing adjacency predicate with variable values."""
-        return self.VertexSharing(cell1=self.cell(suffix_1), cell2=self.cell(suffix_2))
 
     @property
     @cached_predicate
@@ -249,17 +234,6 @@ class RectangularGrid(Grid):
         )
 
         return Line
-
-    def line(self, direction_suffix: str = "", index_suffix: str = "", loc_suffix: str = "") -> Predicate:
-        """Get a line predicate for this grid with variable values."""
-        if direction_suffix:
-            direction_suffix = f"_{direction_suffix}"
-        if index_suffix:
-            index_suffix = f"_{index_suffix}"
-
-        D = Variable(f"D{direction_suffix}")
-        Idx = Variable(f"Idx{index_suffix}")
-        return self.Line(direction=D, index=Idx, loc=self.cell(suffix=loc_suffix))
 
     def find_anchor_cell(
         self,

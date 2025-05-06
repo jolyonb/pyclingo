@@ -13,6 +13,7 @@ class Solver(ABC):
     solver_name: str = "Puzzle solver"
     supported_grid_types: list[str] = ["RectangularGrid"]  # Default supported grid type
     supported_symbols: list[str | int] = []  # List of supported symbols in the grid definition
+    grid: Grid
     map_grid_to_integers: bool = False  # Controls how the grid is read
     _grid_data: list[GridCellData] | None = None
 
@@ -24,6 +25,8 @@ class Solver(ABC):
 
         self.create_grid()
         self.validate()
+        # Process grid data (has further validation)
+        _ = self.grid_data
 
     def create_grid(self) -> None:
         """Create the grid for this puzzle. Can be overridden by subclasses."""
@@ -45,10 +48,6 @@ class Solver(ABC):
 
         # Let the grid create itself from the config
         self.grid = grid_class.from_config(self.puzzle, self.config)
-
-        # After grid is created, parse the grid data if available
-        if "grid" in self.config and self.grid is not None:
-            self._grid_data = self.grid.parse_grid(self.config["grid"], map_to_integers=self.map_grid_to_integers)
 
     @property
     def grid_data(self) -> list[GridCellData]:

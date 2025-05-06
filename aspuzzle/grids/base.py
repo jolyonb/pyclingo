@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from typing import Any, TypeAlias
 
 from aspuzzle.puzzle import Module, Puzzle, cached_predicate
-from pyclingo import ANY, Not, Predicate, Variable
+from pyclingo import ANY, Not, Predicate, Variable, create_variables
 from pyclingo.conditional_literal import ConditionalLiteral
 
 GridCellData: TypeAlias = tuple[int, int, int | str]
@@ -56,6 +56,21 @@ class Grid(Module, ABC):
 
     @property
     @abstractmethod
+    def cell_fields(self) -> list[str]:
+        """Returns the list of field names associated with the Cell predicate for this grid"""
+
+    @property
+    @abstractmethod
+    def cell_var_names(self) -> list[str]:
+        """Returns the default list of variable names for the Cell predicate for this grid"""
+
+    @property
+    @abstractmethod
+    def direction_vectors(self) -> list[tuple[str, tuple[int, ...]]]:
+        """Returns the list of directions and vectors for this grid"""
+
+    @property
+    @abstractmethod
     def Cell(self) -> type[Predicate]:
         """Get the Cell predicate for this grid."""
 
@@ -65,9 +80,21 @@ class Grid(Module, ABC):
         """Get the OutsideGrid predicate identifying cells in the outside border."""
 
     @property
-    @abstractmethod
+    @cached_predicate
     def Direction(self) -> type[Predicate]:
         """Get the Direction predicate for this grid, defining all possible directions as vectors."""
+        Direction = Predicate.define("direction", ["name", "vector"], namespace=self.namespace, show=False)
+
+        self.section("Define directions in the grid")
+
+        direction_facts = []
+        for name, coords in self.direction_vectors:
+            cell_args = dict(zip(self.cell_fields, coords))
+            direction_facts.append(Direction(name=name, vector=self.Cell(**cell_args)))
+
+        self.fact(*direction_facts)
+
+        return Direction
 
     @property
     @cached_predicate
@@ -128,14 +155,57 @@ class Grid(Module, ABC):
             The anchor predicate class that marks the anchor cell
         """
 
-    @abstractmethod
     def cell(self, suffix: str = "") -> Predicate:
         """Get a cell predicate for this grid with variable values."""
-        pass
+        if suffix:
+            suffix = f"_{suffix}"
+        variables = create_variables(*[f"{var_name}{suffix}" for var_name in self.cell_var_names])
+        cell_args = dict(zip(self.cell_fields, variables))
+        return self.Cell(**cell_args)
 
     def outside_grid(self, suffix: str = "") -> Predicate:
         """Get an outside_grid predicate for this grid with variable values."""
         return self.OutsideGrid(self.cell(suffix=suffix))
+
+    def direction(self, name_suffix: str = "", vector_suffix: str = "vec") -> Predicate:
+        """Get a direction predicate including names and vectors."""
+        if name_suffix:
+            name_suffix = f"_{name_suffix}"
+        N = Variable(f"N{name_suffix}")
+        return self.Direction(name=N, vector=self.cell(suffix=vector_suffix))
+
+    def directions(self, name_suffix: str = "") -> Predicate:
+        """Get a direction predicate, listing the names of all directions."""
+        if name_suffix:
+            name_suffix = f"_{name_suffix}"
+        N = Variable(f"N{name_suffix}")
+        return self.Directions(name=N)
+
+    def orthogonal_directions(self, name_suffix: str = "") -> Predicate:
+        """Get an orthogonal direction predicate, listing the names of orthogonal directions."""
+        if name_suffix:
+            name_suffix = f"_{name_suffix}"
+        N = Variable(f"N{name_suffix}")
+        return self.OrthogonalDirections(name=N)
+
+    def orthogonal(self, suffix_1: str = "", suffix_2: str = "adj") -> Predicate:
+        """Get the orthogonal adjacency predicate with variable values."""
+        return self.Orthogonal(cell1=self.cell(suffix_1), cell2=self.cell(suffix_2))
+
+    def vertex_sharing(self, suffix_1: str = "", suffix_2: str = "adj") -> Predicate:
+        """Get the vertex-sharing adjacency predicate with variable values."""
+        return self.VertexSharing(cell1=self.cell(suffix_1), cell2=self.cell(suffix_2))
+
+    def line(self, direction_suffix: str = "", index_suffix: str = "", loc_suffix: str = "") -> Predicate:
+        """Get a line predicate for this grid with variable values."""
+        if direction_suffix:
+            direction_suffix = f"_{direction_suffix}"
+        if index_suffix:
+            index_suffix = f"_{index_suffix}"
+
+        D = Variable(f"D{direction_suffix}")
+        Idx = Variable(f"Idx{index_suffix}")
+        return self.Line(direction=D, index=Idx, loc=self.cell(suffix=loc_suffix))
 
 
 def do_not_show_outside(pred: Predicate, grid: Grid) -> None:
