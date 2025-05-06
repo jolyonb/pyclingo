@@ -11,7 +11,7 @@ from pyclingo.clingo_handler import ClingoMessageHandler, LogLevel
 from pyclingo.predicate import Predicate
 from pyclingo.program_elements import BlankLine, Comment, ProgramElement, Rule
 from pyclingo.term import Term
-from pyclingo.value import Constant, StringConstant, SymbolicConstant
+from pyclingo.value import Constant, ConstantBase, StringConstant, SymbolicConstant
 
 
 class ASPProgram:
@@ -30,7 +30,7 @@ class ASPProgram:
     satisfiable: bool | None = None
     exhausted: bool | None = None
     solution_count: int | None = None
-    statistics: dict[str, int] | None = None
+    statistics: dict[str, int | float] | None = None
 
     def __init__(self, header: str | None = None, default_segment: str = "Rules") -> None:
         """Initialize an empty ASP program."""
@@ -181,10 +181,12 @@ class ASPProgram:
                 lines.extend(("", f"% ===== {segment_name.title()} ====="))
             lines.extend(element.render() for element in elements)
 
-        # 4. Add show directives
-        show_statements = {pred.get_show_directive() for pred in self._collect_predicates()}
-        show_statements.remove(None)  # Used for hidden predicates
-        if show_statements:
+        show_statements: set[str]
+        if show_statements := {
+            pred.get_show_directive()  # type: ignore[misc]
+            for pred in self._collect_predicates()
+            if pred.get_show_directive() is not None
+        }:
             lines.extend(("", "#show."))
             lines.extend(sorted(list(show_statements)))
 
@@ -220,7 +222,7 @@ class ASPProgram:
 
     def solve(
         self, models: int = 0, timeout: int = 0, stop_on_log_level: LogLevel = LogLevel.INFO
-    ) -> Generator[dict[type[Predicate], set[Predicate]], None, None]:
+    ) -> Generator[dict[str, set[Predicate]], None, None]:
         """
         Solve the ASP program and yield solutions as sets of Predicate objects.
 
@@ -249,6 +251,7 @@ class ASPProgram:
 
         # Configure and prepare the control object
         control = clingo.Control(logger=message_handler.on_message)
+        assert isinstance(control.configuration.solve, clingo.Configuration)
         control.configuration.solve.models = models or 1000  # Maximum of 1000 rather than unlimited
         if timeout > 0:
             control.configuration.solve.timeout = timeout
@@ -274,6 +277,7 @@ class ASPProgram:
 
             # Check if we should halt based on log level
             if message_handler.should_halt:
+                assert message_handler.highest_level is not None
                 raise RuntimeError(
                     f"Grounding produced {message_handler.highest_level.name} level messages "
                     f"(stop threshold: {stop_on_log_level.name})."
@@ -314,7 +318,9 @@ class ASPProgram:
             "solving_time": control.statistics["summary"]["times"]["solve"],
         }
 
-    def _convert_symbol_to_predicate(self, symbol, predicate_types: dict[str, type[Predicate]]) -> Predicate:
+    def _convert_symbol_to_predicate(
+        self, symbol: clingo.Symbol, predicate_types: dict[str, type[Predicate]]
+    ) -> Predicate:
         """
         Convert a clingo symbol to a Predicate object.
 
@@ -345,7 +351,7 @@ class ASPProgram:
             )
 
         # Convert arguments to appropriate Value objects
-        kwargs = {}
+        kwargs: dict[str, ConstantBase | Predicate] = {}
         for i, (arg, field_name) in enumerate(zip(symbol.arguments, field_names)):
             # Convert argument based on its type
             if arg.type == clingo.SymbolType.Number:
@@ -363,8 +369,8 @@ class ASPProgram:
         return pred_class(**kwargs)
 
     def _convert_model_to_predicates(
-        self, model, predicate_types: dict[str, type[Predicate]]
-    ) -> dict[type[Predicate], set[Predicate]]:
+        self, model: clingo.Model, predicate_types: dict[str, type[Predicate]]
+    ) -> dict[str, set[Predicate]]:
         """
         Convert a clingo model to a dictionary of Predicate objects.
 
