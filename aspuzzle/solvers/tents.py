@@ -1,4 +1,3 @@
-from aspuzzle.grids.rectangulargrid import RectangularGrid
 from aspuzzle.solvers.base import Solver
 from pyclingo import ANY, Choice, Equals, Not, Predicate, create_variables
 from pyclingo.value import SymbolicConstant
@@ -11,7 +10,6 @@ class Tents(Solver):
     def construct_puzzle(self) -> None:
         """Construct the rules of the puzzle."""
         puzzle, grid, config, grid_data = self.unpack_data
-        assert isinstance(grid, RectangularGrid)
 
         # Define predicates
         Tree = Predicate.define("tree", ["loc"], show=False)

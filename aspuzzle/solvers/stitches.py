@@ -1,4 +1,3 @@
-from aspuzzle.grids.rectangulargrid import RectangularGrid
 from aspuzzle.solvers.base import Solver
 from pyclingo import ANY, Choice, Count, Equals, Predicate, create_variables
 from pyclingo.value import SymbolicConstant
@@ -12,7 +11,6 @@ class Stitches(Solver):
     def construct_puzzle(self) -> None:
         """Construct the rules of the puzzle."""
         puzzle, grid, config, grid_data = self.unpack_data
-        assert isinstance(grid, RectangularGrid)
 
         # Register stitch count as a symbolic constant
         stitch_count = puzzle.register_symbolic_constant("stitch_count", config["stitch_count"])

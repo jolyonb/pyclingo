@@ -1,4 +1,3 @@
-from aspuzzle.grids.rectangulargrid import RectangularGrid
 from aspuzzle.solvers.base import Solver
 from aspuzzle.symbolset import SymbolSet
 from pyclingo import ANY, Predicate, create_variables
@@ -12,7 +11,6 @@ class Starbattle_Shapeless(Solver):
     def construct_puzzle(self) -> None:
         """Construct the rules of the puzzle."""
         puzzle, grid, config, grid_data = self.unpack_data
-        assert isinstance(grid, RectangularGrid)
 
         star_count = puzzle.register_symbolic_constant("star_count", config["star_count"])
 

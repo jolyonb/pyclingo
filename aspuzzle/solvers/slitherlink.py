@@ -1,5 +1,4 @@
 from aspuzzle.grids.base import do_not_show_outside
-from aspuzzle.grids.rectangulargrid import RectangularGrid
 from aspuzzle.solvers.base import Solver
 from aspuzzle.symbolset import SymbolSet
 from pyclingo import Not, Predicate, create_variables
@@ -12,7 +11,6 @@ class Slitherlink(Solver):
     def construct_puzzle(self) -> None:
         """Construct the rules of the puzzle."""
         puzzle, grid, config, grid_data = self.unpack_data
-        assert isinstance(grid, RectangularGrid)
 
         # Define predicates
         Clue = Predicate.define("clue", ["loc", "num"], show=False)
