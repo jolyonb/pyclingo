@@ -198,7 +198,7 @@ class SymbolSet(Module):
         symbol = self._symbols[symbol_name]
         symbol_pred = symbol.predicate
         fields = symbol_pred.field_names()
-        value_field = {symbol.value_field: Variable("V")} if symbol.is_range else {}
+        value_field = {symbol.value_field: Variable("V")} if symbol.value_field else {}
 
         # Create Connected predicate with same fields as the symbol predicate
         Connected = Predicate.define(

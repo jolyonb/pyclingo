@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from functools import wraps
 from typing import TYPE_CHECKING, Any, Callable, Generator, TypeVar, cast
 
 from pyclingo import ASPProgram, Count, Equals, NotEquals, Predicate
@@ -362,7 +363,7 @@ class Module:
 T = TypeVar("T")
 
 
-def cached_predicate(init_func: Callable[[Any], T]) -> property:
+def cached_predicate(init_func: Callable[[Any], T]) -> Callable[[Any], T]:
     """
     Decorator for caching predicates in Module classes.
 
@@ -377,6 +378,7 @@ def cached_predicate(init_func: Callable[[Any], T]) -> property:
     """
     attr_name = f"_{init_func.__name__}"
 
+    @wraps(init_func)
     def getter(self: Any) -> T:
         # Check if the predicate has already been initialized
         if not hasattr(self, attr_name) or getattr(self, attr_name) is None:
@@ -386,4 +388,4 @@ def cached_predicate(init_func: Callable[[Any], T]) -> property:
         # Return the cached predicate
         return cast(T, getattr(self, attr_name))
 
-    return property(getter)
+    return getter

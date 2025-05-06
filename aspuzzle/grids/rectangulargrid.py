@@ -29,6 +29,7 @@ class RectangularGrid(Grid):
         self.rows = rows
         self.cols = cols
 
+    @property
     @cached_predicate
     def Cell(self) -> type[Predicate]:
         """Get the Cell predicate for this grid."""
@@ -55,6 +56,7 @@ class RectangularGrid(Grid):
         R, C = create_variables(f"R{suffix}", f"C{suffix}")
         return cast(Predicate, self.Cell(row=R, col=C))
 
+    @property
     @cached_predicate
     def OutsideGrid(self) -> type[Predicate]:
         """Get the OutsideGrid predicate identifying cells in the outside border."""
@@ -93,6 +95,7 @@ class RectangularGrid(Grid):
         """Get an outside_grid predicate for this grid with variable values."""
         return cast(Predicate, self.OutsideGrid(self.cell(suffix=suffix)))
 
+    @property
     @cached_predicate
     def Direction(self) -> type[Predicate]:
         """Get the Direction predicate for this grid, defining all possible directions as vectors."""
@@ -116,19 +119,7 @@ class RectangularGrid(Grid):
 
         return Direction
 
-    @cached_predicate
-    def Directions(self) -> type[Predicate]:
-        """Get the Directions predicate, identifying all directions."""
-        Directions = Predicate.define("directions", ["name"], namespace=self.namespace, show=False)
-
-        self.section("All directions")
-
-        # Define Directions for each direction vector
-        N = Variable("N")
-        self.when(self.Direction(name=N, vector=ANY), Directions(name=N))
-
-        return Directions
-
+    @property
     @cached_predicate
     def OrthogonalDirections(self) -> type[Predicate]:
         """Get the OrthogonalDirections predicate, identifying orthogonal directions (N,S,E,W)."""
@@ -166,6 +157,7 @@ class RectangularGrid(Grid):
         N = Variable(f"N{name_suffix}")
         return cast(Predicate, self.OrthogonalDirections(name=N))
 
+    @property
     @cached_predicate
     def Orthogonal(self) -> type[Predicate]:
         """Get the orthogonal adjacency predicate (cells that share an edge)."""
@@ -199,6 +191,7 @@ class RectangularGrid(Grid):
         """Get the orthogonal adjacency predicate with variable values."""
         return cast(Predicate, self.Orthogonal(cell1=self.cell(suffix_1), cell2=self.cell(suffix_2)))
 
+    @property
     @cached_predicate
     def VertexSharing(self) -> type[Predicate]:
         """Get the vertex-sharing adjacency predicate."""
@@ -230,6 +223,7 @@ class RectangularGrid(Grid):
         """Get the vertex-sharing adjacency predicate with variable values."""
         return cast(Predicate, self.VertexSharing(cell1=self.cell(suffix_1), cell2=self.cell(suffix_2)))
 
+    @property
     @cached_predicate
     def Line(self) -> type[Predicate]:
         """Get the Line predicate defining major lines in the grid."""
