@@ -32,9 +32,6 @@ def solve(filename: str) -> None:
     # Construct the puzzle rules
     solver = puzzle_class(puzzle=puzzle, config=config)
 
-    # Create a grid object
-    solver.create_grid()
-
     # Validate the config
     solver.validate()
 

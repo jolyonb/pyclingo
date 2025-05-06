@@ -4,7 +4,7 @@ import pprint
 from abc import ABC, abstractmethod
 from typing import Any
 
-from aspuzzle.grids.base import Grid
+from aspuzzle.grids.base import Grid, GridCellData
 from aspuzzle.puzzle import Puzzle
 
 
@@ -14,14 +14,15 @@ class Solver(ABC):
     supported_grid_types: list[str] = ["RectangularGrid"]  # Default supported grid type
     supported_symbols: list[str | int] = []  # List of supported symbols in the grid definition
     map_grid_to_integers: bool = False  # Controls how the grid is read
+    _grid_data: list[GridCellData] | None = None
 
     def __init__(self, puzzle: Puzzle, config: dict[str, Any]) -> None:
         self.puzzle = puzzle
         self.puzzle.name = self.solver_name
-        self.grid = None
         # Merge default config with instance config
         self.config = {**self.default_config, **config}
-        self._grid_data = None
+
+        self.create_grid()
 
     def create_grid(self) -> None:
         """Create the grid for this puzzle. Can be overridden by subclasses."""
@@ -143,10 +144,10 @@ class Solver(ABC):
 
             # Convert found solutions to comparable format (sets of frozensets)
             found_solutions_set = set()
-            for solution in solutions:
+            for sol in solutions:
                 # Convert each solution to a frozenset of (predicate_name, frozenset of predicates)
                 solution_set = frozenset(
-                    (pred_name, frozenset(str(pred) for pred in preds)) for pred_name, preds in solution.items()
+                    (pred_name, frozenset(str(pred) for pred in preds)) for pred_name, preds in sol.items()
                 )
                 found_solutions_set.add(solution_set)
 
