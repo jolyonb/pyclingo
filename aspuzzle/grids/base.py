@@ -87,7 +87,7 @@ class Grid(Module, ABC):
         pass
 
     @abstractmethod
-    def get_line_count(self, direction: str) -> int | SymbolicConstant:
+    def get_line_count(self, direction: str) -> int | SymbolicConstant:  # TODO: should this not be SymbolicConstant?
         """Returns the number of lines in the specified direction"""
         pass
 

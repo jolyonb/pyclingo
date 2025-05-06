@@ -1,6 +1,7 @@
 from aspuzzle.grids.rectangulargrid import RectangularGrid
 from aspuzzle.solvers.base import Solver
 from pyclingo import ANY, Choice, Count, Equals, Predicate, create_variables
+from pyclingo.value import SymbolicConstant
 
 
 class Stitches(Solver):
@@ -35,14 +36,12 @@ class Stitches(Solver):
         for r, c, region_id in grid_data:
             puzzle.fact(Region(loc=grid.Cell(row=r, col=c), id=region_id), segment="Regions")
 
-        # Define expected row and column counts
+        # Define expected line counts
         puzzle.section("Stitch counts", segment="Clues")
-        # Row counts (direction 'e' for rows)
-        for i, count in enumerate(config["row_clues"], 1):
-            puzzle.fact(ExpectedCounts(dir="e", index=i, count=count), segment="Clues")
-        # Column counts (direction 's' for columns)
-        for i, count in enumerate(config["col_clues"], 1):
-            puzzle.fact(ExpectedCounts(dir="s", index=i, count=count), segment="Clues")
+        for direction in grid.line_direction_names:
+            clue_key = f"{grid.line_direction_descriptions[direction]}_clues"
+            for i, count in enumerate(config[clue_key], 1):
+                puzzle.fact(ExpectedCounts(dir=direction, index=i, count=count), segment="Clues")
 
         # Rule 1: Identify adjoining regions (with Id1 < Id2)
         puzzle.section("Find adjoining regions")
@@ -94,25 +93,40 @@ class Stitches(Solver):
 
     def validate_config(self) -> None:
         """Validate the puzzle configuration."""
-        # Check if row and column clues exist
-        if "row_clues" not in self.config:
-            raise ValueError("Missing row_clues in puzzle configuration")
-        if "col_clues" not in self.config:
-            raise ValueError("Missing col_clues in puzzle configuration")
+        grid = self.grid
 
-        # Validate clue lengths match grid dimensions
-        assert isinstance(self.grid, RectangularGrid)
-        if len(self.config["row_clues"]) != self.grid.rows:
-            raise ValueError(f"Expected {self.grid.rows} row clues, got {len(self.config['row_clues'])}")
-        if len(self.config["col_clues"]) != self.grid.cols:
-            raise ValueError(f"Expected {self.grid.cols} column clues, got {len(self.config['col_clues'])}")
+        # Check if line clues exist for each direction
+        line_sums = []
+        for direction in grid.line_direction_names:
+            clue_key = f"{grid.line_direction_descriptions[direction]}_clues"
 
-        # Validate that row and column clue sums match
-        row_sum = sum(self.config["row_clues"])
-        col_sum = sum(self.config["col_clues"])
+            # Check if clues exist
+            if clue_key not in self.config:
+                raise ValueError(f"Missing {clue_key} in puzzle configuration")
 
-        if row_sum != col_sum:
-            raise ValueError(f"Sum of row clues ({row_sum}) doesn't match sum of column clues ({col_sum})")
+            # Check if count matches grid size
+            expected_count = grid.get_line_count(direction)
+            actual_count = len(self.config[clue_key])
+
+            if isinstance(expected_count, SymbolicConstant):
+                # Can't verify
+                pass
+            elif actual_count == expected_count:
+                # Calculate sum of clues
+                line_sums.append((direction, sum(self.config[clue_key])))
+            else:
+                raise ValueError(f"Expected {expected_count} {clue_key}, got {actual_count}")
+
+        # Ensure all line sums are equal
+        if len(line_sums) > 1:
+            expected_sum = line_sums[0][1]
+            for direction, actual_sum in line_sums[1:]:
+                if actual_sum != expected_sum:
+                    desc1 = grid.line_direction_descriptions[line_sums[0][0]]
+                    desc2 = grid.line_direction_descriptions[direction]
+                    raise ValueError(
+                        f"Sum of {desc1} clues ({expected_sum}) doesn't match sum of {desc2} clues ({actual_sum})"
+                    )
 
         # For Stitches, the sum of clues should be equal to the number of stitches,
         # which is the number of region boundaries times stitch_count * 2.
