@@ -141,10 +141,7 @@ class SymbolSet(Module):
         for name, symbol_info in self._symbols.items():
             pred = symbol_info.predicate
 
-            if not symbol_info.is_range:
-                # Simple symbol, no conditions
-                choices.append((pred(loc=cell), None))
-            else:
+            if symbol_info.value_field:
                 # Range symbol, add condition that value is in the pool
                 choices.append(
                     (
@@ -152,6 +149,9 @@ class SymbolSet(Module):
                         V.in_(symbol_info.pool),
                     )
                 )
+            else:
+                # Simple symbol, no conditions
+                choices.append((pred(loc=cell), None))
 
         # Create the choice rule
         first_choice, first_condition = choices[0]

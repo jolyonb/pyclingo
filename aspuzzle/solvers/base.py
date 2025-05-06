@@ -49,7 +49,7 @@ class Solver(ABC):
             self._grid_data = self.grid.parse_grid(self.config["grid"], map_to_integers=self.map_grid_to_integers)
 
     @property
-    def grid_data(self) -> list[tuple[int, int, int | str]]:
+    def grid_data(self) -> list[tuple[int, int, int | str]]:  # TODO: fix ouptut type to alias
         """
         Get the parsed grid data, using the provided mapping strategy.
         Lazy-loads and caches the data on first access.

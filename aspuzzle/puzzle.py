@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Callable, Generator, Type, TypeVar
+from typing import TYPE_CHECKING, Any, Callable, Generator, TypeVar, cast
 
 from pyclingo import ASPProgram, Count, Equals, NotEquals, Predicate
 from pyclingo.term import Term
@@ -143,7 +143,7 @@ class Puzzle:
         """
         return self._program.register_symbolic_constant(name, value)
 
-    def solve(self, models: int = 0, timeout: int = 0) -> Generator[dict[Type[Predicate], set[Predicate]], None, None]:
+    def solve(self, models: int = 0, timeout: int = 0) -> Generator[dict[str, set[Predicate]], None, None]:
         """
         Solve the puzzle and yield solutions.
 
@@ -176,7 +176,7 @@ class Puzzle:
         return self._program.solution_count
 
     @property
-    def statistics(self) -> dict[str, int] | None:
+    def statistics(self) -> dict[str, int | float] | None:
         """Solver statistics after solving, or None if not solved yet."""
         return self._program.statistics
 
@@ -231,6 +231,7 @@ class Puzzle:
         count_term = Count(count_over, condition=condition).assign_to(count_variable)
 
         # Build rule body
+        rule_body: list[Term] | Term
         if when is None:
             rule_body = count_term
         elif isinstance(when, list):
@@ -383,6 +384,6 @@ def cached_predicate(init_func: Callable[[Any], T]) -> property:
             setattr(self, attr_name, init_func(self))
 
         # Return the cached predicate
-        return getattr(self, attr_name)
+        return cast(T, getattr(self, attr_name))
 
     return property(getter)

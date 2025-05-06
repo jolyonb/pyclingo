@@ -97,6 +97,7 @@ class Tents(Solver):
             raise ValueError("Missing col_clues in puzzle configuration")
 
         # Validate clue lengths match grid dimensions
+        assert isinstance(self.grid, RectangularGrid)
         if len(self.config["row_clues"]) != self.grid.rows:
             raise ValueError(f"Expected {self.grid.rows} row clues, got {len(self.config['row_clues'])}")
         if len(self.config["col_clues"]) != self.grid.cols:

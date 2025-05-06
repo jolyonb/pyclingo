@@ -626,7 +626,7 @@ def create_variables(names: str) -> Variable: ...
 def create_variables(*names: str) -> tuple[Variable, ...]: ...
 
 
-def create_variables(*names: str) -> Variable | tuple[Variable, ...]:
+def create_variables(*names: str) -> Variable | tuple[Variable, ...]:  # type: ignore[misc]
     """
     Create one or more ASP variables with the given names.
 
