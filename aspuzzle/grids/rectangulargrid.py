@@ -4,8 +4,7 @@ from typing import Any, cast
 
 from aspuzzle.grids.base import Grid, GridCellData
 from aspuzzle.puzzle import Puzzle, cached_predicate
-from pyclingo import ExplicitPool, Min, Not, Predicate, RangePool, create_variables
-from pyclingo.conditional_literal import ConditionalLiteral
+from pyclingo import ExplicitPool, Min, Predicate, RangePool, create_variables
 from pyclingo.value import ANY, SymbolicConstant, Variable
 
 
@@ -90,10 +89,6 @@ class RectangularGrid(Grid):
         self._has_outside_border = True
 
         return Outside
-
-    def outside_grid(self, suffix: str = "") -> Predicate:
-        """Get an outside_grid predicate for this grid with variable values."""
-        return cast(Predicate, self.OutsideGrid(self.cell(suffix=suffix)))
 
     @property
     @cached_predicate
@@ -462,12 +457,3 @@ class RectangularGrid(Grid):
                 cells.append(cell_entry)
 
         return cells
-
-
-def do_not_show_outside(pred: Predicate, grid: RectangularGrid) -> None:
-    """
-    This helper function sets the show directive on a predicate to not display for cells outside the grid.
-    The predicate must be instantiated with the grid.cell() location.
-    """
-    # TODO: Move to base.py, when outside_grid is made an abstract method
-    pred.__class__.set_show_directive(ConditionalLiteral(pred, [pred, Not(grid.outside_grid())]))

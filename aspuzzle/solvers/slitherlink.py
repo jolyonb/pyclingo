@@ -1,4 +1,5 @@
-from aspuzzle.grids.rectangulargrid import RectangularGrid, do_not_show_outside
+from aspuzzle.grids.base import do_not_show_outside
+from aspuzzle.grids.rectangulargrid import RectangularGrid
 from aspuzzle.solvers.base import Solver
 from aspuzzle.symbolset import SymbolSet
 from pyclingo import Not, Predicate, create_variables

@@ -4,7 +4,8 @@ from abc import ABC, abstractmethod
 from typing import Any, TypeAlias
 
 from aspuzzle.puzzle import Module, Puzzle, cached_predicate
-from pyclingo import ANY, Predicate, Variable
+from pyclingo import ANY, Not, Predicate, Variable
+from pyclingo.conditional_literal import ConditionalLiteral
 
 GridCellData: TypeAlias = tuple[int, int, int | str]
 
@@ -131,3 +132,15 @@ class Grid(Module, ABC):
     def cell(self, suffix: str = "") -> Predicate:
         """Get a cell predicate for this grid with variable values."""
         pass
+
+    def outside_grid(self, suffix: str = "") -> Predicate:
+        """Get an outside_grid predicate for this grid with variable values."""
+        return self.OutsideGrid(self.cell(suffix=suffix))
+
+
+def do_not_show_outside(pred: Predicate, grid: Grid) -> None:
+    """
+    This helper function sets the show directive on a predicate to not display for cells outside the grid.
+    The predicate must be instantiated with the grid.cell() location.
+    """
+    pred.__class__.set_show_directive(ConditionalLiteral(pred, [pred, Not(grid.outside_grid())]))
