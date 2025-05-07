@@ -509,15 +509,15 @@ class RectangularGrid(Grid):
 
         # Process solution if provided
         if solution:
-            predicate_renders = render_config.get("predicate_renders", {})
+            predicate_styling = render_config.get("predicates", {})
 
             # Only render predicates that have configuration
             predicates_to_render = []
             for pred_name in solution.keys():
-                if pred_name not in predicate_renders or predicate_renders[pred_name].get("skip_rendering", False):
+                if pred_name not in predicate_styling:
                     continue
 
-                priority = predicate_renders[pred_name].get("priority", 0)
+                priority = predicate_styling[pred_name].get("priority", 0)
                 predicates_to_render.append((pred_name, priority))
 
             # Sort by priority (higher priority rendered later, so they appear on top)
@@ -526,7 +526,7 @@ class RectangularGrid(Grid):
             # Process predicates in priority order
             for pred_name, _ in predicates_to_render:
                 pred_instances = solution[pred_name]
-                render_info = predicate_renders.get(pred_name, {})
+                render_info = predicate_styling.get(pred_name, {})
 
                 # Get default symbol and color (used if no custom renderer)
                 default_symbol = render_info.get("symbol", pred_name[0])

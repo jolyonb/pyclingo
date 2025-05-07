@@ -116,12 +116,11 @@ class Slitherlink(Solver):
                 1: {"symbol": "1", "color": Color.BRIGHT_BLUE},
                 2: {"symbol": "2", "color": Color.BRIGHT_BLUE},
                 3: {"symbol": "3", "color": Color.BRIGHT_BLUE},
-                "S": {"symbol": "S", "color": Color.BRIGHT_GREEN},  # Sheep
-                "W": {"symbol": "W", "color": Color.BRIGHT_RED},  # Wolf
+                "S": {"symbol": "S", "color": Color.WHITE},
+                "W": {"symbol": "W", "color": Color.BRIGHT_RED},
             },
-            "predicate_renders": {
+            "predicates": {
                 "inside": {"symbol": None, "background": BgColor.BRIGHT_GREEN},
-                "outside": {"skip_rendering": True},
             },
             "join_char": "",
         }

@@ -305,11 +305,8 @@ class Grid(Module, ABC):
             solution: Dictionary mapping predicate names to lists of predicate instances
             render_config: Configuration for rendering, including:
                 - 'puzzle_symbols': Dict mapping puzzle values to display symbols
-                - 'predicate_renders': Dict mapping predicate names to render info:
-                    - 'symbol': Character or function to determine symbol to display
-                    - 'color': ANSI color name or function to determine color
-                    - 'priority': Drawing priority (higher drawn on top)
-                    - 'value_mapping': Optional mapping from predicate values to symbols
+                - 'predicates': Dict mapping predicate names to render info
+                - 'join_char': Character to use in joining cells
 
         Returns:
             ASCII string representation of the grid

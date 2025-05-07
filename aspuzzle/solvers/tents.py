@@ -138,11 +138,10 @@ class Tents(Solver):
             Dictionary with rendering configuration for Tents
         """
         return {
-            "puzzle_symbols": {"T": {"symbol": "T", "color": Color.GREEN}},
-            "predicate_renders": {
-                "tent": {
-                    "symbol": "A",
-                    "color": Color.YELLOW,
-                },
+            "puzzle_symbols": {
+                "T": {"symbol": "T", "color": Color.GREEN},
+            },
+            "predicates": {
+                "tent": {"symbol": "A", "color": Color.YELLOW},
             },
         }

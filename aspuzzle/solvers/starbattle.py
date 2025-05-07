@@ -63,13 +63,8 @@ class Starbattle(Solver):
         Returns:
             Dictionary with rendering configuration for Star Battle
         """
-        # For Star Battle, we typically don't show the region IDs in the visualization
-        # We only focus on the stars
         return {
-            "predicate_renders": {
-                "star": {
-                    "symbol": "★",
-                    "color": Color.YELLOW,
-                },
+            "predicates": {
+                "star": {"symbol": "★", "color": Color.YELLOW},
             },
         }

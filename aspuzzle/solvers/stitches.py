@@ -165,9 +165,7 @@ class Stitches(Solver):
             ]
 
         return {
-            "predicate_renders": {
-                "stitch": {
-                    "custom_renderer": stitch_renderer,
-                },
+            "predicates": {
+                "stitch": {"custom_renderer": stitch_renderer},
             },
         }

@@ -67,10 +67,7 @@ class Minesweeper(Solver):
                 7: {"color": Color.WHITE},
                 8: {"color": Color.WHITE},
             },
-            "predicate_renders": {
-                "mine": {
-                    "symbol": "*",
-                    "color": Color.RED,
-                },
+            "predicates": {
+                "mine": {"symbol": "*", "color": Color.RED},
             },
         }

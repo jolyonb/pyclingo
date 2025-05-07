@@ -285,5 +285,5 @@ class Solver(ABC):
         """
         return {
             "puzzle_symbols": {},  # Map puzzle values to display symbols
-            "predicate_renders": {},  # Map predicate names to rendering info
+            "predicates": {},  # Map predicate names to rendering info
         }

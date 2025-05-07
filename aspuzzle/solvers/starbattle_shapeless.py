@@ -53,16 +53,11 @@ class Starbattle_Shapeless(Solver):
         Returns:
             Dictionary with rendering configuration for Star Battle
         """
-        # For Star Battle, we typically don't show the region IDs in the visualization
-        # We only focus on the stars
         return {
             "puzzle_symbols": {
                 "#": {"color": Color.WHITE},
             },
-            "predicate_renders": {
-                "star": {
-                    "symbol": "★",
-                    "color": Color.YELLOW,
-                },
+            "predicates": {
+                "star": {"symbol": "★", "color": Color.YELLOW},
             },
         }
