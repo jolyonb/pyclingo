@@ -12,13 +12,13 @@
   "solutions": [
     {
       "mine": [
-        "mine(cell(1, 4))",
-        "mine(cell(2, 1))",
-        "mine(cell(2, 2))",
-        "mine(cell(2, 5))",
-        "mine(cell(3, 2))",
-        "mine(cell(4, 3))",
-        "mine(cell(5, 5))"
+        "mine(loc=cell(row=1, col=4))",
+        "mine(loc=cell(row=2, col=1))",
+        "mine(loc=cell(row=2, col=2))",
+        "mine(loc=cell(row=2, col=5))",
+        "mine(loc=cell(row=3, col=2))",
+        "mine(loc=cell(row=4, col=3))",
+        "mine(loc=cell(row=5, col=5))"
       ]
     }
   ]

@@ -163,7 +163,7 @@ class Solver(ABC):
         if not self.puzzle.satisfiable:
             print("No solutions found")
         else:
-            print(json.dumps(solutions[:2], indent=2, default=str))
+            print(json.dumps(solutions[:2], indent=2, default=repr))
             if len(solutions) > 2:
                 print(f"(... suppressed ({len(solutions) - 2} more)")
 
@@ -192,7 +192,7 @@ class Solver(ABC):
         for sol in solutions:
             # Convert each solution to a frozenset of (predicate_name, frozenset of predicates)
             solution_set = frozenset(
-                (pred_name, frozenset(str(pred) for pred in preds)) for pred_name, preds in sol.items()
+                (pred_name, frozenset(repr(pred) for pred in preds)) for pred_name, preds in sol.items()
             )
             found_solutions_set.add(solution_set)
 

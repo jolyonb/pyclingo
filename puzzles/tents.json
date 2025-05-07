@@ -28,13 +28,13 @@
   "solutions": [
     {
       "tent": [
-        "tent(cell(1, 5))",
-        "tent(cell(2, 3))",
-        "tent(cell(4, 1))",
-        "tent(cell(4, 6))",
-        "tent(cell(5, 4))",
-        "tent(cell(6, 2))",
-        "tent(cell(6, 6))"
+        "tent(loc=cell(row=1, col=5))",
+        "tent(loc=cell(row=2, col=3))",
+        "tent(loc=cell(row=4, col=1))",
+        "tent(loc=cell(row=4, col=6))",
+        "tent(loc=cell(row=5, col=4))",
+        "tent(loc=cell(row=6, col=2))",
+        "tent(loc=cell(row=6, col=6))"
       ]
     }
   ]
