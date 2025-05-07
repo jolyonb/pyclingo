@@ -1,0 +1,44 @@
+{
+  "puzzle_type": "Hitori",
+  "grid_type": "RectangularGrid",
+  "grid": [
+    "24514",
+    "15422",
+    "34351",
+    "41134",
+    "21342"
+  ],
+  "solutions": [
+    {
+      "white": [
+        "white(loc=cell(row=1, col=1))",
+        "white(loc=cell(row=1, col=3))",
+        "white(loc=cell(row=1, col=4))",
+        "white(loc=cell(row=1, col=5))",
+        "white(loc=cell(row=2, col=1))",
+        "white(loc=cell(row=2, col=2))",
+        "white(loc=cell(row=2, col=3))",
+        "white(loc=cell(row=2, col=4))",
+        "white(loc=cell(row=3, col=1))",
+        "white(loc=cell(row=3, col=2))",
+        "white(loc=cell(row=3, col=4))",
+        "white(loc=cell(row=3, col=5))",
+        "white(loc=cell(row=4, col=1))",
+        "white(loc=cell(row=4, col=3))",
+        "white(loc=cell(row=4, col=4))",
+        "white(loc=cell(row=5, col=2))",
+        "white(loc=cell(row=5, col=3))",
+        "white(loc=cell(row=5, col=4))",
+        "white(loc=cell(row=5, col=5))"
+      ],
+      "black": [
+        "black(loc=cell(row=1, col=2))",
+        "black(loc=cell(row=2, col=5))",
+        "black(loc=cell(row=3, col=3))",
+        "black(loc=cell(row=4, col=2))",
+        "black(loc=cell(row=4, col=5))",
+        "black(loc=cell(row=5, col=1))"
+      ]
+    }
+  ]
+}
