@@ -16,6 +16,7 @@ mypy = "^1.15.0"
 pre-commit = "^4.2.0"
 pyright = "^1.1.400"
 ruff = "^0.11.8"
+pytest = "^8.3.5"
 
 [build-system]
 requires = ["poetry-core"]
@@ -46,3 +47,8 @@ fixable = ["ALL"]
 [tool.ruff.lint.isort]
 known-first-party = ["pyclingo", "aspuzzle"]
 section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
+
+[tool.pytest]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_functions = "test_*"
