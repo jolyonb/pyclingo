@@ -1,3 +1,6 @@
+from typing import Any
+
+from aspuzzle.grids.rendering import Color
 from aspuzzle.solvers.base import Solver
 from pyclingo import ANY, Choice, Equals, Not, Predicate, create_variables
 
@@ -126,3 +129,20 @@ class Tents(Solver):
             # Check that sum matches tree count
             if expected_sum != tree_count:
                 raise ValueError(f"Sum of clues ({expected_sum}) doesn't match number of trees ({tree_count})")
+
+    def get_render_config(self) -> dict[str, Any]:
+        """
+        Get the rendering configuration for the Tents solver.
+
+        Returns:
+            Dictionary with rendering configuration for Tents
+        """
+        return {
+            "puzzle_symbols": {"T": {"symbol": "T", "color": Color.GREEN}},
+            "predicate_renders": {
+                "tent": {
+                    "symbol": "A",
+                    "color": Color.YELLOW,
+                },
+            },
+        }

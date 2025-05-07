@@ -14,6 +14,7 @@ def solve(
     timeout: int = 0,
     display_solutions: bool = True,
     display_stats: bool = True,
+    visualize: bool = True,
     validate: bool = True,
     output_file: str | None = None,
     quiet: bool = False,
@@ -29,6 +30,7 @@ def solve(
         timeout: Timeout in seconds (0 for no timeout)
         display_solutions: Whether to display found solutions
         display_stats: Whether to display solver statistics
+        visualize: Whether to visualize the solution as ASCII
         validate: Whether to validate solutions against expected solutions
         output_file: Optional file to write the ASP program to
         quiet: Suppress all output except errors
@@ -71,7 +73,7 @@ def solve(
 
         # Display solutions
         if display_solutions and not quiet:
-            solver.display_results(solutions)
+            solver.display_results(solutions, visualize=visualize)
 
         # Print statistics
         if display_stats and not quiet:
@@ -111,7 +113,8 @@ def main() -> None:
     # Display options
     display_group = parser.add_argument_group("Display options")
     display_group.add_argument("--no-solutions", action="store_true", help="Don't display solutions")
-    display_group.add_argument("--no-stats", action="store_true", help="Don't display solver statistics")
+    display_group.add_argument("--stats", action="store_true", help="Display solver statistics")
+    display_group.add_argument("--no-viz", action="store_true", help="Don't visualize the solution")
     display_group.add_argument(
         "--no-validation", action="store_true", help="Don't validate solutions against expected solutions"
     )
@@ -131,7 +134,8 @@ def main() -> None:
         max_solutions=args.max_solutions,
         timeout=args.timeout,
         display_solutions=not args.no_solutions and not args.quiet,
-        display_stats=not args.no_stats and not args.quiet,
+        display_stats=args.stats and not args.quiet,
+        visualize=not args.no_viz and not args.quiet,
         validate=not args.no_validation and not args.quiet,
         output_file=args.output_file,
         quiet=args.quiet,

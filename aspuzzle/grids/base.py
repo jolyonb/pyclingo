@@ -7,7 +7,9 @@ from aspuzzle.puzzle import Module, Puzzle, cached_predicate
 from pyclingo import ANY, ExplicitPool, Not, Predicate, Variable, create_variables
 from pyclingo.conditional_literal import ConditionalLiteral
 
-GridCellData: TypeAlias = tuple[int, int, int | str]
+GridCellData: TypeAlias = tuple[
+    int, int, int | str
+]  # TODO: This is row/col/value; needs to be tuple[tuple[int, ...], int | str]
 
 
 class Grid(Module, ABC):
@@ -287,6 +289,32 @@ class Grid(Module, ABC):
         Returns:
             A new Cell predicate with the vector added
         """
+
+    @abstractmethod
+    def render_ascii(
+        self,
+        puzzle_definition: list[GridCellData],
+        solution: dict[str, list[Predicate]] | None = None,
+        render_config: dict[str, Any] | None = None,
+    ) -> str:
+        """
+        Render the grid as ASCII text.
+
+        Args:
+            puzzle_definition: List of (row, col, value) tuples defining the puzzle
+            solution: Dictionary mapping predicate names to lists of predicate instances
+            render_config: Configuration for rendering, including:
+                - 'puzzle_symbols': Dict mapping puzzle values to display symbols
+                - 'predicate_renders': Dict mapping predicate names to render info:
+                    - 'symbol': Character or function to determine symbol to display
+                    - 'color': ANSI color name or function to determine color
+                    - 'priority': Drawing priority (higher drawn on top)
+                    - 'value_mapping': Optional mapping from predicate values to symbols
+
+        Returns:
+            ASCII string representation of the grid
+        """
+        pass
 
 
 def do_not_show_outside(pred: Predicate, grid: Grid) -> None:

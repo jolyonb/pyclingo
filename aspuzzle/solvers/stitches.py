@@ -1,3 +1,6 @@
+from typing import Any
+
+from aspuzzle.grids.rendering import Color, RenderItem
 from aspuzzle.solvers.base import Solver
 from pyclingo import ANY, Choice, Count, Equals, Predicate, create_variables
 
@@ -125,3 +128,46 @@ class Stitches(Solver):
         # For Stitches, the sum of clues should be equal to the number of stitches,
         # which is the number of region boundaries times stitch_count * 2.
         # I don't want to do this here though, because it requires a python implementation of finding region boundaries.
+
+    def get_render_config(self) -> dict[str, Any]:
+        """
+        Get the rendering configuration for the Stitches solver.
+
+        Returns:
+            Dictionary with rendering configuration for Stitches
+        """
+        # Create an array of distinct colors to cycle through
+        stitch_colors = [
+            Color.RED,
+            Color.GREEN,
+            Color.BLUE,
+            Color.YELLOW,
+            Color.MAGENTA,
+            Color.CYAN,
+            Color.BRIGHT_RED,
+            Color.BRIGHT_GREEN,
+            Color.BRIGHT_BLUE,
+            Color.BRIGHT_YELLOW,
+        ]
+
+        # Create a closure to track the color index
+        color_index = [0]
+
+        def stitch_renderer(pred: Predicate) -> list[RenderItem]:
+            # Get the next color and increment the index
+            color = stitch_colors[color_index[0] % len(stitch_colors)]
+            color_index[0] += 1
+
+            # Return both ends of the stitch with the same color
+            return [
+                RenderItem(loc=pred["loc1"], symbol="X", color=color),
+                RenderItem(loc=pred["loc2"], symbol="X", color=color),
+            ]
+
+        return {
+            "predicate_renders": {
+                "stitch": {
+                    "custom_renderer": stitch_renderer,
+                },
+            },
+        }

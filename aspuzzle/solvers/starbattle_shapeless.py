@@ -1,3 +1,6 @@
+from typing import Any
+
+from aspuzzle.grids.rendering import Color
 from aspuzzle.solvers.base import Solver
 from aspuzzle.symbolset import SymbolSet
 from pyclingo import ANY, Predicate, create_variables
@@ -42,3 +45,24 @@ class Starbattle_Shapeless(Solver):
         # Rule 2: Stars cannot share a vertex or edge
         puzzle.section("Star adjacency constraints")
         puzzle.forbid(symbols["star"](cell), symbols["star"](cell_adj), grid.vertex_sharing(suffix_2="adj"))
+
+    def get_render_config(self) -> dict[str, Any]:
+        """
+        Get the rendering configuration for the Star Battle solver.
+
+        Returns:
+            Dictionary with rendering configuration for Star Battle
+        """
+        # For Star Battle, we typically don't show the region IDs in the visualization
+        # We only focus on the stars
+        return {
+            "puzzle_symbols": {
+                "#": {"color": Color.WHITE},
+            },
+            "predicate_renders": {
+                "star": {
+                    "symbol": "★",
+                    "color": Color.YELLOW,
+                },
+            },
+        }

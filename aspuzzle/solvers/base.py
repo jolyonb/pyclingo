@@ -8,6 +8,7 @@ from typing import Any
 
 from aspuzzle.grids.base import Grid, GridCellData
 from aspuzzle.puzzle import Puzzle
+from pyclingo import Predicate
 
 
 class Solver(ABC):
@@ -157,7 +158,7 @@ class Solver(ABC):
 
         return solutions
 
-    def display_results(self, solutions: list[dict]) -> None:
+    def display_results(self, solutions: list[dict], visualize: bool = True) -> None:
         """Display the solving results."""
         print("\n=== Solutions ===")
         if not self.puzzle.satisfiable:
@@ -166,6 +167,12 @@ class Solver(ABC):
             print(json.dumps(solutions[:2], indent=2, default=repr))
             if len(solutions) > 2:
                 print(f"(... suppressed ({len(solutions) - 2} more)")
+
+            # Visualize the first couple of solutions if requested
+            if visualize and solutions:
+                for idx, sol in enumerate(solutions[:2]):
+                    print(f"\nSolution {idx + 1}:")
+                    print(self.render_solution(sol))
 
             # Print solution count
             suffix = "(exhausted)" if self.puzzle.exhausted else "(not exhausted)"
@@ -249,3 +256,34 @@ class Solver(ABC):
         # Show suppression message if needed
         if count > 2:
             print(f"    (... suppressed {count - 2} more)")
+
+    def render_solution(self, solution: dict[str, list[Predicate]]) -> str:
+        """
+        Render a solution as ASCII text.
+
+        Args:
+            solution: Solution dictionary mapping predicate names to sets of predicate instances
+
+        Returns:
+            ASCII representation of the solution
+        """
+        return self.grid.render_ascii(
+            puzzle_definition=self.grid_data,
+            solution=solution,
+            render_config=self.get_render_config(),
+        )
+
+    def get_render_config(self) -> dict[str, Any]:
+        """
+        Get the rendering configuration for this solver.
+
+        This is a default implementation that provides no special rendering.
+        Solver subclasses should override this method to provide specific rendering configuration.
+
+        Returns:
+            Dictionary with rendering configuration
+        """
+        return {
+            "puzzle_symbols": {},  # Map puzzle values to display symbols
+            "predicate_renders": {},  # Map predicate names to rendering info
+        }

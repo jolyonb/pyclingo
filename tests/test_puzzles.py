@@ -30,5 +30,8 @@ def test_puzzle_solves(puzzle_file: Path) -> None:
 
     assert solver.puzzle.satisfiable, f"Puzzle {puzzle_file.name} should be satisfiable"
 
+    # Just make sure the display code will run
+    solver.display_results(solutions, True)
+
     if "solutions" in config:
         assert solver.validate_solutions(solutions), f"Solutions for {puzzle_file.name} do not match expected solutions"

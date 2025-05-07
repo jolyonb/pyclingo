@@ -1,11 +1,14 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from aspuzzle.grids.base import Grid, GridCellData
+from aspuzzle.grids.rendering import BgColor, Color, RenderItem, colorize
 from aspuzzle.puzzle import Puzzle, cached_predicate
 from pyclingo import Min, Not, Predicate, RangePool, create_variables
-from pyclingo.types import PREDICATE_RAW_INPUT_TYPE
+
+if TYPE_CHECKING:
+    from pyclingo.types import PREDICATE_RAW_INPUT_TYPE
 
 
 class RectangularGrid(Grid):
@@ -445,3 +448,147 @@ class RectangularGrid(Grid):
             top_left_cell,
             bottom_right_cell,
         )
+
+    def render_ascii(
+        self,
+        puzzle_definition: list[GridCellData],
+        solution: dict[str, list[Predicate]] | None = None,
+        render_config: dict[str, Any] | None = None,
+        use_colors: bool = True,
+    ) -> str:
+        """
+        Render the rectangular grid as ASCII text.
+
+        Args:
+            puzzle_definition: List of (row, col, value) tuples defining the puzzle
+            solution: Dictionary mapping predicate names to lists of predicate instances
+            render_config: Configuration for rendering
+            use_colors: Whether to use ANSI colors in the output
+
+        Returns:
+            ASCII string representation of the grid
+        """
+        render_config = render_config or {}
+
+        # Initialize grid with dots
+        grid: list[list[tuple[str, Color | None, BgColor | None]]] = [
+            [(".", None, None) for _ in range(self.cols)] for _ in range(self.rows)
+        ]
+
+        # Process puzzle definition
+        if puzzle_definition:
+            puzzle_symbols = render_config.get("puzzle_symbols", {})
+
+            # Place puzzle values on the grid
+            for row, col, value in puzzle_definition:
+                if value not in puzzle_symbols:
+                    continue
+
+                # Adjust for 1-based indexing
+                grid_row = row - 1
+                grid_col = col - 1
+
+                # Skip if outside grid bounds
+                if grid_row < 0 or grid_row >= self.rows or grid_col < 0 or grid_col >= self.cols:
+                    continue
+
+                # Use configured symbol
+                symbol_config = puzzle_symbols[value]
+                color = None
+                background = None
+                if isinstance(symbol_config, str):
+                    display_value = symbol_config
+                elif isinstance(symbol_config, dict):
+                    display_value = symbol_config.get("symbol", str(value))
+                    color = symbol_config.get("color", None)
+                    background = symbol_config.get("background", None)
+                else:
+                    display_value = str(value)
+
+                grid[grid_row][grid_col] = (display_value, color, background)
+
+        # Process solution if provided
+        if solution:
+            predicate_renders = render_config.get("predicate_renders", {})
+
+            # Only render predicates that have configuration
+            predicates_to_render = []
+            for pred_name in solution.keys():
+                if pred_name not in predicate_renders or predicate_renders[pred_name].get("skip_rendering", False):
+                    continue
+
+                priority = predicate_renders[pred_name].get("priority", 0)
+                predicates_to_render.append((pred_name, priority))
+
+            # Sort by priority (higher priority rendered later, so they appear on top)
+            predicates_to_render.sort(key=lambda x: x[1])
+
+            # Process predicates in priority order
+            for pred_name, _ in predicates_to_render:
+                pred_instances = solution[pred_name]
+                render_info = predicate_renders.get(pred_name, {})
+
+                # Get default symbol and color (used if no custom renderer)
+                default_symbol = render_info.get("symbol", pred_name[0])
+                default_color = render_info.get("color", None)
+                default_background = render_info.get("background", None)
+
+                # Check if this predicate has a custom renderer
+                custom_renderer = render_info.get("custom_renderer")
+
+                # Process each predicate instance
+                # Process each predicate instance
+                for pred in pred_instances:
+                    # Get render items - either from custom renderer or create a default one
+                    if custom_renderer:
+                        # Use custom renderer function that returns RenderItem objects
+                        render_items = custom_renderer(pred)
+                    else:
+                        # Create a single RenderItem with default values
+                        render_items = [
+                            RenderItem(
+                                loc=pred["loc"],
+                                symbol=default_symbol,
+                                color=default_color,
+                                background=default_background,
+                            )
+                        ]
+
+                    # Process all render items uniformly
+                    for item in render_items:
+                        # Extract row/col from the location predicate
+                        loc = item.loc
+                        row = loc["row"].value
+                        col = loc["col"].value
+
+                        # Adjust for 1-based indexing
+                        grid_row = row - 1
+                        grid_col = col - 1
+
+                        if grid_row < 0 or grid_row >= self.rows or grid_col < 0 or grid_col >= self.cols:
+                            continue
+
+                        # Get current cell content for preservation
+                        current_symbol, current_fg, current_bg = grid[grid_row][grid_col]
+
+                        # Use or operator to handle preservation
+                        grid[grid_row][grid_col] = (
+                            item.symbol or current_symbol,
+                            item.color or current_fg,
+                            item.background or current_bg,
+                        )
+
+        # Convert grid to string
+        rows = []
+        join_char = render_config.get("join_char", " ")
+        for row_in_grid in grid:
+            row_str = []
+            for char, color, background in row_in_grid:
+                if use_colors:
+                    row_str.append(colorize(char, color, background))
+                else:
+                    row_str.append(char)
+
+            rows.append(join_char.join(row_str))
+
+        return "\n".join(rows)
