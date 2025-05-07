@@ -144,12 +144,12 @@ class Solver(ABC):
     def construct_puzzle(self) -> None:
         """Construct the rules of the puzzle."""
 
-    def solve(self) -> list[dict]:
+    def solve(self, models: int = 0, timeout: int = 0) -> list[dict]:
         """Solve the puzzle and return the results."""
         self.puzzle.finalize()
 
         solutions = []
-        for solution in self.puzzle.solve():
+        for solution in self.puzzle.solve(models=models, timeout=timeout):
             solution_dict = {
                 predicate_name: sorted(list(instances), key=str) for predicate_name, instances in solution.items()
             }
