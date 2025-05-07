@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import importlib
 import json
 import pprint
@@ -16,6 +18,41 @@ class Solver(ABC):
     grid: Grid
     map_grid_to_integers: bool = False  # Controls how the grid is read
     _grid_data: list[GridCellData] | None = None
+
+    @classmethod
+    def from_config(cls, config: dict[str, Any]) -> Solver:
+        """
+        Create and return the appropriate Solver subclass instance for the given configuration.
+
+        Args:
+            config: The puzzle configuration dictionary
+
+        Returns:
+            An initialized Solver subclass instance
+
+        Raises:
+            ValueError: If the puzzle_type is missing or invalid
+        """
+        if "puzzle_type" not in config:
+            raise ValueError("Puzzle configuration must include 'puzzle_type'")
+
+        puzzle_type = config["puzzle_type"]
+
+        # Import the solver module dynamically
+        try:
+            module = importlib.import_module(f"aspuzzle.solvers.{puzzle_type.lower()}")
+            puzzle_class = getattr(module, puzzle_type)
+        except (ImportError, AttributeError) as e:
+            raise ValueError(f"Invalid puzzle type '{puzzle_type}': {e}") from e
+
+        # Verify that the class is a Solver subclass
+        if not issubclass(puzzle_class, cls):
+            raise ValueError(f"Class '{puzzle_type}' is not a Solver subclass")
+
+        # Initialize and return the solver
+        puzzle = puzzle_class(config)
+        assert isinstance(puzzle, Solver)
+        return puzzle
 
     def __init__(self, config: dict[str, Any]) -> None:
         self.puzzle = Puzzle()
@@ -107,12 +144,10 @@ class Solver(ABC):
     def construct_puzzle(self) -> None:
         """Construct the rules of the puzzle."""
 
-    def solve(self) -> None:
-        """Solve the puzzle."""
-        # Render the puzzle
-        print(self.puzzle.render())
+    def solve(self) -> list[dict]:
+        """Solve the puzzle and return the results."""
+        self.puzzle.finalize()
 
-        # Gather all solutions
         solutions = []
         for solution in self.puzzle.solve():
             solution_dict = {
@@ -120,7 +155,10 @@ class Solver(ABC):
             }
             solutions.append(solution_dict)
 
-        # Print results
+        return solutions
+
+    def display_results(self, solutions: list[dict]) -> None:
+        """Display the solving results."""
         print("\n=== Solutions ===")
         if not self.puzzle.satisfiable:
             print("No solutions found")
@@ -136,57 +174,59 @@ class Solver(ABC):
             else:
                 print(f"\n{self.puzzle.solution_count} solutions found {suffix}")
 
-        # Print statistics
+    def display_statistics(self) -> None:
+        """Display statistics after solving."""
         print("\n=== Statistics ===")
         pprint.pprint(self.puzzle.statistics)
 
-        # Validate solutions against expected solutions if provided
-        if "solutions" in self.config:
-            print("\n=== Solution Validation ===")
-            expected_solutions = self.config["solutions"]
+    def validate_solutions(self, solutions: list[dict]) -> None:
+        """Validate that solutions found match expected solutions."""
+        if "solutions" not in self.config:
+            return
 
-            # Convert found solutions to comparable format (sets of frozensets)
-            found_solutions_set = set()
-            for sol in solutions:
-                # Convert each solution to a frozenset of (predicate_name, frozenset of predicates)
-                solution_set = frozenset(
-                    (pred_name, frozenset(str(pred) for pred in preds)) for pred_name, preds in sol.items()
-                )
-                found_solutions_set.add(solution_set)
+        print("\n=== Solution Validation ===")
+        expected_solutions = self.config["solutions"]
 
-            # Convert expected solutions to the same format
-            expected_solutions_set = set()
-            for expected_solution in expected_solutions:
-                solution_set = frozenset(
-                    (pred_name, frozenset(preds)) for pred_name, preds in expected_solution.items()
-                )
-                expected_solutions_set.add(solution_set)
+        # Convert found solutions to comparable format (sets of frozensets)
+        found_solutions_set = set()
+        for sol in solutions:
+            # Convert each solution to a frozenset of (predicate_name, frozenset of predicates)
+            solution_set = frozenset(
+                (pred_name, frozenset(str(pred) for pred in preds)) for pred_name, preds in sol.items()
+            )
+            found_solutions_set.add(solution_set)
 
-            # Compare the sets
-            if found_solutions_set == expected_solutions_set:
-                count = len(expected_solutions)
-                if count == 1:
-                    print("✓ The expected solution was found")
-                else:
-                    print(f"✓ All {count} expected solutions were found")
+        # Convert expected solutions to the same format
+        expected_solutions_set = set()
+        for expected_solution in expected_solutions:
+            solution_set = frozenset((pred_name, frozenset(preds)) for pred_name, preds in expected_solution.items())
+            expected_solutions_set.add(solution_set)
+
+        # Compare the sets
+        if found_solutions_set == expected_solutions_set:
+            count = len(expected_solutions)
+            if count == 1:
+                print("✓ The expected solution was found")
             else:
-                print("✗ Solutions do not match expected")
+                print(f"✓ All {count} expected solutions were found")
+        else:
+            print("✗ Solutions do not match expected")
 
-                # Find differences
-                missing_solutions = expected_solutions_set - found_solutions_set
-                extra_solutions = found_solutions_set - expected_solutions_set
+            # Find differences
+            missing_solutions = expected_solutions_set - found_solutions_set
+            extra_solutions = found_solutions_set - expected_solutions_set
 
-                if missing_solutions:
-                    self._print_solution_diff(
-                        missing_solutions,
-                        count_label="Missing",
-                        item_label="Missing solution",
-                    )
+            if missing_solutions:
+                self._print_solution_diff(
+                    missing_solutions,
+                    count_label="Missing",
+                    item_label="Missing solution",
+                )
 
-                if extra_solutions:
-                    self._print_solution_diff(
-                        extra_solutions, count_label="Found", item_label="Extra solution", suffix=" unexpected"
-                    )
+            if extra_solutions:
+                self._print_solution_diff(
+                    extra_solutions, count_label="Found", item_label="Extra solution", suffix=" unexpected"
+                )
 
     @staticmethod
     def _print_solution_diff(solutions: set, count_label: str, item_label: str, suffix: str = "") -> None:

@@ -188,14 +188,16 @@ class Puzzle:
         Returns:
             str: The rendered ASP program.
         """
-        # Finalize all modules in an idempotent way (we may render multiple times)
+        self.finalize()
+        self._program.header = f"{self.name} by ASPuzzle"
+        return self._program.render()
+
+    def finalize(self) -> None:
+        """Ensures all modules finalize their code before rendering or solving"""
         if not self.finalized:
             for module in self._modules.values():
                 module.finalize()
             self.finalized = True
-
-        self._program.header = f"{self.name} by ASPuzzle"
-        return self._program.render()
 
     def count_constraint(
         self,

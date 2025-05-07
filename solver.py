@@ -1,5 +1,4 @@
 import argparse
-import importlib
 import json
 import pathlib
 
@@ -22,18 +21,26 @@ def solve(filename: str) -> None:
     with open(path) as f:
         config = json.load(f)
 
-    # Load the appropriate solver
-    module = importlib.import_module(f"aspuzzle.solvers.{config['puzzle_type'].lower()}")
-    puzzle_class: type[Solver] = getattr(module, config["puzzle_type"])
-
-    # Initialize the puzzle class
-    solver = puzzle_class(config)
+    # Create the appropriate solver
+    solver = Solver.from_config(config)
 
     # Construct the puzzle rules
     solver.construct_puzzle()
 
+    # Render the puzzle
+    print(solver.puzzle.render())
+
     # Solve the puzzle
-    solver.solve()
+    solutions = solver.solve()
+
+    # Display solutions
+    solver.display_results(solutions)
+
+    # Print statistics
+    solver.display_statistics()
+
+    # Validate solutions
+    solver.validate_solutions(solutions)
 
 
 if __name__ == "__main__":
