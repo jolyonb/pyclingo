@@ -1,4 +1,5 @@
 from aspuzzle.grids.base import do_not_show_outside
+from aspuzzle.grids.rectangulargrid import RectangularGrid
 from aspuzzle.solvers.base import Solver
 from aspuzzle.symbolset import SymbolSet
 from pyclingo import Not, Predicate, create_variables
@@ -94,3 +95,7 @@ class Slitherlink(Solver):
             when=[Clue(loc=cell, num=N), N > 0, symbols["outside"](loc=cell)],
             exactly=N,
         )
+
+        # Helper for rectangular grids: no checkerboard patterns
+        if isinstance(grid, RectangularGrid):
+            grid.forbid_checkerboard(symbols["inside"])

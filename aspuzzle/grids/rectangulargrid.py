@@ -4,7 +4,8 @@ from typing import Any
 
 from aspuzzle.grids.base import Grid, GridCellData
 from aspuzzle.puzzle import Puzzle, cached_predicate
-from pyclingo import Min, Predicate, RangePool, create_variables
+from pyclingo import Min, Not, Predicate, RangePool, create_variables
+from pyclingo.types import PREDICATE_RAW_INPUT_TYPE
 
 
 class RectangularGrid(Grid):
@@ -369,3 +370,78 @@ class RectangularGrid(Grid):
 
         # Create new cell with added coordinates
         return self.Cell(row=row + dr, col=col + dc)
+
+    def forbid_2x2_blocks(self, symbol_predicate: type[Predicate], **fixed_fields: PREDICATE_RAW_INPUT_TYPE) -> None:
+        """
+        Forbid 2x2 blocks of a specific symbol/predicate in a rectangular grid.
+
+        Args:
+            symbol_predicate: The predicate class representing the symbol to constrain
+            **fixed_fields: Fixed field values for the predicate (for multi-field predicates)
+
+        Example:
+            # Forbid 2x2 blocks of mines
+            grid.forbid_2x2_blocks(symbols["mine"])
+
+            # For a predicate with multiple fields, specify which fields to fix
+            grid.forbid_2x2_blocks(symbols["digit"], value=Var)  # Forbid 2x2 blocks of any individual digit
+        """
+        self.puzzle.section(f"Forbid 2x2 blocks of {symbol_predicate.__name__}")
+
+        R, C = create_variables("R", "C")
+        top_left_cell = self.Cell(row=R, col=C)
+        top_right_cell = self.Cell(row=R, col=C + 1)
+        bottom_left_cell = self.Cell(row=R + 1, col=C)
+        bottom_right_cell = self.Cell(row=R + 1, col=C + 1)
+
+        self.puzzle.forbid(
+            symbol_predicate(loc=top_left_cell, **fixed_fields),
+            symbol_predicate(loc=top_right_cell, **fixed_fields),
+            symbol_predicate(loc=bottom_left_cell, **fixed_fields),
+            symbol_predicate(loc=bottom_right_cell, **fixed_fields),
+            top_left_cell,
+            bottom_right_cell,
+        )
+
+    def forbid_checkerboard(self, symbol_predicate: type[Predicate], **fixed_fields: PREDICATE_RAW_INPUT_TYPE) -> None:
+        """
+        Forbids a 2x2 block checkerboard pattern of a given predicate in a rectangular grid.
+        If the symbol is contiguous and not(symbol) is also contiguous, this configuration is invalid, as
+        something must be surrounded.
+
+        Args:
+            symbol_predicate: The predicate class representing the symbol to constrain
+            **fixed_fields: Fixed field values for the predicate (for multi-field predicates)
+        """
+        self.puzzle.section(f"Forbid disconnecting checkerboard pattern for {symbol_predicate.__name__}")
+
+        R, C = create_variables("R", "C")
+        top_left_cell = self.Cell(row=R, col=C)
+        top_right_cell = self.Cell(row=R, col=C + 1)
+        bottom_left_cell = self.Cell(row=R + 1, col=C)
+        bottom_right_cell = self.Cell(row=R + 1, col=C + 1)
+
+        top_left = symbol_predicate(loc=top_left_cell, **fixed_fields)
+        top_right = symbol_predicate(loc=top_right_cell, **fixed_fields)
+        bottom_right = symbol_predicate(loc=bottom_right_cell, **fixed_fields)
+        bottom_left = symbol_predicate(loc=bottom_left_cell, **fixed_fields)
+
+        # Forbid checkerboard on one diagonal
+        self.puzzle.forbid(
+            top_left,
+            bottom_right,
+            Not(top_right),
+            Not(bottom_left),
+            top_left_cell,
+            bottom_right_cell,
+        )
+
+        # Forbid checkerboard on the other diagonal
+        self.puzzle.forbid(
+            top_right,
+            bottom_left,
+            Not(top_left),
+            Not(bottom_right),
+            top_left_cell,
+            bottom_right_cell,
+        )
