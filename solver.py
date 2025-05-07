@@ -8,6 +8,7 @@ from aspuzzle.solvers.base import Solver
 
 def solve(
     filename: str,
+    preview_puzzle: bool = False,
     render: bool = True,
     solve_puzzle: bool = True,
     max_solutions: int = 0,
@@ -24,6 +25,7 @@ def solve(
 
     Args:
         filename: Path to the puzzle JSON file
+        preview_puzzle: Whether to preview the puzzle before solving
         render: Whether to render the ASP program
         solve_puzzle: Whether to solve the puzzle
         max_solutions: Maximum number of solutions to find (0 for all)
@@ -56,8 +58,14 @@ def solve(
     # Construct the puzzle rules
     solver.construct_puzzle()
 
+    # Preview the puzzle if requested
+    if preview_puzzle and not quiet:
+        print("\n=== Puzzle Preview ===")
+        print(solver.render_puzzle())
+
     # Render the puzzle
     if render and not quiet:
+        print("\n=== Clingo Script ===")
         asp_program = solver.puzzle.render()
         print(asp_program)
 
@@ -95,6 +103,7 @@ def main() -> None:
 
     # Render options
     render_group = parser.add_argument_group("Rendering options")
+    render_group.add_argument("--no-preview", action="store_true", help="Suppress the puzzle preview before solving")
     render_exclusive = render_group.add_mutually_exclusive_group()
     render_exclusive.add_argument("--render", action="store_true", help="Render the ASP program (default)")
     render_exclusive.add_argument("--no-render", action="store_true", help="Don't render the ASP program")
@@ -129,6 +138,7 @@ def main() -> None:
 
     solve(
         filename=args.filename,
+        preview_puzzle=not args.no_preview,
         render=render,
         solve_puzzle=solve_puzzle,
         max_solutions=args.max_solutions,

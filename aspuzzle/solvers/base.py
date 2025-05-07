@@ -172,7 +172,7 @@ class Solver(ABC):
             if visualize and solutions:
                 for idx, sol in enumerate(solutions[:2]):
                     print(f"\nSolution {idx + 1}:")
-                    print(self.render_solution(sol))
+                    print(self.render_puzzle(sol))
 
             # Print solution count
             suffix = "(exhausted)" if self.puzzle.exhausted else "(not exhausted)"
@@ -257,7 +257,7 @@ class Solver(ABC):
         if count > 2:
             print(f"    (... suppressed {count - 2} more)")
 
-    def render_solution(self, solution: dict[str, list[Predicate]]) -> str:
+    def render_puzzle(self, solution: dict[str, list[Predicate]] | None = None) -> str:
         """
         Render a solution as ASCII text.
 
