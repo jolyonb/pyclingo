@@ -179,10 +179,10 @@ class Solver(ABC):
         print("\n=== Statistics ===")
         pprint.pprint(self.puzzle.statistics)
 
-    def validate_solutions(self, solutions: list[dict]) -> None:
+    def validate_solutions(self, solutions: list[dict]) -> bool:
         """Validate that solutions found match expected solutions."""
         if "solutions" not in self.config:
-            return
+            return True
 
         print("\n=== Solution Validation ===")
         expected_solutions = self.config["solutions"]
@@ -209,24 +209,27 @@ class Solver(ABC):
                 print("✓ The expected solution was found")
             else:
                 print(f"✓ All {count} expected solutions were found")
-        else:
-            print("✗ Solutions do not match expected")
+            return True
 
-            # Find differences
-            missing_solutions = expected_solutions_set - found_solutions_set
-            extra_solutions = found_solutions_set - expected_solutions_set
+        print("✗ Solutions do not match expected")
 
-            if missing_solutions:
-                self._print_solution_diff(
-                    missing_solutions,
-                    count_label="Missing",
-                    item_label="Missing solution",
-                )
+        # Find differences
+        missing_solutions = expected_solutions_set - found_solutions_set
+        extra_solutions = found_solutions_set - expected_solutions_set
 
-            if extra_solutions:
-                self._print_solution_diff(
-                    extra_solutions, count_label="Found", item_label="Extra solution", suffix=" unexpected"
-                )
+        if missing_solutions:
+            self._print_solution_diff(
+                missing_solutions,
+                count_label="Missing",
+                item_label="Missing solution",
+            )
+
+        if extra_solutions:
+            self._print_solution_diff(
+                extra_solutions, count_label="Found", item_label="Extra solution", suffix=" unexpected"
+            )
+
+        return False
 
     @staticmethod
     def _print_solution_diff(solutions: set, count_label: str, item_label: str, suffix: str = "") -> None:

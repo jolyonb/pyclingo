@@ -30,24 +30,5 @@ def test_puzzle_solves(puzzle_file: Path) -> None:
 
     assert solver.puzzle.satisfiable, f"Puzzle {puzzle_file.name} should be satisfiable"
 
-    # If expected solutions are provided, verify they match
-    # TODO: Clean this up to leverage the solver verification?
     if "solutions" in config:
-        # Convert found solutions to comparable format
-        found_solutions_set = set()
-        for sol in solutions:
-            solution_set = frozenset(
-                (pred_name, frozenset(str(pred) for pred in preds)) for pred_name, preds in sol.items()
-            )
-            found_solutions_set.add(solution_set)
-
-        # Convert expected solutions to the same format
-        expected_solutions_set = set()
-        for expected_solution in config["solutions"]:
-            solution_set = frozenset((pred_name, frozenset(preds)) for pred_name, preds in expected_solution.items())
-            expected_solutions_set.add(solution_set)
-
-        # Check if the sets are equal
-        assert found_solutions_set == expected_solutions_set, (
-            f"Solutions for {puzzle_file.name} do not match expected solutions"
-        )
+        assert solver.validate_solutions(solutions), f"Solutions for {puzzle_file.name} do not match expected solutions"
