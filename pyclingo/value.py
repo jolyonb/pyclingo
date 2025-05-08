@@ -291,57 +291,9 @@ class Variable(Value):
         """
         from pyclingo.expression import Comparison
         from pyclingo.operators import ComparisonOperator
-        from pyclingo.pool import ExplicitPool, Pool, RangePool
-        from pyclingo.predicate import Predicate
+        from pyclingo.pool import pool
 
-        # Handle case where input is already a Pool
-        if isinstance(pool_or_range, Pool):
-            pool = pool_or_range
-
-        # Handle case where input is a list/tuple of values
-        elif isinstance(pool_or_range, (list, tuple)):
-            # Convert all elements to appropriate types
-            elements: list[ConstantBase | Predicate] = []
-            for element in pool_or_range:
-                if isinstance(element, int):
-                    elements.append(Constant(element))
-                elif isinstance(element, (ConstantBase, Predicate)):
-                    # Ensure the predicate is grounded
-                    if isinstance(element, Predicate) and not element.is_grounded:
-                        raise ValueError(f"Predicate in pool must be grounded: {element.render()}")
-                    elements.append(element)
-                else:
-                    raise TypeError(
-                        f"Pool element must be an int, ConstantBase, or grounded Predicate, "
-                        f"got {type(element).__name__}"
-                    )
-
-            if not elements:
-                raise ValueError("Cannot create an empty pool")
-
-            pool = ExplicitPool(elements)
-
-        # Handle case where input is a range (start..end)
-        elif isinstance(pool_or_range, range):
-            # Check if this is a unit-step range (step=1)
-            if pool_or_range.step == 1:
-                # For step=1, create a RangePool
-                start = Constant(pool_or_range.start)
-                # range's stop is exclusive, but RangePool's end is inclusive
-                end = Constant(pool_or_range.stop - 1)
-                pool = RangePool(start, end)
-            else:
-                # For non-unit step, create an ExplicitPool with individual values
-                elements = [Constant(x) for x in pool_or_range]
-                if not elements:
-                    raise ValueError("Cannot create an empty pool from empty range")
-                pool = ExplicitPool(elements)
-
-        else:
-            raise TypeError(f"Expected Pool, list, tuple, or range, got {type(pool_or_range).__name__}")
-
-        # Create a comparison: Variable = Pool
-        return Comparison(self, ComparisonOperator.EQUAL, pool)
+        return Comparison(self, ComparisonOperator.EQUAL, pool(pool_or_range))
 
 
 class ConstantBase(Value, ABC):

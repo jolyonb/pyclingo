@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import TYPE_CHECKING, Sequence
+from typing import TYPE_CHECKING, Sequence, Union
 
 from pyclingo.predicate import Predicate
 from pyclingo.term import BasicTerm
@@ -274,4 +274,63 @@ class ExplicitPool(Pool):
         return variables
 
 
-# TODO: Helper function that creates a pool object from a python sequence
+def pool(elements: Union[range, Sequence[int | str | ConstantBase | Predicate], Pool]) -> Pool:
+    """
+    Create a Pool object from a general variety of input options.
+
+    Args:
+        elements: A Pool object, range, or sequence of elements
+                 (integers, strings, ConstantBase objects, or grounded Predicates)
+
+    Returns:
+        An appropriate Pool object (RangePool for continuous ranges, ExplicitPool otherwise)
+
+    Examples:
+        >>> pool(range(1, 6))  # Creates a RangePool equivalent to 1..5
+        >>> pool([1, 3, 5])    # Creates an ExplicitPool equivalent to (1;3;5)
+        >>> pool(["a", "b"])   # Creates an ExplicitPool of string constants
+
+    Raises:
+        TypeError: If elements is not a supported type or contains unsupported elements
+        ValueError: If attempting to create an empty pool
+    """
+    pool_elements: Sequence[ConstantBase | Predicate]
+
+    # Handle case where input is already a Pool
+    if isinstance(elements, Pool):
+        return elements
+
+    elif isinstance(elements, range):
+        if elements.step == 1:
+            return RangePool(Constant(elements.start), Constant(elements.stop - 1))
+        if pool_elements := [Constant(x) for x in elements]:
+            return ExplicitPool(pool_elements)
+        raise ValueError("Cannot create an empty pool from empty range")
+
+    elif isinstance(elements, (list, tuple)):
+        # Check for empty sequence
+        if not elements:
+            raise ValueError("Cannot create an empty pool")
+
+        # Convert all elements to appropriate types
+        pool_elements = []
+        for element in elements:
+            if isinstance(element, int):
+                pool_elements.append(Constant(element))
+            elif isinstance(element, str):
+                pool_elements.append(StringConstant(element))
+            elif isinstance(element, (ConstantBase, Predicate)):
+                # Ensure the predicate is grounded
+                if isinstance(element, Predicate) and not element.is_grounded:
+                    raise ValueError(f"Predicate in pool must be grounded: {element.render()}")
+                pool_elements.append(element)
+            else:
+                raise TypeError(
+                    f"Pool element must be an int, str, ConstantBase, or grounded Predicate, "
+                    f"got {type(element).__name__}"
+                )
+
+        return ExplicitPool(pool_elements)
+
+    else:
+        raise TypeError(f"Expected Pool, list, tuple, or range, got {type(elements).__name__}")
