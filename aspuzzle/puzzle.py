@@ -233,7 +233,7 @@ class Puzzle:
             count_variable = create_unique_variable_name(used_variables, ["N", "C", "Count"])
 
         # Create the count term
-        count_term = Count(count_over, condition=condition).assign_to(count_variable)
+        count_term = count_variable == Count(count_over, condition=condition)
 
         # Build rule body
         rule_body: list[Term] | Term

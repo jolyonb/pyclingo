@@ -225,7 +225,7 @@ class RectangularGrid(Grid):
 
         # Find the minimum row
         self.puzzle.when(
-            Min(R, condition=[condition_predicate(**condition_args), R.in_(RangePool(1, self.rows))]).assign_to(MinR),
+            MinR == Min(R, condition=[condition_predicate(**condition_args), R.in_(RangePool(1, self.rows))]),
             MinRowPred(**min_row_args),
             segment=segment,
         )
@@ -241,9 +241,8 @@ class RectangularGrid(Grid):
         self.puzzle.when(
             [
                 MinRowPred(**min_row_args),
-                Min(
-                    C, condition=[condition_predicate(**min_row_condition_args), C.in_(RangePool(1, self.rows))]
-                ).assign_to(MinC),
+                MinC
+                == Min(C, condition=[condition_predicate(**min_row_condition_args), C.in_(RangePool(1, self.rows))]),
             ],
             AnchorPred(**anchor_args),
             segment=segment,
