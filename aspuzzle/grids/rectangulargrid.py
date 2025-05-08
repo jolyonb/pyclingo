@@ -531,11 +531,11 @@ class RectangularGrid(Grid):
                 default_symbol = render_info.get("symbol", pred_name[0])
                 default_color = render_info.get("color", None)
                 default_background = render_info.get("background", None)
+                value_field: str | None = render_info.get("value", None)
 
                 # Check if this predicate has a custom renderer
                 custom_renderer = render_info.get("custom_renderer")
 
-                # Process each predicate instance
                 # Process each predicate instance
                 for pred in pred_instances:
                     # Get render items - either from custom renderer or create a default one
@@ -543,11 +543,16 @@ class RectangularGrid(Grid):
                         # Use custom renderer function that returns RenderItem objects
                         render_items = custom_renderer(pred)
                     else:
+                        if value_field is not None:
+                            display_value = str(pred[value_field])
+                        else:
+                            display_value = default_symbol
+
                         # Create a single RenderItem with default values
                         render_items = [
                             RenderItem(
                                 loc=pred["loc"],
-                                symbol=default_symbol,
+                                symbol=display_value,
                                 color=default_color,
                                 background=default_background,
                             )

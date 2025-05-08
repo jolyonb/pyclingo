@@ -116,6 +116,34 @@ class Value(BasicTerm, ComparisonMixin, ABC):
 
         return Expression(None, Operation.UNARY_MINUS, self)
 
+    def __floordiv__(self, other: int | VALUE_EXPRESSION_TYPE) -> Expression:
+        """
+        Creates an Expression representing self // other.
+
+        Args:
+            other: The right-hand operand (integer or Term).
+
+        Returns:
+            Expression: A new Expression representing the integer division.
+        """
+        from pyclingo.expression import Expression
+
+        return Expression(self, Operation.INTEGER_DIVIDE, other)
+
+    def __rfloordiv__(self, other: int | VALUE_EXPRESSION_TYPE) -> Expression:
+        """
+        Creates an Expression representing other // self.
+
+        Args:
+            other: The left-hand operand (integer or Term).
+
+        Returns:
+            Expression: A new Expression representing the integer division.
+        """
+        from pyclingo.expression import Expression
+
+        return Expression(other, Operation.INTEGER_DIVIDE, self)
+
 
 class Variable(Value):
     """

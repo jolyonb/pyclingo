@@ -65,7 +65,7 @@ class SymbolSet(Module):
         self,
         pool: Pool,
         name: str = "number",
-        type_name: str = "num",
+        type_name: str = "value",
         show: bool = True,
     ) -> Self:
         """
