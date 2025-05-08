@@ -100,7 +100,6 @@ class DefaultNegation(NegatedLiteral):
             TypeError: If the term is not a valid type for default negation.
         """
         # Validate term type
-        # TODO: Add Aggregate and ConditionalLiteral when implemented
         if not isinstance(term, (Predicate, Comparison, NegatedLiteral)):
             raise TypeError("Default negation can only be applied to predicates, comparisons, or already negated terms")
 
