@@ -9,19 +9,21 @@ class Operation(Enum):
     ADD = "+"
     SUBTRACT = "-"
     MULTIPLY = "*"
+    INTEGER_DIVIDE = "/"  # ASP uses / for integer division
     UNARY_MINUS = "unary-"
     ABS = "abs"
 
 
 UNARY_OPERATIONS = {Operation.UNARY_MINUS, Operation.ABS}
-BINARY_OPERATIONS = {Operation.ADD, Operation.SUBTRACT, Operation.MULTIPLY}
-NONCOMMUTATIVE_OPERATIONRS = {Operation.SUBTRACT}
+BINARY_OPERATIONS = {Operation.ADD, Operation.SUBTRACT, Operation.MULTIPLY, Operation.INTEGER_DIVIDE}
+NONCOMMUTATIVE_OPERATIONRS = {Operation.SUBTRACT, Operation.INTEGER_DIVIDE}
 
 
 # Operator precedence (lower number = higher precedence)
 PRECEDENCE = {
     Operation.UNARY_MINUS: 0,
     Operation.MULTIPLY: 1,
+    Operation.INTEGER_DIVIDE: 1,
     Operation.ADD: 2,
     Operation.SUBTRACT: 2,
 }

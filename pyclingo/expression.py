@@ -210,33 +210,41 @@ class Expression(Term, ComparisonMixin):
         raise ValueError("Expressions can only be used as parts of comparisons, assignments, or as predicate arguments")
 
     # Arithmetic operator methods
-    def __add__(self, other: EXPRESSION_FIELD_TYPE) -> "Expression":
+    def __add__(self, other: EXPRESSION_FIELD_TYPE) -> Expression:
         """Creates an Expression representing self + other."""
         return Expression(self, Operation.ADD, other)
 
-    def __radd__(self, other: EXPRESSION_FIELD_TYPE) -> "Expression":
+    def __radd__(self, other: EXPRESSION_FIELD_TYPE) -> Expression:
         """Creates an Expression representing other + self."""
         return Expression(other, Operation.ADD, self)
 
-    def __sub__(self, other: EXPRESSION_FIELD_TYPE) -> "Expression":
+    def __sub__(self, other: EXPRESSION_FIELD_TYPE) -> Expression:
         """Creates an Expression representing self - other."""
         return Expression(self, Operation.SUBTRACT, other)
 
-    def __rsub__(self, other: EXPRESSION_FIELD_TYPE) -> "Expression":
+    def __rsub__(self, other: EXPRESSION_FIELD_TYPE) -> Expression:
         """Creates an Expression representing other - self."""
         return Expression(other, Operation.SUBTRACT, self)
 
-    def __mul__(self, other: EXPRESSION_FIELD_TYPE) -> "Expression":
+    def __mul__(self, other: EXPRESSION_FIELD_TYPE) -> Expression:
         """Creates an Expression representing self * other."""
         return Expression(self, Operation.MULTIPLY, other)
 
-    def __rmul__(self, other: EXPRESSION_FIELD_TYPE) -> "Expression":
+    def __rmul__(self, other: EXPRESSION_FIELD_TYPE) -> Expression:
         """Creates an Expression representing other * self."""
         return Expression(other, Operation.MULTIPLY, self)
 
-    def __neg__(self) -> "Expression":
+    def __neg__(self) -> Expression:
         """Creates an Expression representing -self."""
         return Expression(None, Operation.UNARY_MINUS, self)
+
+    def __floordiv__(self, other: EXPRESSION_FIELD_TYPE) -> Expression:
+        """Creates an Expression representing self // other."""
+        return Expression(self, Operation.INTEGER_DIVIDE, other)
+
+    def __rfloordiv__(self, other: EXPRESSION_FIELD_TYPE) -> Expression:
+        """Creates an Expression representing other // self."""
+        return Expression(other, Operation.INTEGER_DIVIDE, self)
 
     def collect_predicates(self) -> set[PREDICATE_CLASS_TYPE]:
         """
