@@ -4,7 +4,7 @@ from pyclingo import Variable
 from pyclingo.term import Term
 
 
-def collect_variables(*terms: Term | Sequence[Term] | None) -> set[Variable]:
+def collect_variables(*terms: Term | Sequence[Term] | None) -> set[str]:
     """
     Given a list of terms, collect all variables used in them.
 
@@ -14,9 +14,9 @@ def collect_variables(*terms: Term | Sequence[Term] | None) -> set[Variable]:
     * None
 
     Returns:
-        set[Variable]: Set of variables
+        set[str]: Set of variable names
     """
-    used_variables: set[Variable] = set()
+    used_variables: set[str] = set()
 
     for term in terms:
         if term is None:
@@ -35,18 +35,18 @@ def collect_variables(*terms: Term | Sequence[Term] | None) -> set[Variable]:
     return used_variables
 
 
-def create_unique_variable_name(used_variables: set[Variable], preferred_names: list[str]) -> Variable:
+def create_unique_variable_name(used_variables: set[str], preferred_names: list[str]) -> Variable:
     """
     Given a set of used variables and a list of preferred names, construct a unique variable name.
     Uses the first available name in the preferred names list, or starts appending numbers to the last one if needed.
     """
     for name in preferred_names:
-        if all(var.name != name for var in used_variables):
+        if name not in used_variables:
             return Variable(name)
 
     # If all preferred names are taken, use numeric suffix with the last preferred name
     base_name = preferred_names[-1]
     counter = 1
-    while any(var.name == f"{base_name}{counter}" for var in used_variables):
+    while f"{base_name}{counter}" in used_variables:
         counter += 1
     return Variable(f"{base_name}{counter}")

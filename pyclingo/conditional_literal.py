@@ -8,7 +8,7 @@ from pyclingo.predicate import Predicate
 from pyclingo.term import Term
 
 if TYPE_CHECKING:
-    from pyclingo.types import PREDICATE_CLASS_TYPE, VARIABLE_TYPE
+    from pyclingo.types import PREDICATE_CLASS_TYPE
 
     # Type for terms that can be used in a conditional literal
     CONDITIONAL_TERM_TYPE = Union[Predicate, Comparison, NegatedLiteral]
@@ -142,12 +142,12 @@ class ConditionalLiteral(Term):
 
         return constants
 
-    def collect_variables(self) -> set[VARIABLE_TYPE]:
+    def collect_variables(self) -> set[str]:
         """
         Collects all variables used in this conditional literal.
 
         Returns:
-            set[Variable]: A set of variables used.
+            set[str]: A set of variables used.
         """
         variables = set()
 

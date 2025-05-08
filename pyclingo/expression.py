@@ -274,12 +274,12 @@ class Expression(Term):
 
         return constants
 
-    def collect_variables(self) -> set[Variable]:
+    def collect_variables(self) -> set[str]:
         """
         Collects all variables used in this expression.
 
         Returns:
-            set[Variable]: A set of variables used in this expression.
+            set[str]: A set of variables used in this expression.
         """
         variables = set()
 
@@ -447,12 +447,12 @@ class Comparison(Term):
 
         return constants
 
-    def collect_variables(self) -> set[Variable]:
+    def collect_variables(self) -> set[str]:
         """
         Collects all variables used in this comparison.
 
         Returns:
-            set[Variable]: A set of variables used in this comparison.
+            set[str]: A set of variables used in this comparison.
         """
         variables = set()
 
