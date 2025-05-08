@@ -11,7 +11,7 @@ from pyclingo.term import Term
 from pyclingo.value import Value, Variable
 
 if TYPE_CHECKING:
-    from pyclingo.types import PREDICATE_CLASS_TYPE, VARIABLE_TYPE
+    from pyclingo.types import PREDICATE_CLASS_TYPE
 
     AGGREGATE_ELEMENT_TYPE = Union[Value, Predicate]
     AGGREGATE_CONDITION_TYPE = Union[Predicate, NegatedLiteral, Comparison]
@@ -237,12 +237,12 @@ class Aggregate(Term, ABC):
 
         return constants
 
-    def collect_variables(self) -> set[VARIABLE_TYPE]:
+    def collect_variables(self) -> set[str]:
         """
         Collects all variables used in this aggregate.
 
         Returns:
-            set[Variable]: A set of variables used in this aggregate.
+            set[str]: A set of variables used in this aggregate.
         """
         variables = set()
 

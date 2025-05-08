@@ -7,7 +7,7 @@ from pyclingo.operators import ComparisonOperator
 
 if TYPE_CHECKING:
     from pyclingo.expression import Comparison
-    from pyclingo.types import PREDICATE_CLASS_TYPE, VARIABLE_TYPE
+    from pyclingo.types import PREDICATE_CLASS_TYPE
 
 
 class Term(ABC):
@@ -73,12 +73,12 @@ class Term(ABC):
         pass
 
     @abstractmethod
-    def collect_variables(self) -> set[VARIABLE_TYPE]:
+    def collect_variables(self) -> set[str]:
         """
         Collects all variables used in this term.
 
         Returns:
-            set[Variable]: A set of variables used within this term.
+            set[str]: A set of variables used within this term.
         """
         pass
 

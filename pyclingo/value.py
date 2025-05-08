@@ -254,14 +254,14 @@ class Variable(Value):
         """
         return self.name
 
-    def collect_variables(self) -> set["Variable"]:
+    def collect_variables(self) -> set[str]:
         """
         Returns this variable in a set.
 
         Returns:
-            set[Variable]: A set containing this variable.
+            set[str]: A set containing this variable.
         """
-        return {self}
+        return {self.name}
 
     def in_(self, pool_or_range: Union[Pool, list, tuple, range]) -> Comparison:
         """
@@ -347,12 +347,12 @@ class ConstantBase(Value, ABC):
         """
         return set()
 
-    def collect_variables(self) -> set[Variable]:
+    def collect_variables(self) -> set[str]:
         """
         Constants don't contain variables.
 
         Returns:
-            set[Variable]: An empty set.
+            set[str]: An empty set.
         """
         return set()
 

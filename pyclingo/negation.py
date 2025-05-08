@@ -8,7 +8,7 @@ from pyclingo.predicate import Predicate
 from pyclingo.term import Term
 
 if TYPE_CHECKING:
-    from pyclingo.types import PREDICATE_CLASS_TYPE, VARIABLE_TYPE
+    from pyclingo.types import PREDICATE_CLASS_TYPE
 
 
 class NegatedLiteral(Term, ABC):
@@ -66,12 +66,12 @@ class NegatedLiteral(Term, ABC):
         """
         return self._term.collect_symbolic_constants()
 
-    def collect_variables(self) -> set[VARIABLE_TYPE]:
+    def collect_variables(self) -> set[str]:
         """
         Collects all variables used in the negated term.
 
         Returns:
-            set[Variable]: A set of variables used in this term.
+            set[str]: A set of variables used in this term.
         """
         return self._term.collect_variables()
 

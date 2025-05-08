@@ -13,7 +13,6 @@ if TYPE_CHECKING:
         PREDICATE_CLASS_TYPE,
         PREDICATE_FIELD_TYPE,
         PREDICATE_RAW_INPUT_TYPE,
-        VARIABLE_TYPE,
     )
 
 
@@ -291,12 +290,12 @@ class Predicate(BasicTerm):
 
         return ClassicalNegation(self)
 
-    def collect_variables(self) -> set[VARIABLE_TYPE]:
+    def collect_variables(self) -> set[str]:
         """
         Collects all variables used in this predicate's arguments.
 
         Returns:
-            set[Variable]: A set of variables used in this predicate.
+            set[str]: A set of variables used in this predicate.
         """
         variables = set()
 

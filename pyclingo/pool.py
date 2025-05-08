@@ -9,7 +9,7 @@ from pyclingo.value import Constant, ConstantBase, StringConstant
 
 if TYPE_CHECKING:
     from pyclingo.expression import Expression
-    from pyclingo.types import PREDICATE_CLASS_TYPE, VARIABLE_TYPE
+    from pyclingo.types import PREDICATE_CLASS_TYPE
 
 
 class Pool(BasicTerm, ABC):
@@ -144,12 +144,12 @@ class RangePool(Pool):
 
         return constants
 
-    def collect_variables(self) -> set[VARIABLE_TYPE]:
+    def collect_variables(self) -> set[str]:
         """
         Range pools don't contain variables.
 
         Returns:
-            set[Variable]: An empty set.
+            set[str]: An empty set.
         """
         return set()
 
@@ -259,12 +259,12 @@ class ExplicitPool(Pool):
 
         return constants
 
-    def collect_variables(self) -> set[VARIABLE_TYPE]:
+    def collect_variables(self) -> set[str]:
         """
         Collects all variables used in this explicit pool.
 
         Returns:
-            set[Variable]: A set of variables used in this pool.
+            set[str]: A set of variables used in this pool.
         """
         variables = set()
 

@@ -9,7 +9,7 @@ from pyclingo.term import Term
 from pyclingo.value import Constant, StringConstant, Value, Variable
 
 if TYPE_CHECKING:
-    from pyclingo.types import PREDICATE_CLASS_TYPE, VARIABLE_TYPE
+    from pyclingo.types import PREDICATE_CLASS_TYPE
 
     CHOICE_ELEMENT_TYPE = Union[Predicate, ClassicalNegation]
     CHOICE_CONDITION_TYPE = Union[Predicate, NegatedLiteral, Comparison]
@@ -388,12 +388,12 @@ class Choice(Term):
 
         return constants
 
-    def collect_variables(self) -> set[VARIABLE_TYPE]:
+    def collect_variables(self) -> set[str]:
         """
         Collects all variables used in this choice rule.
 
         Returns:
-            set[Variable]: A set of variables used in this choice rule.
+            set[str]: A set of variables used in this choice rule.
         """
         variables = set()
 
@@ -406,9 +406,9 @@ class Choice(Term):
 
         # Check cardinality bounds
         if isinstance(self.min_cardinality, Variable):
-            variables.add(self.min_cardinality)
+            variables.add(self.min_cardinality.name)
 
         if isinstance(self.max_cardinality, Variable):
-            variables.add(self.max_cardinality)
+            variables.add(self.max_cardinality.name)
 
         return variables
