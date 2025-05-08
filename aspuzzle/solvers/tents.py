@@ -2,7 +2,7 @@ from typing import Any
 
 from aspuzzle.grids.rendering import Color
 from aspuzzle.solvers.base import Solver
-from pyclingo import ANY, Choice, Equals, Not, Predicate, create_variables
+from pyclingo import ANY, Choice, Not, Predicate, create_variables
 
 
 class Tents(Solver):
@@ -70,7 +70,7 @@ class Tents(Solver):
                 TieDestination(tree_loc=A, tent_loc=C),
                 TieDestination(tree_loc=B, tent_loc=C),
             ],
-            let=Equals(A, B),
+            let=(A == B),
         )
 
         # Rule 4: Constraint on number of tents per line

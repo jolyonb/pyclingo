@@ -3,7 +3,7 @@ from typing import Any
 from aspuzzle.grids.rendering import BgColor, Color
 from aspuzzle.solvers.base import Solver
 from aspuzzle.symbolset import SymbolSet
-from pyclingo import Equals, Predicate, create_variables
+from pyclingo import Predicate, create_variables
 
 
 class Hitori(Solver):
@@ -43,7 +43,7 @@ class Hitori(Solver):
                 symbols["white"](loc=C1),
                 symbols["white"](loc=C2),
             ],
-            let=Equals(C1, C2),
+            let=(C1 == C2),
         )
 
         # Rule 2: Two black cells cannot be adjacent horizontally or vertically

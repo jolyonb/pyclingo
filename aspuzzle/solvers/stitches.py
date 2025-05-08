@@ -2,7 +2,7 @@ from typing import Any
 
 from aspuzzle.grids.rendering import Color, RenderItem
 from aspuzzle.solvers.base import Solver
-from pyclingo import ANY, Choice, Count, Equals, Predicate, create_variables
+from pyclingo import ANY, Choice, Count, Predicate, create_variables
 
 
 class Stitches(Solver):
@@ -83,7 +83,7 @@ class Stitches(Solver):
         count_expr = Count(element=cell, condition=Stitch(loc1=A, loc2=cell)).add(
             element=cell, condition=Stitch(loc1=cell, loc2=A)
         )
-        puzzle.when([CellInStitch(loc=A), count_expr.assign_to(N)], let=Equals(N, 1))
+        puzzle.when([CellInStitch(loc=A), count_expr.assign_to(N)], let=(N == 1))
 
         # Rule 4: Count stitches per line (row/column/etc)
         puzzle.section("Count stitches in each major line")
