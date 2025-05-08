@@ -15,7 +15,7 @@ from .aggregates import (
 )
 from .choice import Choice
 from .conditional_literal import key_for_each_lock
-from .expression import Abs, Equals, NotEquals
+from .expression import Abs
 from .negation import Not
 from .pool import ExplicitPool, RangePool
 from .predicate import Predicate
