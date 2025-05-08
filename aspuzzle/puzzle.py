@@ -228,7 +228,34 @@ class Puzzle:
 
         # Create count variable if not provided
         if count_variable is None:
-            count_variable = Variable("Count")  # TODO: Check for collisions?
+            # Collect all variables from all terms to avoid collisions
+            used_variables = set()
+            used_variables.update(count_over.collect_variables())
+            if isinstance(condition, list):
+                for cond in condition:
+                    used_variables.update(cond.collect_variables())
+            else:
+                used_variables.update(condition.collect_variables())
+            if when is not None:
+                if isinstance(when, list):
+                    for w in when:
+                        used_variables.update(w.collect_variables())
+                else:
+                    used_variables.update(when.collect_variables())
+
+            # Generate a name that doesn't collide
+            preferred_names = ["N", "C", "Count"]
+            for name in preferred_names:
+                if all(var.name != name for var in used_variables):
+                    count_variable = Variable(name)
+                    break
+            else:  # no break
+                # If all preferred names are taken, use numeric suffix with the last preferred name
+                base_name = preferred_names[-1]
+                counter = 1
+                while any(var.name == f"{base_name}{counter}" for var in used_variables):
+                    counter += 1
+                count_variable = Variable(f"{base_name}{counter}")
 
         # Create the count term
         count_term = Count(count_over, condition=condition).assign_to(count_variable)
