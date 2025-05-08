@@ -229,7 +229,7 @@ class ExplicitPool(Pool):
         """
         elements_str = "; ".join(element.render(as_argument=True) for element in self._elements)
 
-        return elements_str if as_argument else f"({elements_str})"
+        return f"({elements_str})"
 
     def collect_predicates(self) -> set[PREDICATE_CLASS_TYPE]:
         """

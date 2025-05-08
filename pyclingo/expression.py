@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Union
 from pyclingo.comparison_mixin import ComparisonMixin
 from pyclingo.operators import (
     BINARY_OPERATIONS,
-    NONCOMMUTATIVE_OPERATIONRS,
+    NONCOMMUTATIVE_OPERATIONS,
     PRECEDENCE,
     UNARY_OPERATIONS,
     ComparisonOperator,
@@ -123,7 +123,7 @@ class Expression(Term, ComparisonMixin):
         assert self.first_term is not None
         return self.first_term.is_grounded and self.second_term.is_grounded
 
-    def render(self, as_argument: bool = False) -> str:
+    def render(self, as_argument: bool = True) -> str:
         """
         Renders the expression as a string in Clingo syntax.
 
@@ -159,7 +159,9 @@ class Expression(Term, ComparisonMixin):
         return result if as_argument else f"({result})"
 
     @staticmethod
-    def _render_term_with_precedence(term: VALUE_EXPRESSION_TYPE, parent_op: Operation, is_right: bool = False) -> str:
+    def _render_term_with_precedence(
+        term: VALUE_EXPRESSION_TYPE, parent_op: Operation, is_right: bool = False, as_argument: bool = False
+    ) -> str:
         """
         Renders a term with appropriate parentheses based on precedence.
 
@@ -167,15 +169,17 @@ class Expression(Term, ComparisonMixin):
             term: The term to render.
             parent_op: The parent operation.
             is_right: Whether this is the right operand (for non-commutative ops).
+            as_argument: Whether to render as an argument.
 
         Returns:
             str: The rendered term, with parentheses if needed.
         """
         # Simple terms don't need parentheses
         if not isinstance(term, Expression):
-            return term.render()
+            return term.render(as_argument=as_argument)
 
-        term_str = term.render()
+        # For expressions, pass the as_argument parameter
+        term_str = term.render(as_argument=True)
 
         # Unary expressions generally don't need parentheses
         if term.is_unary:
@@ -184,13 +188,40 @@ class Expression(Term, ComparisonMixin):
         # Check if parentheses are needed based on precedence
         parent_precedence = PRECEDENCE[parent_op]
         term_precedence = PRECEDENCE[term.operator]
+
         needs_parens = False
-        # Higher precedence means lower numerical value
+
+        # Case 1: Different precedence levels
         if term_precedence > parent_precedence:
             needs_parens = True
-        # For same precedence, non-commutative ops need parens on right side
-        elif term_precedence == parent_precedence and is_right and parent_op in NONCOMMUTATIVE_OPERATIONRS:
-            needs_parens = True
+
+        # Case 2: Same precedence, but need to check for non-commutative operations
+        elif term_precedence == parent_precedence:
+            if is_right:  # Right-side term
+                # Check if parent and term operation are both in the same category
+                both_multiplicative = parent_op in {Operation.MULTIPLY, Operation.INTEGER_DIVIDE} and term.operator in {
+                    Operation.MULTIPLY,
+                    Operation.INTEGER_DIVIDE,
+                }
+                both_additive = parent_op in {Operation.ADD, Operation.SUBTRACT} and term.operator in {
+                    Operation.ADD,
+                    Operation.SUBTRACT,
+                }
+
+                # For multiplicative operations (*, /), they don't commute freely
+                # e.g., a * (b / c) is different from (a * b) / c
+                if both_multiplicative and parent_op != term.operator:
+                    needs_parens = True
+
+                # For the same non-commutative operation (like -), need parens on right side
+                elif parent_op in NONCOMMUTATIVE_OPERATIONS and parent_op == term.operator:
+                    needs_parens = True
+
+                # For non-commutative operations in additive context
+                elif both_additive and parent_op in NONCOMMUTATIVE_OPERATIONS:
+                    # For subtraction as parent, right operand needs parens
+                    # e.g., a - (b - c) is different from (a - b) - c
+                    needs_parens = True
 
         return f"({term_str})" if needs_parens else term_str
 
@@ -401,8 +432,8 @@ class Comparison(Term):
         Returns:
             str: The string representation of the comparison.
         """
-        left_str = self.left_term.render(as_argument=False)
-        right_str = self.right_term.render(as_argument=False)
+        left_str = self.left_term.render(as_argument=True)
+        right_str = self.right_term.render(as_argument=True)
 
         return f"{left_str} {self.operator.value} {right_str}"
 

@@ -60,8 +60,7 @@ class Sudoku(Solver):
         puzzle.when(
             [
                 grid.Cell(row=R, col=C),
-                # Calculate block ID using integer division: 1 + (C-1)//box_size + box_size*((R-1)//box_size)
-                N == 1 + ((C - 1) // box_size) + box_size * ((R - 1) // box_size),
+                N == 1 + (C - 1) // box_size + box_size * ((R - 1) // box_size),
             ],
             let=Block(loc=grid.Cell(row=R, col=C), block_id=N),
         )
