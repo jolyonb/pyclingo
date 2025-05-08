@@ -6,10 +6,9 @@ from typing import TYPE_CHECKING, ClassVar, Self, Union
 
 from pyclingo.comparison_mixin import ComparisonMixin
 from pyclingo.negation import NegatedLiteral
-from pyclingo.operators import ComparisonOperator
 from pyclingo.predicate import Predicate
 from pyclingo.term import Term
-from pyclingo.value import Value, Variable
+from pyclingo.value import Value
 
 if TYPE_CHECKING:
     from pyclingo.expression import Comparison
@@ -261,23 +260,6 @@ class Aggregate(Term, ComparisonMixin, ABC):
                 variables.update(condition.collect_variables())
 
         return variables
-
-    def assign_to(self, variable: Variable) -> Comparison:
-        """
-        Creates a comparison that assigns this aggregate's value to a variable.
-
-        Args:
-            variable: The variable to assign the aggregate result to
-
-        Returns:
-            Comparison: A comparison term representing "variable = aggregate"
-        """
-        from pyclingo.expression import Comparison
-
-        if not isinstance(variable, Variable):
-            raise TypeError(f"Expected Variable, got {type(variable).__name__}")
-
-        return Comparison(variable, ComparisonOperator.EQUAL, self)
 
 
 class Count(Aggregate):
