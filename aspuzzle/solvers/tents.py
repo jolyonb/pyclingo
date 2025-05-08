@@ -36,7 +36,8 @@ class Tents(Solver):
         for direction in grid.line_direction_names:
             clue_key = f"{grid.line_direction_descriptions[direction]}_clues"
             for i, count in enumerate(config[clue_key], 1):
-                puzzle.fact(ExpectedCounts(dir=direction, index=i, count=count), segment="Clues")
+                if count is not None:
+                    puzzle.fact(ExpectedCounts(dir=direction, index=i, count=count), segment="Clues")
 
         # Rule 1: Each tree has exactly one tie in an orthogonal direction
         puzzle.section("Tree ties")
@@ -92,43 +93,7 @@ class Tents(Solver):
 
     def validate_config(self) -> None:
         """Validate the puzzle configuration."""
-        grid = self.grid
-
-        # Check if line clues exist for each direction
-        for direction in grid.line_direction_names:
-            clue_key = f"{grid.line_direction_descriptions[direction]}_clues"
-            if clue_key not in self.config:
-                raise ValueError(f"Missing {clue_key} in puzzle configuration")
-
-        # Get the number of lines in each direction
-        line_sums = []
-        for direction in grid.line_direction_names:
-            clue_key = f"{grid.line_direction_descriptions[direction]}_clues"
-            expected_count = grid.get_line_count(direction)
-            actual_count = len(self.config[clue_key])
-
-            if actual_count == expected_count:
-                line_sums.append((direction, sum(self.config[clue_key])))
-            else:
-                raise ValueError(f"Expected {expected_count} {clue_key}, got {actual_count}")
-
-        # Ensure all line sums are equal to each other and to the tree count
-        if line_sums:
-            expected_sum = line_sums[0][1]
-            for direction, actual_sum in line_sums[1:]:
-                if actual_sum != expected_sum:
-                    desc1 = grid.line_direction_descriptions[line_sums[0][0]]
-                    desc2 = grid.line_direction_descriptions[direction]
-                    raise ValueError(
-                        f"Sum of {desc1} clues ({expected_sum}) doesn't match sum of {desc2} clues ({actual_sum})"
-                    )
-
-            # Count the number of trees in the grid
-            tree_count = len(self.grid_data)
-
-            # Check that sum matches tree count
-            if expected_sum != tree_count:
-                raise ValueError(f"Sum of clues ({expected_sum}) doesn't match number of trees ({tree_count})")
+        self.validate_line_clues()
 
     def get_render_config(self) -> dict[str, Any]:
         """

@@ -286,3 +286,26 @@ class Solver(ABC):
             "puzzle_symbols": {},  # Map puzzle values to display symbols
             "predicates": {},  # Map predicate names to rendering info
         }
+
+    def validate_line_clues(self) -> None:
+        """
+        Validates that all expected line clues exist and have the correct length.
+
+        Raises:
+            ValueError: If required clue lists are missing or have incorrect length
+        """
+        grid = self.grid
+
+        for direction in grid.line_direction_names:
+            clue_key = f"{grid.line_direction_descriptions[direction]}_clues"
+
+            # Check if clues exist
+            if clue_key not in self.config:
+                raise ValueError(f"Missing {clue_key} in puzzle configuration")
+
+            # Check if count matches grid size
+            expected_count = grid.get_line_count(direction)
+            actual_count = len(self.config[clue_key])
+
+            if actual_count != expected_count:
+                raise ValueError(f"Expected {expected_count} {clue_key}, got {actual_count}")
