@@ -29,17 +29,17 @@ class Slitherlink(Solver):
         # Define clues
         puzzle.section("Grid data", segment="Clues")
         puzzle.fact(
-            *[Clue(loc=grid.Cell(row=r, col=c), num=v) for r, c, v in grid_data if v in (0, 1, 2, 3)],
+            *[Clue(loc=grid.Cell(*loc), num=v) for loc, v in grid_data if v in (0, 1, 2, 3)],
             segment="Clues",
         )
 
         # Define sheep
-        sheep_facts = [Sheep(loc=grid.Cell(row=r, col=c)) for r, c, v in grid_data if v == "S"]
+        sheep_facts = [Sheep(loc=grid.Cell(*loc)) for loc, v in grid_data if v == "S"]
         if sheep_facts:
             puzzle.fact(*sheep_facts, segment="Clues")
 
         # Define wolves
-        wolf_facts = [Wolf(loc=grid.Cell(row=r, col=c)) for r, c, v in grid_data if v == "W"]
+        wolf_facts = [Wolf(loc=grid.Cell(*loc)) for loc, v in grid_data if v == "W"]
         if wolf_facts:
             puzzle.fact(*wolf_facts, segment="Clues")
 

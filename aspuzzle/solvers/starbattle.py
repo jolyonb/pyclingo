@@ -26,7 +26,7 @@ class Starbattle(Solver):
         # Define regions
         puzzle.blank_line(segment="Regions")
         puzzle.fact(
-            *[Region(loc=grid.Cell(row=r, col=c), id=region_id) for r, c, region_id in grid_data],
+            *[Region(loc=grid.Cell(*loc), id=region_id) for loc, region_id in grid_data],
             segment="Regions",
         )
 

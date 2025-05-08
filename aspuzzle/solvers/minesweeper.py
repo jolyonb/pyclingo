@@ -24,7 +24,7 @@ class Minesweeper(Solver):
         # Define clues
         puzzle.blank_line(segment="Clues")
         puzzle.fact(
-            *[Number(loc=grid.Cell(row=r, col=c), num=num) for r, c, num in grid_data],
+            *[Number(loc=grid.Cell(*loc), num=num) for loc, num in grid_data],
             segment="Clues",
         )
 

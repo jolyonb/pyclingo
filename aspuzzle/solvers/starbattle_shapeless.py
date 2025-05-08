@@ -26,7 +26,7 @@ class Starbattle_Shapeless(Solver):
         # Define excluded area
         puzzle.blank_line(segment="Excluded cells")
         puzzle.fact(
-            *[Excluded(loc=grid.Cell(row=r, col=c)) for r, c, _ in grid_data],
+            *[Excluded(loc=grid.Cell(*loc)) for loc, _ in grid_data],
             segment="Excluded cells",
         )
 

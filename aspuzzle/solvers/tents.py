@@ -27,12 +27,10 @@ class Tents(Solver):
 
         # Define trees from input
         puzzle.section("Trees", segment="Clues")
-        puzzle.fact(*[Tree(loc=grid.Cell(row=r, col=c)) for r, c, _ in grid_data], segment="Clues")
+        puzzle.fact(*[Tree(loc=grid.Cell(*loc)) for loc, _ in grid_data], segment="Clues")
 
         # Define expected line counts
         puzzle.section("Tent counts", segment="Clues")
-
-        # Process each direction defined in the grid's line_direction_names
         for direction in grid.line_direction_names:
             clue_key = f"{grid.line_direction_descriptions[direction]}_clues"
             for i, count in enumerate(config[clue_key], 1):

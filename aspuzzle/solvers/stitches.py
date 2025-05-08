@@ -33,8 +33,10 @@ class Stitches(Solver):
         puzzle.section("Define regions", segment="Regions")
 
         # Create Region facts
-        for r, c, region_id in grid_data:
-            puzzle.fact(Region(loc=grid.Cell(row=r, col=c), id=region_id), segment="Regions")
+        puzzle.fact(
+            *[Region(loc=grid.Cell(*loc), id=region_id) for loc, region_id in grid_data],
+            segment="Regions",
+        )
 
         # Define expected line counts
         puzzle.section("Stitch counts", segment="Clues")

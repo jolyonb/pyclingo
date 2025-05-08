@@ -7,9 +7,8 @@ from aspuzzle.puzzle import Module, Puzzle, cached_predicate
 from pyclingo import ANY, ExplicitPool, Not, Predicate, Variable, create_variables
 from pyclingo.conditional_literal import ConditionalLiteral
 
-GridCellData: TypeAlias = tuple[
-    int, int, int | str
-]  # TODO: This is row/col/value; needs to be tuple[tuple[int, ...], int | str]
+# Representing a location and a value
+GridCellData: TypeAlias = tuple[tuple[int, ...], int | str]
 
 
 class Grid(Module, ABC):
@@ -52,7 +51,7 @@ class Grid(Module, ABC):
             map_to_integers: Whether to convert symbols to unique integers
 
         Returns:
-            List of (row, col, value) tuples for non-empty cells
+            List of (loc, value) tuples for non-empty cells
         """
         pass
 
@@ -301,7 +300,7 @@ class Grid(Module, ABC):
         Render the grid as ASCII text.
 
         Args:
-            puzzle_definition: List of (row, col, value) tuples defining the puzzle
+            puzzle_definition: List of (loc, value) tuples defining the puzzle
             solution: Dictionary mapping predicate names to lists of predicate instances
             render_config: Configuration for rendering, including:
                 - 'puzzle_symbols': Dict mapping puzzle values to display symbols

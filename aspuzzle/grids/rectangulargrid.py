@@ -299,7 +299,7 @@ class RectangularGrid(Grid):
             map_to_integers: Whether to convert symbols to unique integers
 
         Returns:
-            List of (row, col, value) tuples for non-empty cells
+            List of (loc, value) tuples for non-empty cells
         """
         rows = self.rows
         cols = self.cols
@@ -342,7 +342,7 @@ class RectangularGrid(Grid):
                     next_id += 1
 
         # Parse cells
-        cells = []
+        cells: list[GridCellData] = []
 
         for r, line in enumerate(grid_data):
             for c, char in enumerate(line):
@@ -358,7 +358,7 @@ class RectangularGrid(Grid):
                     value = int(char) if char.isdigit() else char
 
                 # Add to cells list
-                cell_entry = (r + 1, c + 1, value)
+                cell_entry = ((r + 1, c + 1), value)
                 cells.append(cell_entry)
 
         return cells
@@ -460,7 +460,7 @@ class RectangularGrid(Grid):
         Render the rectangular grid as ASCII text.
 
         Args:
-            puzzle_definition: List of (row, col, value) tuples defining the puzzle
+            puzzle_definition: List of (loc, value) tuples defining the puzzle
             solution: Dictionary mapping predicate names to lists of predicate instances
             render_config: Configuration for rendering
             use_colors: Whether to use ANSI colors in the output
@@ -480,7 +480,7 @@ class RectangularGrid(Grid):
             puzzle_symbols = render_config.get("puzzle_symbols", {})
 
             # Place puzzle values on the grid
-            for row, col, value in puzzle_definition:
+            for (row, col), value in puzzle_definition:
                 if value not in puzzle_symbols:
                     continue
 

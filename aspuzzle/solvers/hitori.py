@@ -25,7 +25,7 @@ class Hitori(Solver):
         # Define grid values from the input grid
         puzzle.section("Define grid values")
         puzzle.fact(
-            *[Value(loc=grid.Cell(row=r, col=c), num=v) for r, c, v in grid_data],
+            *[Value(loc=grid.Cell(*loc), num=v) for loc, v in grid_data],
             segment="Clues",
         )
 
