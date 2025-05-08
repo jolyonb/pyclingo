@@ -11,7 +11,6 @@ from pyclingo.operators import (
     Operation,
 )
 from pyclingo.pool import Pool
-from pyclingo.predicate import Predicate
 from pyclingo.term import Term
 from pyclingo.value import Constant, StringConstant, Value, Variable
 
@@ -329,22 +328,22 @@ class Comparison(Term):
             self._left_term = Constant(left_term)
         elif isinstance(left_term, str):
             self._left_term = StringConstant(left_term)
-        elif isinstance(left_term, (Value, Expression, Predicate, Aggregate)):
+        elif isinstance(left_term, (Value, Expression, Aggregate)):
             self._left_term = left_term
         else:
             raise TypeError(
-                f"Left term must be an int, str, Value, Expression or Predicate, got {type(left_term).__name__}"
+                f"Left term must be an int, str, Value, Expression or Aggregate, got {type(left_term).__name__}"
             )
 
         if isinstance(right_term, int):
             self._right_term = Constant(right_term)
         elif isinstance(right_term, str):
             self._right_term = StringConstant(right_term)
-        elif isinstance(right_term, (Value, Expression, Predicate, Aggregate, Pool)):
+        elif isinstance(right_term, (Value, Expression, Aggregate, Pool)):
             self._right_term = right_term
         else:
             raise TypeError(
-                f"Right term must be an int, str, Value, Expression, Predicate or Pool, got {type(right_term).__name__}"
+                f"Right term must be an int, str, Value, Expression, Aggregate or Pool, got {type(right_term).__name__}"
             )
 
         if not isinstance(operator, ComparisonOperator):

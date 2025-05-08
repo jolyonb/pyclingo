@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 
     EXPRESSION_FIELD_TYPE = Union[Value, Expression, int]
     VALUE_EXPRESSION_TYPE = Union[Value, Expression]
-    COMPARISON_TERM_TYPE = Union[Value, Expression, Predicate, Aggregate]
+    COMPARISON_TERM_TYPE = Union[Value, Expression, Aggregate]
 
     PREDICATE_CLASS_TYPE = Type[Predicate]
 
