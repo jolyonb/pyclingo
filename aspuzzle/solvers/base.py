@@ -106,8 +106,7 @@ class Solver(ABC):
         assert self._grid_data is not None
         return self._grid_data
 
-    @property
-    def unpack_data(self) -> tuple[Puzzle, Grid, dict[str, Any], list[tuple[int, int, int | str]]]:
+    def unpack_data(self) -> tuple[Puzzle, Grid, dict[str, Any], list[GridCellData]]:
         """
         Convenience property to get puzzle, grid, config, and parsed grid data.
 

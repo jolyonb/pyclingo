@@ -13,7 +13,7 @@ class Minesweeper(Solver):
 
     def construct_puzzle(self) -> None:
         """Construct the rules of the puzzle."""
-        puzzle, grid, config, grid_data = self.unpack_data
+        puzzle, grid, config, grid_data = self.unpack_data()
 
         # Define predicates
         Number = Predicate.define("number", ["loc", "num"], show=False)

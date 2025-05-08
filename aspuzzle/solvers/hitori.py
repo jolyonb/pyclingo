@@ -12,7 +12,7 @@ class Hitori(Solver):
 
     def construct_puzzle(self) -> None:
         """Construct the rules of the puzzle."""
-        puzzle, grid, config, grid_data = self.unpack_data
+        puzzle, grid, config, grid_data = self.unpack_data()
 
         # Define the predicate for the number in a cell
         Value = Predicate.define("value", ["loc", "num"], show=False)

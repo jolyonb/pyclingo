@@ -12,7 +12,7 @@ class Stitches(Solver):
 
     def construct_puzzle(self) -> None:
         """Construct the rules of the puzzle."""
-        puzzle, grid, config, grid_data = self.unpack_data
+        puzzle, grid, config, grid_data = self.unpack_data()
 
         # Register stitch count as a symbolic constant
         stitch_count = puzzle.register_symbolic_constant("stitch_count", config["stitch_count"])
