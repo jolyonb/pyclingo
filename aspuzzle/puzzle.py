@@ -3,7 +3,7 @@ from __future__ import annotations
 from functools import wraps
 from typing import TYPE_CHECKING, Any, Callable, Generator, Sequence, TypeVar, cast
 
-from pyclingo import ASPProgram, Count, Equals, NotEquals, Predicate
+from pyclingo import ASPProgram, Count, Predicate
 from pyclingo.term import Term
 from pyclingo.utils import collect_variables, create_unique_variable_name
 from pyclingo.value import SymbolicConstant, Variable
@@ -145,7 +145,7 @@ class Puzzle:
         """
         return self._program.register_symbolic_constant(name, value)
 
-    def solve(self, models: int = 0, timeout: int = 0) -> Generator[dict[str, set[Predicate]], None, None]:
+    def solve(self, models: int = 0, timeout: int = 0) -> Generator[dict[str, list[Predicate]], None, None]:
         """
         Solve the puzzle and yield solutions.
 
@@ -154,7 +154,7 @@ class Puzzle:
             timeout: Timeout in seconds (0 for no timeout)
 
         Yields:
-            For each solution, a dictionary mapping Predicate types to sets of Predicate instances
+            For each solution, a dictionary mapping Predicate types to lists of Predicate instances
 
         Notes:
             After all models are yielded, solver statistics are stored in the
@@ -246,8 +246,8 @@ class Puzzle:
 
         # Add constraints based on keywords
         constraint_map = {
-            "exactly": lambda n, v: Equals(n, v),
-            "not_equal": lambda n, v: NotEquals(n, v),
+            "exactly": lambda n, v: n == v,
+            "not_equal": lambda n, v: n != v,
             "at_least": lambda n, v: n >= v,
             "at_most": lambda n, v: n <= v,
             "greater_than": lambda n, v: n > v,

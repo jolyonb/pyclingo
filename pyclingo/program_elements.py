@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 from pyclingo.term import Term
 
 if TYPE_CHECKING:
-    from pyclingo.types import PREDICATE_CLASS_TYPE, VARIABLE_TYPE
+    from pyclingo.types import PREDICATE_CLASS_TYPE
 
 
 class ProgramElement(ABC):
@@ -176,7 +176,7 @@ class Rule(ProgramElement):
 
         return constants
 
-    def collect_variables(self) -> tuple[set[VARIABLE_TYPE], set[VARIABLE_TYPE]]:
+    def collect_variables(self) -> tuple[set[str], set[str]]:
         """
         Collects all variables used in this rule.
 
