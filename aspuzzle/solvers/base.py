@@ -17,7 +17,7 @@ class Solver(ABC):
     supported_grid_types: tuple[type] = (Grid,)  # Support all grids by default
     supported_symbols: list[str | int] = []  # List of supported symbols in the grid definition
     grid: Grid
-    map_grid_to_integers: bool = False  # Controls how the grid is read
+    map_grid_to_integers: bool = False  # Whether to map grid symbols to unique integer ids, useful for defining regions
     _grid_data: list[GridCellData] | None = None
 
     @classmethod
