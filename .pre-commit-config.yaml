@@ -34,6 +34,15 @@ repos:
         language: system
         types: [python]
 
+      # Run pytest
+      - id: pytest
+        name: pytest
+        description: "Run 'pytest' to run unit tests"
+        entry: pytest
+        language: system
+        pass_filenames: false
+        args: ["-xvs", "tests/"]
+
   # Verify that the pre-commit configuration is valid
   - repo: local
     hooks:
