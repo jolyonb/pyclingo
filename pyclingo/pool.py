@@ -229,6 +229,7 @@ class ExplicitPool(Pool):
         """
         elements_str = "; ".join(element.render(as_argument=True) for element in self._elements)
 
+        # Explicit pools always require parentheses
         return f"({elements_str})"
 
     def collect_predicates(self) -> set[PREDICATE_CLASS_TYPE]:

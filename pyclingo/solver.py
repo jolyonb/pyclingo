@@ -256,24 +256,28 @@ class ASPProgram:
         if timeout > 0:
             control.configuration.solve.timeout = timeout
 
-        # Get a mapping of predicate names to their types for reconstruction
-        predicate_types = {pred.get_name(): pred for pred in self._collect_predicates()}
-
         # Add and ground the program
-        control.add("base", [], asp_source)
+        try:
+            control.add("base", [], asp_source)
+        except RuntimeError as e:
+            # Handle parsing errors
+            error_msg = str(e)
+            if formatted_messages := message_handler.format_all_messages(verb="parsing"):
+                error_msg += "\n\n" + formatted_messages
+            raise RuntimeError(error_msg) from e
 
         try:
             control.ground([("base", [])])
         except RuntimeError as e:
             # Handle grounding errors
             error_msg = f"Grounding failed: {e}\n\n"
-            if formatted_messages := message_handler.format_all_messages():
+            if formatted_messages := message_handler.format_all_messages(verb="grounding"):
                 error_msg += formatted_messages
             raise RuntimeError(error_msg) from e
 
         # Check for messages after grounding
         if message_handler.messages:
-            print(message_handler.format_all_messages())
+            print(message_handler.format_all_messages(verb="grounding"))
 
             # Check if we should halt based on log level
             if message_handler.should_halt:
@@ -282,6 +286,9 @@ class ASPProgram:
                     f"Grounding produced {message_handler.highest_level.name} level messages "
                     f"(stop threshold: {stop_on_log_level.name})."
                 )
+
+        # Get a mapping of predicate names to their types for reconstruction
+        predicate_types = {pred.get_name(): pred for pred in self._collect_predicates()}
 
         # Continue with solving
         self.exhausted = False

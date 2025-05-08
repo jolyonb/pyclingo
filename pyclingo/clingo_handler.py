@@ -129,19 +129,19 @@ class ClingoMessageHandler:
                 # The column_start is 1-based, but we need 0-based for the string
                 pointer_pos = msg.column_start - 1
                 pointer = " " * pointer_pos + "^" * (msg.column_end - msg.column_start)
-                output.append(f"     | {pointer}")
+                output.append(f"       {pointer}")
 
         output.append("")
         return "\n".join(output)
 
-    def format_all_messages(self) -> str | None:
+    def format_all_messages(self, verb: str) -> str | None:
         """Format all captured messages."""
         if not self.messages:
             return None
 
         output = [
             "-" * 60,
-            f"Found {len(self.messages)} message{'s' if len(self.messages) > 1 else ''} during grounding:\n",
+            f"Found {len(self.messages)} message{'s' if len(self.messages) > 1 else ''} during {verb}:\n",
         ]
         for msg in self.messages:
             output.extend(
