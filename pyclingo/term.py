@@ -1,12 +1,9 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any
-
-from pyclingo.operators import ComparisonOperator
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from pyclingo.expression import Comparison
     from pyclingo.types import PREDICATE_CLASS_TYPE
 
 
@@ -81,44 +78,6 @@ class Term(ABC):
             set[str]: A set of variables used within this term.
         """
         pass
-
-    def __lt__(self, other: Any) -> Comparison:  # pyright: ignore[reportIncompatibleMethodOverride]
-        """Creates a Comparison representing self < other."""
-        from pyclingo.expression import Comparison
-
-        if not isinstance(other, (Term, int)):
-            raise ValueError(f"Cannot compare Term with {type(other).__name__}")
-
-        return Comparison(self, ComparisonOperator.LESS_THAN, other)
-
-    def __le__(self, other: Any) -> Comparison:  # pyright: ignore[reportIncompatibleMethodOverride]
-        """Creates a Comparison representing self <= other."""
-        from pyclingo.expression import Comparison
-
-        if not isinstance(other, (Term, int)):
-            raise ValueError(f"Cannot compare Term with {type(other).__name__}")
-
-        return Comparison(self, ComparisonOperator.LESS_EQUAL, other)
-
-    def __gt__(self, other: Any) -> Comparison:  # pyright: ignore[reportIncompatibleMethodOverride]
-        """Creates a Comparison representing self > other."""
-        from pyclingo.expression import Comparison
-
-        if not isinstance(other, (Term, int)):
-            raise ValueError(f"Cannot compare Term with {type(other).__name__}")
-
-        return Comparison(self, ComparisonOperator.GREATER_THAN, other)
-
-    def __ge__(self, other: Any) -> Comparison:  # pyright: ignore[reportIncompatibleMethodOverride]
-        """Creates a Comparison representing self >= other."""
-        from pyclingo.expression import Comparison
-
-        if not isinstance(other, (Term, int)):
-            raise ValueError(f"Cannot compare Term with {type(other).__name__}")
-
-        return Comparison(self, ComparisonOperator.GREATER_EQUAL, other)
-
-    # We don't do __eq__ or __ne__ because this makes problems for set operations!
 
 
 class BasicTerm(Term, ABC):

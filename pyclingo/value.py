@@ -3,6 +3,7 @@ from __future__ import annotations
 from abc import ABC
 from typing import TYPE_CHECKING, Union, overload
 
+from pyclingo.comparison_mixin import ComparisonMixin
 from pyclingo.operators import Operation
 from pyclingo.term import BasicTerm
 
@@ -12,7 +13,7 @@ if TYPE_CHECKING:
     from pyclingo.types import PREDICATE_CLASS_TYPE, VALUE_EXPRESSION_TYPE
 
 
-class Value(BasicTerm, ABC):
+class Value(BasicTerm, ComparisonMixin, ABC):
     """
     Abstract base class for values that can be used as arguments in ASP programs.
 
