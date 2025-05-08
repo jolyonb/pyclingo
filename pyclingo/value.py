@@ -592,6 +592,3 @@ def create_variables(*names: str) -> Variable | tuple[Variable, ...]:  # type: i
         raise ValueError("At least one variable name must be provided")
     variables = tuple(Variable(name) for name in names)
     return variables[0] if len(names) == 1 else variables
-
-
-# TODO: Add hash and eq methods for all things that I need to compare via sets!

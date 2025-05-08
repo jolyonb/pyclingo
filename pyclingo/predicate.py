@@ -27,6 +27,9 @@ class Predicate(BasicTerm):
     Predicates in ASP consist of a name and optional arguments.
     They can appear in rule heads and bodies, and can have Value
     or other Predicate objects as arguments.
+
+    Note: This class is a frozen dataclass, which automatically provides proper __eq__ and __hash__
+    methods, allowing Predicate instances to be used in sets and as dictionary keys.
     """
 
     # Class-level attributes
