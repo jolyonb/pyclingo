@@ -16,7 +16,7 @@ class Operation(Enum):
 
 UNARY_OPERATIONS = {Operation.UNARY_MINUS, Operation.ABS}
 BINARY_OPERATIONS = {Operation.ADD, Operation.SUBTRACT, Operation.MULTIPLY, Operation.INTEGER_DIVIDE}
-NONCOMMUTATIVE_OPERATIONRS = {Operation.SUBTRACT, Operation.INTEGER_DIVIDE}
+NONCOMMUTATIVE_OPERATIONS = {Operation.SUBTRACT, Operation.INTEGER_DIVIDE}
 
 
 # Operator precedence (lower number = higher precedence)
