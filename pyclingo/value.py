@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import TYPE_CHECKING, Any, Union, overload
+from typing import TYPE_CHECKING, Union, overload
 
 from pyclingo.operators import Operation
 from pyclingo.term import BasicTerm
@@ -212,29 +212,6 @@ class Variable(Value):
             set[str]: An empty set.
         """
         return set()
-
-    def __eq__(self, other: Any) -> bool:
-        """
-        Compare variables based on their names for equality.
-
-        Args:
-            other: The object to compare with
-
-        Returns:
-            bool: True if other is a Variable with the same name
-        """
-        if not isinstance(other, Variable):
-            return NotImplemented
-        return self._name == other._name
-
-    def __hash__(self) -> int:
-        """
-        Generate a hash based on the variable name.
-
-        Returns:
-            int: Hash value based on the variable name
-        """
-        return hash(self._name)
 
     def __repr__(self) -> str:
         """
