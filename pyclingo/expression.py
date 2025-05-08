@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Union
 
+from pyclingo.comparison_mixin import ComparisonMixin
 from pyclingo.operators import (
     BINARY_OPERATIONS,
     NONCOMMUTATIVE_OPERATIONRS,
@@ -23,7 +24,7 @@ if TYPE_CHECKING:
     )
 
 
-class Expression(Term):
+class Expression(Term, ComparisonMixin):
     """
     Represents a mathematical expression in an ASP program.
 
@@ -464,7 +465,7 @@ class Comparison(Term):
 
 def Abs(term: EXPRESSION_FIELD_TYPE) -> Expression:
     """
-    Helper function to use absolute value functions..
+    Helper function to use absolute value functions.
 
     Args:
         term: The term to take the absolute value of.

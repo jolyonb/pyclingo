@@ -300,7 +300,7 @@ class Choice(Term):
             min_str = self.min_cardinality.render()
             max_str = self.max_cardinality.render()
 
-            if self.min_cardinality == self.max_cardinality:
+            if min_str == max_str:
                 # Exact cardinality: { ... } = n
                 suffix = f" = {min_str}"
             else:

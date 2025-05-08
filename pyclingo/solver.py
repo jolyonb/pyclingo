@@ -222,7 +222,7 @@ class ASPProgram:
 
     def solve(
         self, models: int = 0, timeout: int = 0, stop_on_log_level: LogLevel = LogLevel.INFO
-    ) -> Generator[dict[str, set[Predicate]], None, None]:
+    ) -> Generator[dict[str, list[Predicate]], None, None]:
         """
         Solve the ASP program and yield solutions as sets of Predicate objects.
 
@@ -232,7 +232,7 @@ class ASPProgram:
             stop_on_log_level: Log level at which to abort solving
 
         Yields:
-            For each solution, a dictionary mapping Predicate types to sets of Predicate instances
+            For each solution, a dictionary mapping Predicate types to lists of Predicate instances
 
         Raises:
             RuntimeError: If an error occurs during solving or grounding, or if log level threshold is exceeded
@@ -370,7 +370,7 @@ class ASPProgram:
 
     def _convert_model_to_predicates(
         self, model: clingo.Model, predicate_types: dict[str, type[Predicate]]
-    ) -> dict[str, set[Predicate]]:
+    ) -> dict[str, list[Predicate]]:
         """
         Convert a clingo model to a dictionary of Predicate objects.
 
@@ -379,12 +379,12 @@ class ASPProgram:
             predicate_types: Dictionary mapping predicate names to Predicate classes
 
         Returns:
-            Dictionary mapping Predicate types to sets of Predicate instances
+            Dictionary mapping Predicate types to lists of Predicate instances
         """
-        result = defaultdict(set)
+        result = defaultdict(list)
 
         for symbol in model.symbols(shown=True):
             pred_instance = self._convert_symbol_to_predicate(symbol, predicate_types)
-            result[pred_instance.get_name()].add(pred_instance)
+            result[pred_instance.get_name()].append(pred_instance)
 
         return dict(result)
