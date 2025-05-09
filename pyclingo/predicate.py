@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import Field, dataclass, fields, make_dataclass
 from typing import TYPE_CHECKING, Any, ClassVar, Type
 
-from pyclingo.term import BasicTerm
+from pyclingo.term import BasicTerm, RenderingContext
 from pyclingo.value import Constant, StringConstant, Value
 
 if TYPE_CHECKING:
@@ -189,7 +189,7 @@ class Predicate(BasicTerm):
         if not cls._show:
             return None
         if cls._show_conditions:
-            signature = cls._show_conditions.render(as_argument=False)
+            signature = cls._show_conditions.render()
         else:
             signature = f"{cls.get_name()}/{cls.get_arity()}"
         return f"#show {signature}."
@@ -213,13 +213,12 @@ class Predicate(BasicTerm):
         """
         return all(arg.is_grounded for arg in self.arguments)
 
-    def render(self, as_argument: bool = False) -> str:
+    def render(self, context: RenderingContext = RenderingContext.DEFAULT) -> str:
         """
         Renders the predicate as a string in Clingo syntax.
 
         Args:
-            as_argument: Whether this term is being rendered as an argument
-                        to another term (e.g., inside a predicate).
+            context: The context in which the Term is being rendered.
 
         Returns:
             str: The string representation of the predicate.
@@ -227,7 +226,11 @@ class Predicate(BasicTerm):
         if not self.argument_fields():
             return self.get_name()
 
-        args_str = ", ".join(arg.render(as_argument=True) for arg in self.arguments)
+        if len(self.arguments) == 1:
+            args_str = self.arguments[0].render(context=RenderingContext.LONE_PREDICATE_ARGUMENT)
+        else:
+            args_str = ", ".join(arg.render() for arg in self.arguments)
+
         return f"{self.get_name()}({args_str})"
 
     def validate_in_context(self, is_in_head: bool) -> None:
@@ -312,7 +315,7 @@ class Predicate(BasicTerm):
         Returns:
             A string in the format: name(arg1=value1, arg2=value2)
         """
-        return self.render(as_argument=False)
+        return self.render()
 
     def __repr__(self) -> str:
         """

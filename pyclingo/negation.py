@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Union
 
 from pyclingo.expression import Comparison
 from pyclingo.predicate import Predicate
-from pyclingo.term import Term
+from pyclingo.term import RenderingContext, Term
 
 if TYPE_CHECKING:
     from pyclingo.types import PREDICATE_CLASS_TYPE
@@ -120,18 +120,17 @@ class DefaultNegation(NegatedLiteral):
         # Initialize with the appropriate term
         super().__init__(actual_term)
 
-    def render(self, as_argument: bool = False) -> str:
+    def render(self, context: RenderingContext = RenderingContext.DEFAULT) -> str:
         """
         Renders the default negation as a string in Clingo syntax.
 
         Args:
-            as_argument: Whether this term is being rendered as an argument
-                        to another term (e.g., inside a predicate).
+            context: The context in which the Term is being rendered.
 
         Returns:
             str: The string representation of the default negation.
         """
-        term_str = self._term.render(as_argument=False)
+        term_str = self._term.render(context=RenderingContext.NEGATION)
         return f"not {term_str}"
 
     def validate_in_context(self, is_in_head: bool) -> None:
@@ -180,18 +179,17 @@ class ClassicalNegation(NegatedLiteral):
         # Initialize with the appropriate term
         super().__init__(actual_term)
 
-    def render(self, as_argument: bool = False) -> str:
+    def render(self, context: RenderingContext = RenderingContext.DEFAULT) -> str:
         """
         Renders the classical negation as a string in Clingo syntax.
 
         Args:
-            as_argument: Whether this term is being rendered as an argument
-                        to another term (e.g., inside a predicate).
+            context: The context in which the Term is being rendered.
 
         Returns:
             str: The string representation of the classical negation.
         """
-        term_str = self._term.render(as_argument=as_argument)
+        term_str = self._term.render()
         return f"-{term_str}"
 
     def validate_in_context(self, is_in_head: bool) -> None:

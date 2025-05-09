@@ -4,7 +4,7 @@ from abc import ABC
 from typing import TYPE_CHECKING, Sequence, Union
 
 from pyclingo.predicate import Predicate
-from pyclingo.term import BasicTerm
+from pyclingo.term import BasicTerm, RenderingContext
 from pyclingo.value import Constant, ConstantBase, StringConstant
 
 if TYPE_CHECKING:
@@ -107,18 +107,17 @@ class RangePool(Pool):
         """
         return True
 
-    def render(self, as_argument: bool = False) -> str:
+    def render(self, context: RenderingContext = RenderingContext.DEFAULT) -> str:
         """
         Renders the term as a string in Clingo syntax.
 
         Args:
-            as_argument: Whether this term is being rendered as an argument
-                        to another term (e.g., inside a predicate).
+            context: The context in which the Term is being rendered.
 
         Returns:
             str: The string representation of the range, e.g., "1..5".
         """
-        return f"{self.start.render(as_argument=False)}..{self.end.render(as_argument=False)}"
+        return f"{self.start.render()}..{self.end.render()}"
 
     def collect_predicates(self) -> set[PREDICATE_CLASS_TYPE]:
         """
@@ -216,21 +215,18 @@ class ExplicitPool(Pool):
         """
         return True
 
-    def render(self, as_argument: bool = False) -> str:
+    def render(self, context: RenderingContext = RenderingContext.DEFAULT) -> str:
         """
         Renders the explicit pool as a string in Clingo syntax.
 
         Args:
-            as_argument: Whether this term is being rendered as an argument
-                        to another term (e.g., inside a predicate).
+            context: The context in which the Term is being rendered.
 
         Returns:
             str: The string representation of the pool, e.g., "1;3;5" or "(1;3;5)".
         """
-        elements_str = "; ".join(element.render(as_argument=True) for element in self._elements)
-
-        # Explicit pools always require parentheses
-        return f"({elements_str})"
+        elements_str = "; ".join(element.render() for element in self._elements)
+        return elements_str if context == RenderingContext.LONE_PREDICATE_ARGUMENT else f"({elements_str})"
 
     def collect_predicates(self) -> set[PREDICATE_CLASS_TYPE]:
         """

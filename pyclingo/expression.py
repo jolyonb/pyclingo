@@ -12,7 +12,7 @@ from pyclingo.operators import (
     Operation,
 )
 from pyclingo.pool import Pool
-from pyclingo.term import Term
+from pyclingo.term import RenderingContext, Term
 from pyclingo.value import Constant, StringConstant, Value, Variable
 
 if TYPE_CHECKING:
@@ -123,29 +123,28 @@ class Expression(Term, ComparisonMixin):
         assert self.first_term is not None
         return self.first_term.is_grounded and self.second_term.is_grounded
 
-    def render(self, as_argument: bool = True) -> str:
+    def render(self, context: RenderingContext = RenderingContext.DEFAULT) -> str:
         """
         Renders the expression as a string in Clingo syntax.
 
         Handles operator precedence to minimize parentheses.
 
         Args:
-            as_argument: Whether this expression is being rendered as an argument.
+            context: The context in which the Term is being rendered.
 
         Returns:
             str: The string representation of the expression.
         """
+        # TODO: Not happy with the parentheses handling here at all :( Think I want to rewrite
+        # Start by putting parentheses around everything?
+        # Figure out the logical way to handle context
+
         if self.is_unary:
             if self.operator == Operation.UNARY_MINUS:
-                second_str = self.second_term.render()
-
-                # Add parentheses if the operand is a binary expression
-                if isinstance(self.second_term, Expression) and not self.second_term.is_unary:
-                    second_str = f"({second_str})"
-
-                return f"-{second_str}"
+                second_str = self.second_term.render(context=RenderingContext.UNARY_NEGATION)
+                return f"(-{second_str})" if context == RenderingContext.UNARY_NEGATION else f"-{second_str}"
             elif self.operator == Operation.ABS:
-                return f"|{self.second_term.render(as_argument=True)}|"
+                return f"|{self.second_term.render()}|"
             else:
                 raise ValueError(f"Unknown operator {self.operator}")
 
@@ -154,13 +153,13 @@ class Expression(Term, ComparisonMixin):
         first_str = self._render_term_with_precedence(self.first_term, self.operator)
         second_str = self._render_term_with_precedence(self.second_term, self.operator, is_right=True)
 
-        result = f"{first_str} {self.operator.value} {second_str}"
-
-        return result if as_argument else f"({result})"
+        return f"{first_str} {self.operator.value} {second_str}"
 
     @staticmethod
     def _render_term_with_precedence(
-        term: VALUE_EXPRESSION_TYPE, parent_op: Operation, is_right: bool = False, as_argument: bool = False
+        term: VALUE_EXPRESSION_TYPE,
+        parent_op: Operation,
+        is_right: bool = False,
     ) -> str:
         """
         Renders a term with appropriate parentheses based on precedence.
@@ -169,17 +168,15 @@ class Expression(Term, ComparisonMixin):
             term: The term to render.
             parent_op: The parent operation.
             is_right: Whether this is the right operand (for non-commutative ops).
-            as_argument: Whether to render as an argument.
 
         Returns:
             str: The rendered term, with parentheses if needed.
         """
+        term_str = term.render()
+
         # Simple terms don't need parentheses
         if not isinstance(term, Expression):
-            return term.render(as_argument=as_argument)
-
-        # For expressions, pass the as_argument parameter
-        term_str = term.render(as_argument=True)
+            return term_str
 
         # Unary expressions generally don't need parentheses
         if term.is_unary:
@@ -421,21 +418,22 @@ class Comparison(Term):
         """
         return self.left_term.is_grounded and self.right_term.is_grounded
 
-    def render(self, as_argument: bool = False) -> str:
+    def render(self, context: RenderingContext = RenderingContext.DEFAULT) -> str:
         """
         Renders the comparison as a string in Clingo syntax.
 
         Args:
-            as_argument: Whether this term is being rendered as an argument
-                        to another term (e.g., inside a predicate).
+            context: The context in which the Term is being rendered.
 
         Returns:
             str: The string representation of the comparison.
         """
-        left_str = self.left_term.render(as_argument=True)
-        right_str = self.right_term.render(as_argument=True)
+        left_str = self.left_term.render()
+        right_str = self.right_term.render()
 
-        return f"{left_str} {self.operator.value} {right_str}"
+        expr = f"{left_str} {self.operator.value} {right_str}"
+
+        return f"({expr})" if context == RenderingContext.NEGATION else expr
 
     def validate_in_context(self, is_in_head: bool) -> None:
         """
