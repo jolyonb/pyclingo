@@ -7,6 +7,7 @@ from abc import ABC, abstractmethod
 from typing import Any
 
 from aspuzzle.grids.base import Grid, GridCellData
+from aspuzzle.grids.rendering import RenderItem
 from aspuzzle.puzzle import Puzzle
 from pyclingo import Predicate
 
@@ -261,16 +262,105 @@ class Solver(ABC):
         Render a solution as ASCII text.
 
         Args:
-            solution: Solution dictionary mapping predicate names to sets of predicate instances
+            solution: Solution dictionary mapping predicate names to lists of predicate instances
 
         Returns:
             ASCII representation of the solution
         """
+        # Preprocess puzzle symbols and predicates
+        puzzle_render_items = self._preprocess_puzzle_symbols()
+        predicate_render_items = self._preprocess_predicates(solution)
+
+        # Get rendering configuration
+        render_config = self.get_render_config()
+
+        # Call the grid's render_ascii method with processed items
         return self.grid.render_ascii(
-            puzzle_definition=self.grid_data,
-            solution=solution,
-            render_config=self.get_render_config(),
+            puzzle_render_items=puzzle_render_items,
+            predicate_render_items=predicate_render_items,
+            render_config=render_config,
         )
+
+    def _preprocess_puzzle_symbols(self) -> list[RenderItem]:
+        """
+        Preprocess puzzle definition symbols for rendering.
+
+        Returns:
+            List of RenderItem objects ready for rendering
+        """
+        render_config = self.get_render_config()
+        puzzle_symbols = render_config.get("puzzle_symbols", {})
+
+        processed_symbols = []
+
+        for loc, value in self.grid_data:
+            symbol_config = puzzle_symbols.get(value)
+            if symbol_config is None:
+                continue
+            assert isinstance(symbol_config, dict)
+
+            display_symbol = symbol_config.get("symbol", str(value))
+            foreground_color = symbol_config.get("color", None)
+            background_color = symbol_config.get("background", None)
+
+            render_item = RenderItem(
+                loc=self.grid.Cell(*loc), symbol=display_symbol, color=foreground_color, background=background_color
+            )
+            processed_symbols.append(render_item)
+
+        return processed_symbols
+
+    def _preprocess_predicates(self, solution: dict[str, list[Predicate]] | None = None) -> dict[int, list[RenderItem]]:
+        """
+        Preprocess solution predicates for rendering, organized by priority level.
+
+        Args:
+            solution: Dictionary mapping predicate names to lists of predicate instances
+
+        Returns:
+            Dictionary mapping priority levels to lists of RenderItem objects
+        """
+        if not solution:
+            return {}
+
+        render_config = self.get_render_config()
+        predicate_styling = render_config.get("predicates", {})
+
+        priority_render_items: dict[int, list[RenderItem]] = {}
+
+        for pred_name, instances in solution.items():
+            render_info = predicate_styling.get(pred_name)
+            if render_info is None:
+                continue
+            assert isinstance(render_info, dict)
+
+            priority = render_info.get("priority", 0)
+
+            # Initialize list for this priority if needed
+            if priority not in priority_render_items:
+                priority_render_items[priority] = []
+
+            if custom_renderer := render_info.get("custom_renderer"):
+                priority_render_items[priority].extend([item for pred in instances for item in custom_renderer(pred)])
+            else:
+                color = render_info.get("color", None)
+                background = render_info.get("background", None)
+                default_symbol = render_info.get("symbol", pred_name[0])
+                value_field: str | None = render_info.get("value", None)
+
+                priority_render_items[priority].extend(
+                    [
+                        RenderItem(
+                            loc=pred["loc"],
+                            symbol=str(pred[value_field]) if value_field is not None else default_symbol,
+                            color=color,
+                            background=background,
+                        )
+                        for pred in instances
+                    ]
+                )
+
+        return priority_render_items
 
     def get_render_config(self) -> dict[str, Any]:
         """

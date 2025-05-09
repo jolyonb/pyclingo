@@ -3,6 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any, TypeAlias
 
+from aspuzzle.grids.rendering import RenderItem
 from aspuzzle.puzzle import Module, Puzzle, cached_predicate
 from pyclingo import ANY, ExplicitPool, Not, Predicate, Variable, create_variables
 from pyclingo.conditional_literal import ConditionalLiteral
@@ -292,20 +293,24 @@ class Grid(Module, ABC):
     @abstractmethod
     def render_ascii(
         self,
-        puzzle_definition: list[GridCellData],
-        solution: dict[str, list[Predicate]] | None = None,
-        render_config: dict[str, Any] | None = None,
+        puzzle_render_items: list[RenderItem],
+        predicate_render_items: dict[int, list[RenderItem]],
+        render_config: dict[str, Any],
+        use_colors: bool = True,
     ) -> str:
         """
-        Render the grid as ASCII text.
+        Render the rectangular grid as ASCII text.
+
+        This method takes preprocessed rendering items and converts them into an ASCII
+        representation of the grid. Rendering is applied in order of priority, with higher
+        priority items rendered later (on top).
 
         Args:
-            puzzle_definition: List of (loc, value) tuples defining the puzzle
-            solution: Dictionary mapping predicate names to lists of predicate instances
-            render_config: Configuration for rendering, including:
-                - 'puzzle_symbols': Dict mapping puzzle values to display symbols
-                - 'predicates': Dict mapping predicate names to render info
-                - 'join_char': Character to use in joining cells
+            puzzle_render_items: List of RenderItem objects for the puzzle symbols
+            predicate_render_items: Dictionary mapping priority levels to lists of RenderItem objects
+            render_config: Additional rendering configuration including:
+                - 'join_char': Character to use in joining cells (default: " ")
+            use_colors: Whether to use ANSI colors in the output
 
         Returns:
             ASCII string representation of the grid
