@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Union
 from pyclingo.expression import Comparison
 from pyclingo.negation import NegatedLiteral
 from pyclingo.predicate import Predicate
-from pyclingo.term import Term
+from pyclingo.term import RenderingContext, Term
 
 if TYPE_CHECKING:
     from pyclingo.types import PREDICATE_CLASS_TYPE
@@ -74,13 +74,12 @@ class ConditionalLiteral(Term):
         """
         return self.head.is_grounded and all(cond.is_grounded for cond in self.condition)
 
-    def render(self, as_argument: bool = False) -> str:
+    def render(self, context: RenderingContext = RenderingContext.DEFAULT) -> str:
         """
         Renders the conditional literal as a string in Clingo syntax.
 
         Args:
-            as_argument: Whether this term is being rendered as an argument
-                        to another term (e.g., inside a predicate).
+            context: The context in which the Term is being rendered.
 
         Returns:
             str: The string representation of the conditional literal.

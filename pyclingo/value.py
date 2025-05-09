@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Union, overload
 
 from pyclingo.comparison_mixin import ComparisonMixin
 from pyclingo.operators import Operation
-from pyclingo.term import BasicTerm
+from pyclingo.term import BasicTerm, RenderingContext
 
 if TYPE_CHECKING:
     from pyclingo.expression import Comparison, Expression
@@ -188,13 +188,12 @@ class Variable(Value):
         """
         return self._name == "_"
 
-    def render(self, as_argument: bool = False) -> str:
+    def render(self, context: RenderingContext = RenderingContext.DEFAULT) -> str:
         """
         Renders the term as a string in Clingo syntax.
 
         Args:
-            as_argument: Whether this term is being rendered as an argument
-                        to another term (e.g., inside a predicate).
+            context: The context in which the Term is being rendered.
 
         Returns:
             str: The string representation of the variable.
@@ -396,13 +395,12 @@ class Constant(ConstantBase):
         """
         return self._value
 
-    def render(self, as_argument: bool = False) -> str:
+    def render(self, context: RenderingContext = RenderingContext.DEFAULT) -> str:
         """
         Renders the term as a string in Clingo syntax.
 
         Args:
-            as_argument: Whether this term is being rendered as an argument
-                        to another term (e.g., inside a predicate).
+            context: The context in which the Term is being rendered.
 
         Returns:
             str: The string representation of the constant.
@@ -463,13 +461,12 @@ class StringConstant(ConstantBase):
         """
         return self._value
 
-    def render(self, as_argument: bool = False) -> str:
+    def render(self, context: RenderingContext = RenderingContext.DEFAULT) -> str:
         """
         Renders the term as a string in Clingo syntax.
 
         Args:
-            as_argument: Whether this term is being rendered as an argument
-                        to another term (e.g., inside a predicate).
+            context: The context in which the Term is being rendered.
 
         Returns:
             str: The string representation of the constant.
@@ -532,13 +529,12 @@ class SymbolicConstant(ConstantBase):
         """
         return self._value
 
-    def render(self, as_argument: bool = False) -> str:
+    def render(self, context: RenderingContext = RenderingContext.DEFAULT) -> str:
         """
         Renders the term as a string in Clingo syntax.
 
         Args:
-            as_argument: Whether this term is being rendered as an argument
-                        to another term (e.g., inside a predicate).
+            context: The context in which the Term is being rendered.
 
         Returns:
             str: The string representation of the symbolic constant.

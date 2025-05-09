@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Self, Union
 from pyclingo.expression import Comparison
 from pyclingo.negation import ClassicalNegation, NegatedLiteral
 from pyclingo.predicate import Predicate
-from pyclingo.term import Term
+from pyclingo.term import RenderingContext, Term
 from pyclingo.value import Constant, StringConstant, Value, Variable
 
 if TYPE_CHECKING:
@@ -281,13 +281,12 @@ class Choice(Term):
 
         return True
 
-    def render(self, as_argument: bool = False) -> str:
+    def render(self, context: RenderingContext = RenderingContext.DEFAULT) -> str:
         """
         Renders the choice rule as a string in Clingo syntax.
 
         Args:
-            as_argument: Whether this term is being rendered as an argument
-                        (not typically relevant for choice rules).
+            context: The context in which the Term is being rendered.
 
         Returns:
             str: The string representation of the choice rule in Clingo syntax.

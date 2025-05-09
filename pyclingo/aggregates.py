@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, ClassVar, Self, Union
 from pyclingo.comparison_mixin import ComparisonMixin
 from pyclingo.negation import NegatedLiteral
 from pyclingo.predicate import Predicate
-from pyclingo.term import Term
+from pyclingo.term import RenderingContext, Term
 from pyclingo.value import Value
 
 if TYPE_CHECKING:
@@ -152,13 +152,12 @@ class Aggregate(Term, ComparisonMixin, ABC):
 
         return True
 
-    def render(self, as_argument: bool = False) -> str:
+    def render(self, context: RenderingContext = RenderingContext.DEFAULT) -> str:
         """
         Renders the aggregate as a string in Clingo syntax.
 
         Args:
-            as_argument: Whether this term is being rendered as an argument
-                        to another term (e.g., inside a predicate).
+            context: The context in which the Term is being rendered.
 
         Returns:
             str: The string representation of the aggregate in Clingo syntax.
@@ -167,7 +166,7 @@ class Aggregate(Term, ComparisonMixin, ABC):
         elements_str = []
 
         for element_tuple, conditions in self._elements:
-            element_str = ", ".join(elem.render(as_argument=True) for elem in element_tuple)
+            element_str = ", ".join(elem.render() for elem in element_tuple)
 
             # Add conditions if present
             if conditions:

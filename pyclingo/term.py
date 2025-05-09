@@ -1,10 +1,22 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from enum import Enum
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from pyclingo.types import PREDICATE_CLASS_TYPE
+
+
+class RenderingContext(Enum):
+    """
+    Enum for defining rendering contexts where predicates may need to know to surround themselves in parentheses.
+    """
+
+    DEFAULT = "default"
+    LONE_PREDICATE_ARGUMENT = "lone_predicate_argument"
+    NEGATION = "negation"
+    UNARY_NEGATION = "unary_negation"
 
 
 class Term(ABC):
@@ -15,13 +27,15 @@ class Term(ABC):
     """
 
     @abstractmethod
-    def render(self, as_argument: bool = False) -> str:
+    def render(self, context: RenderingContext = RenderingContext.DEFAULT) -> str:
         """
         Renders the term as a string in Clingo syntax.
 
+        Context is used to tell the term the context in which it is being rendered.
+        Terms are responsible for wrapping themselves in parentheses as needed.
+
         Args:
-            as_argument: Whether this term is being rendered as an argument
-                        to another term (e.g., inside a predicate).
+            context: The context in which the Term is being rendered.
 
         Returns:
             str: The string representation of the term in Clingo syntax.
