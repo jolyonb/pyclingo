@@ -123,11 +123,17 @@ class Expression(Term, ComparisonMixin):
         assert self.first_term is not None
         return self.first_term.is_grounded and self.second_term.is_grounded
 
-    def render(self, context: RenderingContext = RenderingContext.DEFAULT) -> str:
+    def render(
+        self,
+        context: RenderingContext = RenderingContext.DEFAULT,
+        parent_op: Operation | None = None,
+        is_right_operand: bool = False,
+    ) -> str:
         """
         Renders the expression as a string in Clingo syntax.
 
-        Handles operator precedence to minimize parentheses.
+        Each expression renders itself with knowledge of how it sits with respect to its parents.
+        Expressions should never look at how their children are situated.
 
         Args:
             context: The context in which the Term is being rendered.
@@ -135,92 +141,54 @@ class Expression(Term, ComparisonMixin):
         Returns:
             str: The string representation of the expression.
         """
-        # TODO: Not happy with the parentheses handling here at all :( Think I want to rewrite
-        # Start by putting parentheses around everything?
-        # Figure out the logical way to handle context
+        # Handle unary operators first
+        if self.operator == Operation.ABS:
+            # No parentheses ever needed; absolute value has its own delimiters
+            return f"|{self.second_term.render(RenderingContext.DEFAULT)}|"
 
-        if self.is_unary:
-            if self.operator == Operation.UNARY_MINUS:
-                second_str = self.second_term.render(context=RenderingContext.UNARY_NEGATION)
-                return f"(-{second_str})" if context == RenderingContext.UNARY_NEGATION else f"-{second_str}"
-            elif self.operator == Operation.ABS:
-                return f"|{self.second_term.render()}|"
-            else:
-                raise ValueError(f"Unknown operator {self.operator}")
+        if self.operator == Operation.UNARY_MINUS:
+            second_str = self.second_term.render(RenderingContext.DEFAULT, self.operator, False)
+            expr = f"-{second_str}"
+            # Need parentheses when it's inside another operation (abs never passes the operation through)
+            needs_outer_parentheses = parent_op is not None
+            return f"({expr})" if needs_outer_parentheses else expr
 
-        # For binary operations
+        # Must be a binary operation
         assert self.first_term is not None
-        first_str = self._render_term_with_precedence(self.first_term, self.operator)
-        second_str = self._render_term_with_precedence(self.second_term, self.operator, is_right=True)
+        first_str = self.first_term.render(RenderingContext.IN_EXPRESSION, self.operator, False)
+        second_str = self.second_term.render(RenderingContext.IN_EXPRESSION, self.operator, True)
 
-        return f"{first_str} {self.operator.value} {second_str}"
+        expr = f"{first_str} {self.operator.value} {second_str}"
 
-    @staticmethod
-    def _render_term_with_precedence(
-        term: VALUE_EXPRESSION_TYPE,
-        parent_op: Operation,
-        is_right: bool = False,
-    ) -> str:
-        """
-        Renders a term with appropriate parentheses based on precedence.
+        # Determine if parentheses are needed
+        needs_parentheses = False
+        if parent_op is not None:
+            current_precedence = PRECEDENCE[self.operator]
+            parent_precedence = PRECEDENCE[parent_op]
 
-        Args:
-            term: The term to render.
-            parent_op: The parent operation.
-            is_right: Whether this is the right operand (for non-commutative ops).
+            if current_precedence < parent_precedence:
+                # Current operation has lower precedence than parent - always needs parentheses
+                needs_parentheses = True
+            elif current_precedence > parent_precedence:
+                # Current operation has higher precedence than parent - never needs parentheses
+                needs_parentheses = False
+            elif current_precedence == parent_precedence:
+                # Same precedence - need to handle carefully
+                if parent_op in NONCOMMUTATIVE_OPERATIONS:
+                    # When we're on the right side of a non-commutative parent operation,
+                    # we always need parentheses for an expression at the same precedence.
+                    # e.g., a - (b - c)
+                    needs_parentheses = is_right_operand
 
-        Returns:
-            str: The rendered term, with parentheses if needed.
-        """
-        term_str = term.render()
+                # Special case: Integer division within multiplication
+                # This is to handle the case where (X * Y) // Z is different from X * (Y // Z)
+                if self.operator == Operation.INTEGER_DIVIDE and parent_op == Operation.MULTIPLY:
+                    # Add parentheses when we're the right side of multiplication
+                    # For cases like X * (Y // Z)
+                    needs_parentheses = is_right_operand
 
-        # Simple terms don't need parentheses
-        if not isinstance(term, Expression):
-            return term_str
-
-        # Unary expressions generally don't need parentheses
-        if term.is_unary:
-            return term_str
-
-        # Check if parentheses are needed based on precedence
-        parent_precedence = PRECEDENCE[parent_op]
-        term_precedence = PRECEDENCE[term.operator]
-
-        needs_parens = False
-
-        # Case 1: Different precedence levels
-        if term_precedence > parent_precedence:
-            needs_parens = True
-
-        # Case 2: Same precedence, but need to check for non-commutative operations
-        elif term_precedence == parent_precedence:
-            if is_right:  # Right-side term
-                # Check if parent and term operation are both in the same category
-                both_multiplicative = parent_op in {Operation.MULTIPLY, Operation.INTEGER_DIVIDE} and term.operator in {
-                    Operation.MULTIPLY,
-                    Operation.INTEGER_DIVIDE,
-                }
-                both_additive = parent_op in {Operation.ADD, Operation.SUBTRACT} and term.operator in {
-                    Operation.ADD,
-                    Operation.SUBTRACT,
-                }
-
-                # For multiplicative operations (*, /), they don't commute freely
-                # e.g., a * (b / c) is different from (a * b) / c
-                if both_multiplicative and parent_op != term.operator:
-                    needs_parens = True
-
-                # For the same non-commutative operation (like -), need parens on right side
-                elif parent_op in NONCOMMUTATIVE_OPERATIONS and parent_op == term.operator:
-                    needs_parens = True
-
-                # For non-commutative operations in additive context
-                elif both_additive and parent_op in NONCOMMUTATIVE_OPERATIONS:
-                    # For subtraction as parent, right operand needs parens
-                    # e.g., a - (b - c) is different from (a - b) - c
-                    needs_parens = True
-
-        return f"({term_str})" if needs_parens else term_str
+        # Apply parentheses if needed
+        return f"({expr})" if needs_parentheses else expr
 
     def validate_in_context(self, is_in_head: bool) -> None:
         """

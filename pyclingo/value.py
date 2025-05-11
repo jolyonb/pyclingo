@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from abc import ABC
+from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Union, overload
 
 from pyclingo.comparison_mixin import ComparisonMixin
@@ -20,6 +20,25 @@ class Value(BasicTerm, ComparisonMixin, ABC):
     Values include variables and constants, representing the most basic
     elements in an ASP program.
     """
+
+    @abstractmethod
+    def render(
+        self,
+        context: RenderingContext = RenderingContext.DEFAULT,
+        parent_op: Operation | None = None,
+        is_right_operand: bool = False,
+    ) -> str:
+        """
+        Renders the term as a string in Clingo syntax.
+
+        Args:
+            context: The context in which the Term is being rendered.
+            Other arguments are ignored, but present to assist with rendering of expressions.
+
+        Returns:
+            str: The string representation of the symbolic constant.
+        """
+        pass
 
     def __add__(self, other: int | VALUE_EXPRESSION_TYPE) -> Expression:
         """
@@ -188,7 +207,12 @@ class Variable(Value):
         """
         return self._name == "_"
 
-    def render(self, context: RenderingContext = RenderingContext.DEFAULT) -> str:
+    def render(
+        self,
+        context: RenderingContext = RenderingContext.DEFAULT,
+        parent_op: Operation | None = None,
+        is_right_operand: bool = False,
+    ) -> str:
         """
         Renders the term as a string in Clingo syntax.
 
@@ -395,7 +419,12 @@ class Constant(ConstantBase):
         """
         return self._value
 
-    def render(self, context: RenderingContext = RenderingContext.DEFAULT) -> str:
+    def render(
+        self,
+        context: RenderingContext = RenderingContext.DEFAULT,
+        parent_op: Operation | None = None,
+        is_right_operand: bool = False,
+    ) -> str:
         """
         Renders the term as a string in Clingo syntax.
 
@@ -461,7 +490,12 @@ class StringConstant(ConstantBase):
         """
         return self._value
 
-    def render(self, context: RenderingContext = RenderingContext.DEFAULT) -> str:
+    def render(
+        self,
+        context: RenderingContext = RenderingContext.DEFAULT,
+        parent_op: Operation | None = None,
+        is_right_operand: bool = False,
+    ) -> str:
         """
         Renders the term as a string in Clingo syntax.
 
@@ -529,7 +563,12 @@ class SymbolicConstant(ConstantBase):
         """
         return self._value
 
-    def render(self, context: RenderingContext = RenderingContext.DEFAULT) -> str:
+    def render(
+        self,
+        context: RenderingContext = RenderingContext.DEFAULT,
+        parent_op: Operation | None = None,
+        is_right_operand: bool = False,
+    ) -> str:
         """
         Renders the term as a string in Clingo syntax.
 

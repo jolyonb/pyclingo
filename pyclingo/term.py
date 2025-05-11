@@ -16,7 +16,7 @@ class RenderingContext(Enum):
     DEFAULT = "default"
     LONE_PREDICATE_ARGUMENT = "lone_predicate_argument"
     NEGATION = "negation"
-    UNARY_NEGATION = "unary_negation"
+    IN_EXPRESSION = "in_expression"
 
 
 class Term(ABC):
