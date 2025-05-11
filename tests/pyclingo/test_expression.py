@@ -86,13 +86,13 @@ def test_deeply_nested_expressions() -> None:
     expr = X + Y * (Z - X) // (Y + Z)
     assert expr.render() == "X + Y * (Z - X) / (Y + Z)"
 
-    # Expression with multiple operations of same precedence
-    expr = X * Y // Z * X
-    assert expr.render() == "X * Y / Z * X"  # Left-to-right evaluation
-
     # Expression with deliberate parenthesization
     expr = X * (Y // (Z * X))
     assert expr.render() == "X * (Y / (Z * X))"
+
+    # Expression with multiple operations of same precedence
+    expr = X * Y // Z * X
+    assert expr.render() == "X * Y / Z * X"  # Left-to-right evaluation
 
 
 def test_precedence_with_subexpressions() -> None:

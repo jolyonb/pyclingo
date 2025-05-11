@@ -19,13 +19,13 @@ BINARY_OPERATIONS = {Operation.ADD, Operation.SUBTRACT, Operation.MULTIPLY, Oper
 NONCOMMUTATIVE_OPERATIONS = {Operation.SUBTRACT, Operation.INTEGER_DIVIDE}
 
 
-# Operator precedence (lower number = higher precedence)
+# Operator precedence (higher number = higher precedence)
 PRECEDENCE = {
-    Operation.UNARY_MINUS: 0,
+    Operation.UNARY_MINUS: 2,
     Operation.MULTIPLY: 1,
     Operation.INTEGER_DIVIDE: 1,
-    Operation.ADD: 2,
-    Operation.SUBTRACT: 2,
+    Operation.ADD: 0,
+    Operation.SUBTRACT: 0,
 }
 
 
