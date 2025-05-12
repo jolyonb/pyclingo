@@ -5,7 +5,7 @@ from aspuzzle.grids.rectangulargrid import RectangularGrid
 from aspuzzle.grids.rendering import BgColor, Color
 from aspuzzle.solvers.base import Solver
 from aspuzzle.symbolset import SymbolSet
-from pyclingo import ANY, Count, Predicate, create_variables
+from pyclingo import ANY, Predicate, create_variables
 
 
 class Cave(Solver):
@@ -19,13 +19,12 @@ class Cave(Solver):
 
         # Define predicates
         Number = Predicate.define("number", ["loc", "value"], show=False)
-        Visible = Predicate.define("visible", ["loc", "dir", "distance"], show=False)
+        CanSee = Predicate.define("can_see", ["from_loc", "dir", "index", "position"], show=False)
 
         # Create variables
-        C, Dir, Dist, T, N = create_variables("C", "Dir", "Dist", "T", "N")
+        C, Dir, Pos, Idx, Delta, N = create_variables("C", "Dir", "Pos", "Idx", "Delta", "N")
         cell = grid.cell()
-        vec = grid.cell(suffix="vec")
-        cell_plus_vec = grid.add_vector_to_cell(cell, vec)
+        cell_seen = grid.cell(suffix="seen")
 
         # Define numbers from the input grid
         puzzle.section("Define numbered cells", segment="Clues")
@@ -52,34 +51,35 @@ class Cave(Solver):
         # Rule 5: Line-of-sight count for numbered cells
         puzzle.section("Line-of-sight counting")
 
-        # Base case: Number cells see adjacent cells in orthogonal directions
+        # Define the base case: a cell can see itself (along all lines it sits on)
         puzzle.when(
             [
                 Number(loc=cell, value=ANY),
-                grid.Direction(name=Dir, vector=vec),
-                grid.OrthogonalDirections(Dir),
-                symbols["cave"](loc=cell_plus_vec),
+                grid.OrderedLine(direction=Dir, index=Idx, position=Pos, loc=cell),
             ],
-            let=Visible(loc=cell, dir=Dir, distance=1),
+            let=CanSee(from_loc=cell, dir=Dir, index=Idx, position=Pos),
         )
 
-        # Recursive case: Continue seeing in the same direction until hitting a wall
-        # TODO: The add_vector_to_cell method with a vec_multiplier might not work on a triangular grid
+        # Define the recursive case: We extend CanSee forwards and backwards whilever there are cave cells
         puzzle.when(
             [
-                Visible(loc=cell, dir=Dir, distance=Dist),
-                grid.Direction(name=Dir, vector=vec),
-                grid.OrthogonalDirections(Dir),
-                symbols["cave"](loc=grid.add_vector_to_cell(cell, vec, vec_multiplier=Dist + 1)),
+                CanSee(from_loc=cell, dir=Dir, index=Idx, position=Pos),
+                grid.OrderedLine(direction=Dir, index=Idx, position=Pos + Delta, loc=cell_seen),
+                Delta.in_([-1, 1]),
+                symbols["cave"](loc=cell_seen),
             ],
-            Visible(loc=cell, dir=Dir, distance=Dist + 1),
+            let=CanSee(from_loc=cell, dir=Dir, index=Idx, position=Pos + Delta),
         )
 
-        # Count constraint: For each numbered cell, the number indicates how many cave cells it can see plus itself
-        count_expr = T == Count(element=(Dir, Dist), condition=Visible(loc=cell, dir=Dir, distance=Dist))
-        puzzle.when(
-            [Number(loc=cell, value=N), count_expr],
-            N == T + 1,  # +1 for the number cell itself
+        # Count constraint: Numbered cells indicate how many cave cells they can see including themselves
+        puzzle.count_constraint(
+            count_over=cell_seen,
+            condition=[
+                CanSee(from_loc=cell, dir=Dir, index=Idx, position=Pos),
+                grid.OrderedLine(direction=Dir, index=Idx, position=Pos, loc=cell_seen),
+            ],
+            when=Number(loc=cell, value=N),
+            exactly=N,
         )
 
         # Supplementary Rule: No checkerboard patterns

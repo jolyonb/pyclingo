@@ -8,7 +8,7 @@ from aspuzzle.puzzle import Puzzle, cached_predicate
 from pyclingo import Min, Not, Predicate, RangePool, create_variables
 
 if TYPE_CHECKING:
-    from pyclingo.types import PREDICATE_RAW_INPUT_TYPE, VALUE_EXPRESSION_TYPE
+    from pyclingo.types import PREDICATE_RAW_INPUT_TYPE
 
 
 class RectangularGrid(Grid):
@@ -165,6 +165,47 @@ class RectangularGrid(Grid):
         )
 
         return Line
+
+    @property
+    @cached_predicate
+    def OrderedLine(self) -> type[Predicate]:
+        """
+        Get the OrderedLine predicate defining major lines in the grid with position ordering.
+
+        For a rectangular grid, this defines rows (direction 'e') and columns (direction 's')
+        with a position parameter indicating the ordinal position along that line.
+        """
+        OrderedLine = Predicate.define(
+            "ordered_line", ["direction", "index", "position", "loc"], namespace=self.namespace, show=False
+        )
+
+        R, C = create_variables("R", "C")
+        cell = self.Cell(row=R, col=C)
+
+        self.section("Define ordered positions along major lines in the grid")
+
+        # For rectangular grids, define rows (direction E) and columns (direction S)
+        # Row lines: all cells in the same row, with column number as position
+        self.when(
+            [
+                cell,
+                R.in_(RangePool(1, self.rows)),
+                C.in_(RangePool(1, self.cols)),
+            ],
+            OrderedLine(direction="e", index=R, position=C, loc=cell),
+        )
+
+        # Column lines: all cells in the same column, with row number as position
+        self.when(
+            [
+                cell,
+                R.in_(RangePool(1, self.rows)),
+                C.in_(RangePool(1, self.cols)),
+            ],
+            OrderedLine(direction="s", index=C, position=R, loc=cell),
+        )
+
+        return OrderedLine
 
     def find_anchor_cell(
         self,
@@ -362,18 +403,13 @@ class RectangularGrid(Grid):
 
         return cells
 
-    def add_vector_to_cell(
-        self, cell_pred: Predicate, vector_pred: Predicate, vec_multiplier: VALUE_EXPRESSION_TYPE | int = 1
-    ) -> Predicate:
+    def add_vector_to_cell(self, cell_pred: Predicate, vector_pred: Predicate) -> Predicate:
         """Add a vector to a cell in rectangular coordinates."""
         # Extract coordinates
         row = getattr(cell_pred, "row")
         col = getattr(cell_pred, "col")
         dr = getattr(vector_pred, "row")
         dc = getattr(vector_pred, "col")
-        if vec_multiplier != 1:
-            dr = dr * vec_multiplier
-            dc = dc * vec_multiplier
 
         # Create new cell with added coordinates
         return self.Cell(row=row + dr, col=col + dc)

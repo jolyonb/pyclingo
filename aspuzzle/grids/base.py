@@ -9,7 +9,7 @@ from pyclingo import ANY, ExplicitPool, Not, Predicate, Variable, create_variabl
 from pyclingo.conditional_literal import ConditionalLiteral
 
 if TYPE_CHECKING:
-    from pyclingo.types import VALUE_EXPRESSION_TYPE
+    pass
 
 # Representing a location and a value
 GridCellData: TypeAlias = tuple[tuple[int, ...], int | str]
@@ -203,6 +203,11 @@ class Grid(Module, ABC):
     def Line(self) -> type[Predicate]:
         """Get the Line predicate defining major lines in the grid."""
 
+    @property
+    @abstractmethod
+    def OrderedLine(self) -> type[Predicate]:
+        """Get the OrderedLine predicate defining major lines in the grid, with position indexing."""
+
     @abstractmethod
     def find_anchor_cell(
         self,
@@ -281,16 +286,13 @@ class Grid(Module, ABC):
         return self.Line(direction=D, index=Idx, loc=self.cell(suffix=loc_suffix))
 
     @abstractmethod
-    def add_vector_to_cell(
-        self, cell_pred: Predicate, vector_pred: Predicate, vec_multiplier: VALUE_EXPRESSION_TYPE | int = 1
-    ) -> Predicate:
+    def add_vector_to_cell(self, cell_pred: Predicate, vector_pred: Predicate) -> Predicate:
         """
         Add a vector to a cell, returning the new cell location.
 
         Args:
             cell_pred: The starting cell predicate
             vector_pred: The vector predicate (as defined in Direction)
-            vec_multiplier: A multiplier for the vector
 
         Returns:
             A new Cell predicate with the vector added
