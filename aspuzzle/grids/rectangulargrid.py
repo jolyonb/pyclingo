@@ -8,7 +8,7 @@ from aspuzzle.puzzle import Puzzle, cached_predicate
 from pyclingo import Min, Not, Predicate, RangePool, create_variables
 
 if TYPE_CHECKING:
-    from pyclingo.types import PREDICATE_RAW_INPUT_TYPE
+    from pyclingo.types import PREDICATE_RAW_INPUT_TYPE, VALUE_EXPRESSION_TYPE
 
 
 class RectangularGrid(Grid):
@@ -362,13 +362,18 @@ class RectangularGrid(Grid):
 
         return cells
 
-    def add_vector_to_cell(self, cell_pred: Predicate, vector_pred: Predicate) -> Predicate:
+    def add_vector_to_cell(
+        self, cell_pred: Predicate, vector_pred: Predicate, vec_multiplier: VALUE_EXPRESSION_TYPE | int = 1
+    ) -> Predicate:
         """Add a vector to a cell in rectangular coordinates."""
         # Extract coordinates
         row = getattr(cell_pred, "row")
         col = getattr(cell_pred, "col")
         dr = getattr(vector_pred, "row")
         dc = getattr(vector_pred, "col")
+        if vec_multiplier != 1:
+            dr = dr * vec_multiplier
+            dc = dc * vec_multiplier
 
         # Create new cell with added coordinates
         return self.Cell(row=row + dr, col=col + dc)

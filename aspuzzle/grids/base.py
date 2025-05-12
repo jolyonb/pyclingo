@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, TypeAlias
+from typing import TYPE_CHECKING, Any, TypeAlias
 
 from aspuzzle.grids.rendering import RenderItem
 from aspuzzle.puzzle import Module, Puzzle, cached_predicate
 from pyclingo import ANY, ExplicitPool, Not, Predicate, Variable, create_variables
 from pyclingo.conditional_literal import ConditionalLiteral
+
+if TYPE_CHECKING:
+    from pyclingo.types import VALUE_EXPRESSION_TYPE
 
 # Representing a location and a value
 GridCellData: TypeAlias = tuple[tuple[int, ...], int | str]
@@ -278,13 +281,16 @@ class Grid(Module, ABC):
         return self.Line(direction=D, index=Idx, loc=self.cell(suffix=loc_suffix))
 
     @abstractmethod
-    def add_vector_to_cell(self, cell_pred: Predicate, vector_pred: Predicate) -> Predicate:
+    def add_vector_to_cell(
+        self, cell_pred: Predicate, vector_pred: Predicate, vec_multiplier: VALUE_EXPRESSION_TYPE | int = 1
+    ) -> Predicate:
         """
         Add a vector to a cell, returning the new cell location.
 
         Args:
             cell_pred: The starting cell predicate
             vector_pred: The vector predicate (as defined in Direction)
+            vec_multiplier: A multiplier for the vector
 
         Returns:
             A new Cell predicate with the vector added
