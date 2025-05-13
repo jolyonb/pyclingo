@@ -1,11 +1,15 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from aspuzzle.grids.base import Grid
+from aspuzzle.grids.rectangulargrid import RectangularGrid
 from aspuzzle.puzzle import Module, Puzzle, cached_predicate
 from pyclingo import ANY, Choice, Count, Not, Predicate, create_variables
 from pyclingo.term import Term
+
+if TYPE_CHECKING:
+    from pyclingo.choice import CHOICE_CONDITION_TYPE
 
 
 class RegionConstructor(Module):
@@ -26,6 +30,9 @@ class RegionConstructor(Module):
         anchor_predicate: type[Predicate] | None = None,
         anchor_fields: dict[str, Any] | None = None,
         allow_regionless: bool = True,
+        forbid_regionless_pools: bool = False,
+        contiguous_regionless: bool = False,
+        non_adjacent_regions: bool = False,
     ):
         """
         Initialize a RegionConstructor module.
@@ -40,23 +47,19 @@ class RegionConstructor(Module):
             anchor_fields: Optional dictionary of field names to values for filtering specific anchors
             allow_regionless: If True, cells can be outside any region
                             If False, all cells must belong to a region
+            forbid_regionless_pools: If True, no regionless pools are allowed (2x2 in rectangular grid)
+            contiguous_regionless: If True, regionless cells must be contiguous
+            non_adjacent_regions: If True, regions cannot be adjacent to each other
         """
         super().__init__(puzzle, name, primary_namespace)
         self.grid = grid
         self._anchor_predicate = anchor_predicate
         self._anchor_fields = anchor_fields or {}
-        self._dynamic_anchors = anchor_predicate is None
-        self._allow_regionless = allow_regionless
-
-    @property
-    def dynamic_anchors(self) -> bool:
-        """Whether this region constructor uses dynamic anchors."""
-        return self._dynamic_anchors
-
-    @property
-    def allow_regionless(self) -> bool:
-        """Whether this region constructor allows cells to be outside any region."""
-        return self._allow_regionless
+        self.dynamic_anchors = anchor_predicate is None
+        self.allow_regionless = allow_regionless
+        self.forbid_regionless_pools = forbid_regionless_pools
+        self.contiguous_regionless = contiguous_regionless
+        self.non_adjacent_regions = non_adjacent_regions
 
     @property
     @cached_predicate
@@ -88,7 +91,7 @@ class RegionConstructor(Module):
     @cached_predicate
     def Region(self) -> type[Predicate]:
         """Get the Region predicate defining which cells belong to which regions."""
-        return Predicate.define("region", ["loc", "anchor"], namespace=self.namespace, show=True)
+        return Predicate.define("region", ["loc", "anchor"], namespace=self.namespace, show=False)
 
     @property
     @cached_predicate
@@ -100,7 +103,7 @@ class RegionConstructor(Module):
     @cached_predicate
     def RegionSize(self) -> type[Predicate]:
         """Get the RegionSize predicate defining the size of each region."""
-        RegionSize = Predicate.define("region_size", ["anchor", "size"], namespace=self.namespace, show=True)
+        RegionSize = Predicate.define("region_size", ["anchor", "size"], namespace=self.namespace, show=False)
 
         # Generate the region size calculation rules
         self.section("Region Size Calculation")
@@ -165,10 +168,10 @@ class RegionConstructor(Module):
         self.section("Connection Rules")
 
         # Connected cells can connect to other orthogonal cells
-        choice_conditions: list[Term] = [self.grid.Orthogonal(cell1=C, cell2=N)]
+        choice_conditions: list[CHOICE_CONDITION_TYPE] = [self.grid.Orthogonal(cell1=C, cell2=N)]
         if self.allow_regionless:
             choice_conditions.append(Not(self.Regionless(loc=N)))
-        choice = Choice(self.ConnectsTo(loc1=C, loc2=N))
+        choice = Choice(self.ConnectsTo(loc1=C, loc2=N), condition=choice_conditions)
         if self.dynamic_anchors:
             # Dynamic anchors: connected cells must have at least one connection (as they're not anchors)
             choice.at_least(1)
@@ -214,4 +217,64 @@ class RegionConstructor(Module):
             # Anchor must be the lexicographically smallest cell in its region
             self.forbid(self.Anchor(loc=C), self.Region(loc=N, anchor=C), N < C)
             # TODO: if this works, then finding an anchor cell in Grid is probably a lot easier than what I'm
-            #       currently doing!
+            #       currently doing! Update: this DOES seem to work, which is impressive!
+
+        # Optional rules
+
+        # Regionless pools
+        if self.forbid_regionless_pools:
+            if isinstance(self.grid, RectangularGrid):
+                self.grid.forbid_2x2_blocks(self.Regionless)  # TODO: Make this use the correct segment output
+            else:
+                raise ValueError("Don't know how to forbid pools with this grid type")
+
+        # Non-adjacent regions
+        if self.non_adjacent_regions:
+            self.section("Regions cannot touch")
+            # Cheapest to express this as "forbid cells next to a region cell that aren't the same region or regionless"
+            # Can also write as "if region(C1, A1) and region(C2, A2), then A1 == A2", but that's more expensive
+            C1, C2 = create_variables("C1", "C2")
+            self.forbid(
+                self.Region(loc=C1, anchor=A),
+                self.grid.Orthogonal(cell1=C1, cell2=C2),
+                Not(self.Region(loc=C2, anchor=A)),
+                Not(self.Regionless(loc=C2)),
+            )
+
+        # Contiguous regionless area
+        if self.contiguous_regionless:
+            # Predicate for connectedness
+            Connected = Predicate.define(
+                "connected_regionless",
+                ["loc"],
+                namespace=self.namespace,
+                show=False,
+            )
+
+            # Create an anchor for the regionless area
+            anchor_pred = self.grid.find_anchor_cell(
+                condition_predicate=self.Regionless,
+                cell_field="loc",
+                anchor_name="regionless_anchor",
+                segment=self._name,
+            )
+
+            self.section("Contiguity for regionless cells")
+
+            # Mark the anchor as connected
+            cell = self.grid.cell()
+            self.when(anchor_pred(loc=cell), Connected(cell))
+
+            # Propagate connectivity
+            C, C_adj = create_variables("C", "C_adj")
+            self.when(
+                [
+                    Connected(loc=C),
+                    self.grid.Orthogonal(cell1=C, cell2=C_adj),
+                    self.Regionless(loc=C_adj),
+                ],
+                Connected(loc=C_adj),
+            )
+
+            # Forbid disconnected regionless cells
+            self.forbid(self.Regionless(loc=C), Not(Connected(loc=C)))

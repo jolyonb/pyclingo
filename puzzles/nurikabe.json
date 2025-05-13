@@ -1,0 +1,70 @@
+{
+  "puzzle_type": "Nurikabe",
+  "grid_type": "RectangularGrid",
+  "grid": [
+    "2.3....",
+    "......4",
+    "....1..",
+    ".....4.",
+    ".......",
+    "..2.2..",
+    ".5....."
+  ],
+  "solutions": [
+    {
+      "stream": [
+        "stream(loc=cell(row=1, col=2))",
+        "stream(loc=cell(row=1, col=4))",
+        "stream(loc=cell(row=2, col=2))",
+        "stream(loc=cell(row=2, col=4))",
+        "stream(loc=cell(row=2, col=5))",
+        "stream(loc=cell(row=2, col=6))",
+        "stream(loc=cell(row=3, col=1))",
+        "stream(loc=cell(row=3, col=2))",
+        "stream(loc=cell(row=3, col=4))",
+        "stream(loc=cell(row=3, col=6))",
+        "stream(loc=cell(row=3, col=7))",
+        "stream(loc=cell(row=4, col=2))",
+        "stream(loc=cell(row=4, col=3))",
+        "stream(loc=cell(row=4, col=4))",
+        "stream(loc=cell(row=4, col=5))",
+        "stream(loc=cell(row=5, col=2))",
+        "stream(loc=cell(row=5, col=4))",
+        "stream(loc=cell(row=5, col=6))",
+        "stream(loc=cell(row=6, col=2))",
+        "stream(loc=cell(row=6, col=4))",
+        "stream(loc=cell(row=6, col=6))",
+        "stream(loc=cell(row=7, col=3))",
+        "stream(loc=cell(row=7, col=4))",
+        "stream(loc=cell(row=7, col=5))",
+        "stream(loc=cell(row=7, col=6))",
+        "stream(loc=cell(row=7, col=7))"
+      ],
+      "island": [
+        "island(loc=cell(row=1, col=1))",
+        "island(loc=cell(row=1, col=3))",
+        "island(loc=cell(row=1, col=5))",
+        "island(loc=cell(row=1, col=6))",
+        "island(loc=cell(row=1, col=7))",
+        "island(loc=cell(row=2, col=1))",
+        "island(loc=cell(row=2, col=3))",
+        "island(loc=cell(row=2, col=7))",
+        "island(loc=cell(row=3, col=3))",
+        "island(loc=cell(row=3, col=5))",
+        "island(loc=cell(row=4, col=1))",
+        "island(loc=cell(row=4, col=6))",
+        "island(loc=cell(row=4, col=7))",
+        "island(loc=cell(row=5, col=1))",
+        "island(loc=cell(row=5, col=3))",
+        "island(loc=cell(row=5, col=5))",
+        "island(loc=cell(row=5, col=7))",
+        "island(loc=cell(row=6, col=1))",
+        "island(loc=cell(row=6, col=3))",
+        "island(loc=cell(row=6, col=5))",
+        "island(loc=cell(row=6, col=7))",
+        "island(loc=cell(row=7, col=1))",
+        "island(loc=cell(row=7, col=2))"
+      ]
+    }
+  ]
+}
