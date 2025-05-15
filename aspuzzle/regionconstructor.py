@@ -33,6 +33,10 @@ class RegionConstructor(Module):
         forbid_regionless_pools: bool = False,
         contiguous_regionless: bool = False,
         non_adjacent_regions: bool = False,
+        forbid_region_pools: bool = False,
+        min_region_size: int | None = None,
+        max_region_size: int | None = None,
+        rectangular_regions: bool = False,
     ):
         """
         Initialize a RegionConstructor module.
@@ -50,6 +54,10 @@ class RegionConstructor(Module):
             forbid_regionless_pools: If True, no regionless pools are allowed (2x2 in rectangular grid)
             contiguous_regionless: If True, regionless cells must be contiguous
             non_adjacent_regions: If True, regions cannot be adjacent to each other
+            forbid_region_pools: If True, no pools allowed in any region (2x2 in rectangular grid)
+            min_region_size: The global minimum region size allowed
+            max_region_size: The global maximum region size allowed
+            rectangular_regions: Whether to force regions to be rectangular (grid-dependent meaning)
         """
         super().__init__(puzzle, name, primary_namespace)
         self.grid = grid
@@ -60,6 +68,10 @@ class RegionConstructor(Module):
         self.forbid_regionless_pools = forbid_regionless_pools
         self.contiguous_regionless = contiguous_regionless
         self.non_adjacent_regions = non_adjacent_regions
+        self.forbid_region_pools = forbid_region_pools
+        self.min_region_size = min_region_size
+        self.max_region_size = max_region_size
+        self.rectangular_regions = rectangular_regions
 
     @property
     @cached_predicate
@@ -223,8 +235,17 @@ class RegionConstructor(Module):
 
         # Regionless pools
         if self.forbid_regionless_pools:
+            self.section("Forbid regionless pools")
             if isinstance(self.grid, RectangularGrid):
                 self.grid.forbid_2x2_blocks(self.Regionless)  # TODO: Make this use the correct segment output
+            else:
+                raise ValueError("Don't know how to forbid pools with this grid type")
+
+        # Region pools
+        if self.forbid_region_pools:
+            self.section("Forbid region pools")
+            if isinstance(self.grid, RectangularGrid):
+                self.grid.forbid_2x2_blocks(self.Region, anchor=A)  # TODO: Make this use the correct segment output
             else:
                 raise ValueError("Don't know how to forbid pools with this grid type")
 
@@ -232,7 +253,7 @@ class RegionConstructor(Module):
         if self.non_adjacent_regions:
             self.section("Regions cannot touch")
             # Cheapest to express this as "forbid cells next to a region cell that aren't the same region or regionless"
-            # Can also write as "if region(C1, A1) and region(C2, A2), then A1 == A2", but that's more expensive
+            # Can write as "if region(C1, A1) and region(C2, A2), then A1 == A2", but that's more expensive to ground
             C1, C2 = create_variables("C1", "C2")
             self.forbid(
                 self.Region(loc=C1, anchor=A),
@@ -278,3 +299,58 @@ class RegionConstructor(Module):
 
             # Forbid disconnected regionless cells
             self.forbid(self.Regionless(loc=C), Not(Connected(loc=C)))
+
+        # Min/Max region sizes
+        if self.min_region_size or self.max_region_size:
+            # Initialize counts if needed
+            _ = self.RegionSize
+            self.section("Min/Max region sizes")
+            if self.min_region_size == self.max_region_size:
+                self.when([self.RegionSize(loc=C, anchor=A, size=N)], let=(N == self.min_region_size))
+            else:
+                if self.min_region_size:
+                    self.when([self.RegionSize(loc=C, anchor=A, size=N)], let=(N >= self.min_region_size))
+                if self.max_region_size:
+                    self.when([self.RegionSize(loc=C, anchor=A, size=N)], let=(N <= self.max_region_size))
+
+        # Rectangular regions
+        if self.rectangular_regions:
+            self.section("Rectangular region constraints")
+
+            if not isinstance(self.grid, RectangularGrid):
+                raise ValueError("Don't know how to force rectangular regions with this grid type")
+
+            # If three corners of a 2x2 are in a region, then the 4th corner must be as well
+            C, R = create_variables("C", "R")
+            self.when(
+                [
+                    self.Region(loc=self.grid.Cell(row=R + 1, col=C), anchor=A),
+                    self.Region(loc=self.grid.Cell(row=R, col=C + 1), anchor=A),
+                    self.Region(loc=self.grid.Cell(row=R + 1, col=C + 1), anchor=A),
+                ],
+                self.Region(loc=self.grid.Cell(row=R, col=C), anchor=A),
+            )
+            self.when(
+                [
+                    self.Region(loc=self.grid.Cell(row=R, col=C), anchor=A),
+                    self.Region(loc=self.grid.Cell(row=R, col=C + 1), anchor=A),
+                    self.Region(loc=self.grid.Cell(row=R + 1, col=C + 1), anchor=A),
+                ],
+                self.Region(loc=self.grid.Cell(row=R + 1, col=C), anchor=A),
+            )
+            self.when(
+                [
+                    self.Region(loc=self.grid.Cell(row=R, col=C), anchor=A),
+                    self.Region(loc=self.grid.Cell(row=R + 1, col=C), anchor=A),
+                    self.Region(loc=self.grid.Cell(row=R + 1, col=C + 1), anchor=A),
+                ],
+                self.Region(loc=self.grid.Cell(row=R, col=C + 1), anchor=A),
+            )
+            self.when(
+                [
+                    self.Region(loc=self.grid.Cell(row=R, col=C), anchor=A),
+                    self.Region(loc=self.grid.Cell(row=R + 1, col=C), anchor=A),
+                    self.Region(loc=self.grid.Cell(row=R, col=C + 1), anchor=A),
+                ],
+                self.Region(loc=self.grid.Cell(row=R + 1, col=C + 1), anchor=A),
+            )
