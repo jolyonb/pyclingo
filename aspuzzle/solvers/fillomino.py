@@ -25,7 +25,7 @@ class Fillomino(Solver):
         )
 
         # Create variables for convenience
-        A, C, C_adj, N, S, A1, A2 = create_variables("A", "C", "C_adj", "N", "S", "A1", "A2")
+        A, C, C_adj, C2, N, S, S2, A1, A2 = create_variables("A", "C", "C_adj", "C2", "N", "S", "S2", "A1", "A2")
 
         # Create the region constructor to construct polyominoes
         region_constructor = RegionConstructor(
@@ -57,6 +57,7 @@ class Fillomino(Solver):
 
         # Rule 3: Ensure that adjacent regions have different sizes
         puzzle.section("Regions with same size cannot touch orthogonally")
+        # Splitting off the separate predicate here is important for performance!
         DifferentRegions = Predicate.define("different_regions", ["cell1", "cell2"], show=False)
         puzzle.when(
             [
@@ -67,6 +68,40 @@ class Fillomino(Solver):
             let=DifferentRegions(cell1=C, cell2=C_adj),
         )
         puzzle.forbid(DifferentRegions(C, C_adj), Number(C, N), Number(C_adj, N))
+
+        # Solver helpers
+        if any(size == 1 for _, size in grid_data):
+            puzzle.section("1 clues must be anchors")
+            puzzle.when(Clue(loc=C, size=1), let=region_constructor.Anchor(loc=C))
+
+        puzzle.section("Adjacent clues with the same value must be in the same region")
+        puzzle.when(
+            [Clue(loc=C, size=S), Clue(loc=C_adj, size=S), grid.Orthogonal(cell1=C, cell2=C_adj)],
+            let=region_constructor.ConnectsTo(loc1=C, loc2=C_adj),
+        )
+
+        puzzle.section("Adjacent clues with different values must be in different regions")
+        puzzle.forbid(
+            Clue(loc=C, size=S),
+            Clue(loc=C_adj, size=S2),
+            S != S2,
+            grid.Orthogonal(cell1=C, cell2=C_adj),
+            region_constructor.ConnectsTo(loc1=C, loc2=C_adj),
+        )
+
+        # These rules did not help the solver
+
+        # puzzle.section("Size-1 regions cannot connect to other cells")
+        # puzzle.forbid(Clue(loc=C, size=1), region_constructor.ConnectsTo(loc1=C, loc2=ANY))
+
+        # puzzle.section("Clues with different numbers cannot have the same anchor")
+        # puzzle.forbid(
+        #     Clue(loc=C, size=S),
+        #     Clue(loc=C2, size=S2),
+        #     region_constructor.Region(loc=C, anchor=A),
+        #     region_constructor.Region(loc=C2, anchor=A),
+        #     S != S2,
+        # )
 
     def get_render_config(self) -> dict[str, Any]:
         """
