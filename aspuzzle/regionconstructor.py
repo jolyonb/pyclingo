@@ -304,12 +304,12 @@ class RegionConstructor(Module):
         if self.min_region_size or self.max_region_size:
             self.section("Min/Max region sizes")
             if self.min_region_size == self.max_region_size:
-                self.when([self.RegionSize(loc=C, anchor=A, size=N)], let=(N == self.min_region_size))
+                self.when([self.RegionSize(anchor=A, size=N)], let=(N == self.min_region_size))
             else:
                 if self.min_region_size:
-                    self.when([self.RegionSize(loc=C, anchor=A, size=N)], let=(N >= self.min_region_size))
+                    self.when([self.RegionSize(anchor=A, size=N)], let=(N >= self.min_region_size))
                 if self.max_region_size:
-                    self.when([self.RegionSize(loc=C, anchor=A, size=N)], let=(N <= self.max_region_size))
+                    self.when([self.RegionSize(anchor=A, size=N)], let=(N <= self.max_region_size))
 
         # Rectangular regions
         if self.rectangular_regions:
