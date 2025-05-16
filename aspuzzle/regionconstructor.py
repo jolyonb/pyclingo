@@ -63,6 +63,7 @@ class RegionConstructor(Module):
         self.grid = grid
         self._anchor_predicate = anchor_predicate
         self._anchor_fields = anchor_fields or {}
+        self._uses_region_size = False
         self.dynamic_anchors = anchor_predicate is None
         self.allow_regionless = allow_regionless
         self.forbid_regionless_pools = forbid_regionless_pools
@@ -116,21 +117,7 @@ class RegionConstructor(Module):
     def RegionSize(self) -> type[Predicate]:
         """Get the RegionSize predicate defining the size of each region."""
         RegionSize = Predicate.define("region_size", ["anchor", "size"], namespace=self.namespace, show=False)
-
-        # Generate the region size calculation rules
-        self.section("Region Size Calculation")
-
-        AnchorCell, Cell, Size = create_variables("Anchor", "Cell", "Size")
-
-        # Count cells in each region
-        self.when(
-            [
-                self.Anchor(loc=AnchorCell),
-                Size == Count(Cell, condition=self.Region(loc=Cell, anchor=AnchorCell)),
-            ],
-            let=RegionSize(anchor=AnchorCell, size=Size),
-        )
-
+        self._uses_region_size = True
         return RegionSize
 
     def finalize(self) -> None:
@@ -221,10 +208,10 @@ class RegionConstructor(Module):
             # Dynamic anchors. This can lead to a complexity explosion, so we use #count aggregates instead of the
             # local rules.
             # All cells must have exactly one anchor
-            conditions = [cell, C == Count(A, condition=self.Region(loc=cell, anchor=A))]
+            conditions = [cell, N == Count(A, condition=self.Region(loc=cell, anchor=A))]
             if self.allow_regionless:
                 conditions.append(Not(self.Regionless(loc=cell)))
-            self.when(conditions, let=(C == 1))
+            self.when(conditions, let=(N == 1))
 
             # Anchor must be the lexicographically smallest cell in its region
             self.forbid(self.Anchor(loc=C), self.Region(loc=N, anchor=C), N < C)
@@ -232,6 +219,19 @@ class RegionConstructor(Module):
             #       currently doing! Update: this DOES seem to work, which is impressive!
 
         # Optional rules
+
+        # Region size rule
+        if self._uses_region_size or self.min_region_size or self.max_region_size:
+            self.section("Region Size Calculation")
+            AnchorCell, Cell, Size = create_variables("Anchor", "Cell", "Size")
+            # Count cells in each region
+            self.when(
+                [
+                    self.Anchor(loc=AnchorCell),
+                    Size == Count(Cell, condition=self.Region(loc=Cell, anchor=AnchorCell)),
+                ],
+                let=self.RegionSize(anchor=AnchorCell, size=Size),
+            )
 
         # Regionless pools
         if self.forbid_regionless_pools:
@@ -302,8 +302,6 @@ class RegionConstructor(Module):
 
         # Min/Max region sizes
         if self.min_region_size or self.max_region_size:
-            # Initialize counts if needed
-            _ = self.RegionSize
             self.section("Min/Max region sizes")
             if self.min_region_size == self.max_region_size:
                 self.when([self.RegionSize(loc=C, anchor=A, size=N)], let=(N == self.min_region_size))
