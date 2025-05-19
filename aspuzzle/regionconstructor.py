@@ -214,7 +214,7 @@ class RegionConstructor(Module):
             self.when(conditions, let=(N == 1))
 
             # Anchor must be the lexicographically smallest cell in its region
-            self.forbid(self.Anchor(loc=C), self.Region(loc=N, anchor=C), N < C)
+            self.forbid(self.Region(loc=C, anchor=A), C < A)
             # TODO: if this works, then finding an anchor cell in Grid is probably a lot easier than what I'm
             #       currently doing! Update: this DOES seem to work, which is impressive!
 
