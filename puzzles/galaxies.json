@@ -1,0 +1,12 @@
+{
+  "puzzle_type": "Galaxies",
+  "grid_type": "RectangularGrid",
+  "grid": [
+    "..b.a.",
+    "...b..",
+    "j..cc.",
+    "jhid..",
+    "....df",
+    "g...e."
+  ]
+}
