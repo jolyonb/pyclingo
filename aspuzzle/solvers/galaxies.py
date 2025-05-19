@@ -17,44 +17,104 @@ class Galaxies(Solver):
 
     solver_name = "Spiral Galaxies solver"
     supported_grid_types = (RectangularGrid,)
-
-    def process_data(self) -> dict[str | int, list[tuple[int, ...]]]:
-        """Process grid data to organize by symbol type"""
-        symbols_dict: dict[str | int, list[tuple[int, ...]]] = {}
-        for loc, symbol in self.grid_data:
-            if symbol not in symbols_dict:
-                symbols_dict[symbol] = []
-            symbols_dict[symbol].append(loc)
-        return symbols_dict
+    supported_symbols = [".", "o", "<", ">", "^", "v", 1, 2, 3, 4]
 
     def validate_config(self) -> None:
         """Validate the puzzle configuration."""
-        symbols_dict = self.process_data()
+        self.process_data()
 
-        for e in symbols_dict:
-            if len(symbols_dict[e]) not in (1, 2):
-                raise ValueError(f"Each symbol must occur either once or twice in the grid. Problem with {e}.")
-            if len(symbols_dict[e]) == 2:
-                # Ensure that symbols are close to each other
-                loc1, loc2 = symbols_dict[e]
-                if abs(loc1[0] - loc2[0]) > 1 or abs(loc1[1] - loc2[1]) > 1:
-                    raise ValueError(f"Symbols must be close to each other. Problem with {e}: {loc1}, {loc2}.")
+    def process_data(self) -> list[tuple[tuple[int, int], tuple[int, int], int]]:
+        """
+        Process the grid data to identify galaxy centers and their positions.
+
+        Returns:
+            List of (center_position1, center_position2, region_id) tuples.
+            For centers in cells, position1 = position2.
+            For centers at edges or corners, position1 and position2 are the adjacent cells that average to the center.
+        """
+        # Parse the grid to find all markers
+        cell_markers = {}
+        for r, row in enumerate(self.config["grid"], 1):
+            for c, symbol in enumerate(row, 1):
+                if symbol != ".":
+                    cell_markers[(r, c)] = symbol
+
+        # Process the markers to identify centers
+        centers: list[tuple[tuple[int, int], tuple[int, int], int]] = []
+        processed = set()
+        region_id = 1
+
+        for (r, c), symbol in cell_markers.items():
+            if (r, c) in processed:
+                continue
+
+            if symbol == "1":
+                # For a "1" cell at (r,c), we need to check if "2", "3", and "4" are present
+                # in their expected positions
+                expected = {
+                    "2": (r, c + 1),  # Top-right
+                    "3": (r + 1, c),  # Bottom-left
+                    "4": (r + 1, c + 1),  # Bottom-right
+                }
+                valid = not any(
+                    pos not in cell_markers or cell_markers[pos] != expected_symbol
+                    for expected_symbol, pos in expected.items()
+                )
+                if not valid:
+                    raise ValueError(f"Incomplete vertex definition at cell ({r}, {c})")
+                centers.append(((r, c), (r + 1, c + 1), region_id))
+                processed.add((r, c))
+                processed.add((r, c + 1))
+                processed.add((r + 1, c))
+                processed.add((r + 1, c + 1))
+                region_id += 1
+
+            elif symbol == "<":
+                # For a "<" cell at (r,c), we need to check if ">" is present next to it
+                if (r, c + 1) not in cell_markers or cell_markers[(r, c + 1)] != ">":
+                    raise ValueError(f"Incomplete vertex definition at cell ({r}, {c})")
+                centers.append(((r, c), (r, c + 1), region_id))
+                processed.add((r, c))
+                processed.add((r, c + 1))
+                region_id += 1
+
+            elif symbol == "^":
+                # For a "^" cell at (r,c), we need to check if "v" is present below it
+                if (r + 1, c) not in cell_markers or cell_markers[(r + 1, c)] != "v":
+                    raise ValueError(f"Incomplete vertex definition at cell ({r}, {c})")
+                centers.append(((r, c), (r + 1, c), region_id))
+                processed.add((r, c))
+                processed.add((r + 1, c))
+                region_id += 1
+
+            elif symbol == "o":
+                centers.append(((r, c), (r, c), region_id))
+                processed.add((r, c))
+                region_id += 1
+
+        # Check for orphaned characters
+        if orphaned := set(cell_markers.keys()) - processed:
+            orphaned_symbols = {pos: cell_markers[pos] for pos in orphaned}
+            raise ValueError(f"Orphaned galaxy markers detected: {orphaned_symbols}")
+
+        return centers
 
     def construct_puzzle(self) -> None:
         """Construct the rules of the puzzle."""
         puzzle, grid, config, grid_data = self.unpack_data()
         assert isinstance(grid, RectangularGrid)
 
-        symbols_dict = self.process_data()
-
         # Define predicates
         Center = Predicate.define("center", ["loc", "loc2", "id"], show=False)
 
         # Define clues - the clues contain cells on either side of the center
-        for region_id, locations in enumerate(symbols_dict.values(), start=1):
-            loc1 = grid.Cell(*locations[0])
-            loc2 = loc1 if len(locations) == 1 else grid.Cell(*locations[1])
-            puzzle.fact(Center(loc=loc1, loc2=loc2, id=region_id), segment="Clues")
+        puzzle.fact(
+            *[
+                Center(loc=grid.Cell(*loc1), loc2=grid.Cell(*loc2), id=region_id)
+                for loc1, loc2, region_id in self.process_data()
+            ],
+            segment="Clues",
+        )
 
         # Divide the grid into regions using the first cell in each clue as an anchor
         region_constructor = RegionConstructor(
@@ -104,8 +164,6 @@ class Galaxies(Solver):
             BgColor.YELLOW,
             BgColor.BRIGHT_BLUE,
             BgColor.BRIGHT_GREEN,
-            BgColor.BRIGHT_RED,
-            BgColor.BRIGHT_MAGENTA,
             BgColor.BRIGHT_CYAN,
             BgColor.BRIGHT_YELLOW,
         ]
@@ -139,10 +197,18 @@ class Galaxies(Solver):
                 )
             ]
 
-        # For the puzzle symbols, show dots for empty cells and circles for centers
         return {
             "puzzle_symbols": {
                 ".": {"symbol": ".", "color": Color.WHITE},  # Dot for empty cells
+                "o": {"symbol": "o", "color": Color.BRIGHT_RED},
+                "^": {"symbol": "^", "color": Color.BRIGHT_RED},
+                "v": {"symbol": "v", "color": Color.BRIGHT_RED},
+                "<": {"symbol": "<", "color": Color.BRIGHT_RED},
+                ">": {"symbol": ">", "color": Color.BRIGHT_RED},
+                1: {"symbol": "/", "color": Color.BRIGHT_RED},
+                2: {"symbol": "\\", "color": Color.BRIGHT_RED},
+                3: {"symbol": "\\", "color": Color.BRIGHT_RED},
+                4: {"symbol": "/", "color": Color.BRIGHT_RED},
             },
             "predicates": {
                 "galaxy": {"custom_renderer": region_renderer},
