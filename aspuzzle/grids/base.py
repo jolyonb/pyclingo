@@ -1,15 +1,12 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, TypeAlias
+from typing import Any, TypeAlias
 
 from aspuzzle.grids.rendering import RenderItem
 from aspuzzle.puzzle import Module, Puzzle, cached_predicate
 from pyclingo import ANY, ExplicitPool, Not, Predicate, Variable, create_variables
 from pyclingo.conditional_literal import ConditionalLiteral
-
-if TYPE_CHECKING:
-    pass
 
 # Representing a location and a value
 GridCellData: TypeAlias = tuple[tuple[int, ...], int | str]
@@ -27,6 +24,10 @@ class Grid(Module, ABC):
         """Initialize a base grid module."""
         super().__init__(puzzle, name, primary_namespace)
         self._has_outside_border: bool = False
+
+    @abstractmethod
+    def with_new_puzzle(self, puzzle: Puzzle) -> Grid:
+        """Return a copy of this Grid with a new puzzle."""
 
     @property
     def has_outside_border(self) -> bool:

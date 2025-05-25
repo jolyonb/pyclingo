@@ -267,6 +267,9 @@ class Solver(ABC):
         Returns:
             ASCII representation of the solution
         """
+        # Perform any additional preprocessing before rendering
+        self._preprocess_for_rendering(solution)
+
         # Preprocess puzzle symbols and predicates
         puzzle_render_items = self._preprocess_puzzle_symbols()
         predicate_render_items = self._preprocess_predicates(solution)
@@ -361,6 +364,13 @@ class Solver(ABC):
                 )
 
         return priority_render_items
+
+    def _preprocess_for_rendering(self, solution: dict[str, list[Predicate]] | None = None) -> None:
+        """
+        Optional preprocessing step before rendering. Intended to be used to cache calculations that can be used in
+        get_rendering_config.
+        """
+        pass
 
     def get_render_config(self) -> dict[str, Any]:
         """

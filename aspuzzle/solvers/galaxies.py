@@ -1,6 +1,7 @@
 from typing import Any
 
 from aspuzzle.grids.rectangulargrid import RectangularGrid
+from aspuzzle.grids.region_coloring import assign_region_colors_from_predicates
 from aspuzzle.grids.rendering import BgColor, Color, RenderItem
 from aspuzzle.regionconstructor import RegionConstructor
 from aspuzzle.solvers.base import Solver
@@ -18,6 +19,7 @@ class Galaxies(Solver):
     solver_name = "Spiral Galaxies solver"
     supported_grid_types = (RectangularGrid,)
     supported_symbols = [".", "o", "<", ">", "^", "v", 1, 2, 3, 4]
+    _region_colors: dict[Any, BgColor] | None = None
 
     def validate_config(self) -> None:
         """Validate the puzzle configuration."""
@@ -147,48 +149,19 @@ class Galaxies(Solver):
         )
 
     def get_render_config(self) -> dict[str, Any]:
-        """
-        Get the rendering configuration for the Galaxies solver.
-
-        Returns:
-            Dictionary with rendering configuration for Galaxies
-        """
-        # Create an array of distinct background colors to cycle through for different regions
-        region_colors = [
-            BgColor.BRIGHT_BLACK,
-            BgColor.BLUE,
-            BgColor.GREEN,
-            BgColor.RED,
-            BgColor.MAGENTA,
-            BgColor.CYAN,
-            BgColor.YELLOW,
-            BgColor.BRIGHT_BLUE,
-            BgColor.BRIGHT_GREEN,
-            BgColor.BRIGHT_CYAN,
-            BgColor.BRIGHT_YELLOW,
-        ]
-
-        # Create a closure to track the color index
-        color_index = [0]
+        """Get the rendering configuration for the Galaxies solver."""
 
         def region_renderer(pred: Predicate) -> list[RenderItem]:
-            """
-            Custom renderer for regions that assigns unique colors based on region ID.
-            Colors cycle through the available palette.
-            """
+            """Custom renderer that uses precomputed colors."""
             region_id = pred["id"].value
 
-            # Use region_id to determine color, if we haven't seen this region before
-            if region_id >= len(color_index):
-                # Add new colors as needed
-                while len(color_index) <= region_id:
-                    color_index.append(color_index[0] % len(region_colors))
-                    color_index[0] += 1
+            # Use precomputed color if available, otherwise fall back
+            if self._region_colors and region_id in self._region_colors:
+                background = self._region_colors[region_id]
+            else:
+                # Fallback - shouldn't happen if preprocess_for_rendering was called
+                background = BgColor.BRIGHT_BLACK
 
-            # Get the background color for this region
-            background = region_colors[color_index[region_id]]
-
-            # Create a render item with the background color
             return [
                 RenderItem(
                     loc=pred["loc"],
@@ -213,5 +186,14 @@ class Galaxies(Solver):
             "predicates": {
                 "galaxy": {"custom_renderer": region_renderer},
             },
-            "join_char": "",  # No space between cells
+            "join_char": "",
         }
+
+    def _preprocess_for_rendering(self, solution: dict[str, list[Predicate]] | None = None) -> None:
+        """Precompute region colors for efficient rendering."""
+        if not solution or "galaxy" not in solution:
+            return
+
+        self._region_colors = assign_region_colors_from_predicates(
+            self.grid, solution["galaxy"], id_field="id", loc_field="loc"
+        )

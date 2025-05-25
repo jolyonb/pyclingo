@@ -31,6 +31,12 @@ class RectangularGrid(Grid):
         self.rows = rows
         self.cols = cols
 
+    def with_new_puzzle(self, puzzle: Puzzle) -> RectangularGrid:
+        """Return a copy of this Grid with a new puzzle."""
+        return type(self)(
+            puzzle=puzzle, rows=self.rows, cols=self.cols, name=self._name, primary_namespace=self._namespace == ""
+        )
+
     @property
     def cell_fields(self) -> list[str]:
         """Returns the list of field names associated with the Cell predicate for this grid"""
@@ -329,7 +335,6 @@ class RectangularGrid(Grid):
             primary_namespace=primary_namespace,
         )
 
-    # In grids/rectangulargrid.py
     def parse_grid(self, grid_data: list[str], map_to_integers: bool = False) -> list[GridCellData]:
         """
         Parse a rectangular grid into organized structures, ignoring any "." characters.
