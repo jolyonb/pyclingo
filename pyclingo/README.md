@@ -1,6 +1,6 @@
-# PyCLingo
+# PyClingo
 
-PyCLingo is a Python library for building clingo ASP (Answer Set Programming) programs with a clean, object-oriented interface.
+PyClingo is a Python library for building clingo ASP (Answer Set Programming) programs with a clean, object-oriented interface.
 
 ## Term Hierarchy
 

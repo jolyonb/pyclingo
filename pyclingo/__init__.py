@@ -1,6 +1,6 @@
 # ruff: noqa: F401
 """
-PyCLingo: A Python library for building clingo ASP (Answer Set Programming) programs
+PyClingo: A Python library for building clingo ASP (Answer Set Programming) programs
 with a clean, object-oriented interface.
 """
 
