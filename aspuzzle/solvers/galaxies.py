@@ -19,7 +19,7 @@ class Galaxies(Solver):
     solver_name = "Spiral Galaxies solver"
     supported_grid_types = (RectangularGrid,)
     supported_symbols = [".", "o", "<", ">", "^", "v", 1, 2, 3, 4]
-    _region_colors: dict[Any, BgColor] | None = None
+    _region_colors: dict[Any, BgColor]
 
     def validate_config(self) -> None:
         """Validate the puzzle configuration."""
@@ -156,7 +156,7 @@ class Galaxies(Solver):
             region_id = pred["id"].value
 
             # Use precomputed color if available, otherwise fall back
-            if self._region_colors and region_id in self._region_colors:
+            if region_id in self._region_colors:
                 background = self._region_colors[region_id]
             else:
                 # Fallback - shouldn't happen if preprocess_for_rendering was called

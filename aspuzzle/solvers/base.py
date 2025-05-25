@@ -64,8 +64,8 @@ class Solver(ABC):
 
         self.create_grid()
         self.validate()
-        # Process grid data (has further validation)
-        _ = self.grid_data
+        _ = self.grid_data  # Preprocess this so it's ready!
+        self._preprocess_config()
 
     def create_grid(self) -> None:
         """Create the grid for this puzzle. Can be overridden by subclasses."""
@@ -106,6 +106,16 @@ class Solver(ABC):
                 self._grid_data = self.grid.parse_grid(self.config["grid"], map_to_integers=self.map_grid_to_integers)
         assert self._grid_data is not None
         return self._grid_data
+
+    def _preprocess_config(self) -> None:
+        """
+        Optional preprocessing step after config validation and grid data parsing.
+
+        This method is called after validate_config() and grid_data property access
+        in __init__. Subclasses can override this to perform additional preprocessing
+        such as region coloring computation.
+        """
+        pass
 
     def unpack_data(self) -> tuple[Puzzle, Grid, dict[str, Any], list[GridCellData]]:
         """

@@ -1,6 +1,7 @@
 from typing import Any
 
-from aspuzzle.grids.rendering import Color, RenderItem
+from aspuzzle.grids.region_coloring import assign_region_colors
+from aspuzzle.grids.rendering import BgColor, Color, RenderItem
 from aspuzzle.solvers.base import Solver
 from pyclingo import ANY, Choice, Count, Predicate, create_variables
 
@@ -9,6 +10,7 @@ class Stitches(Solver):
     solver_name = "Stitches puzzle solver"
     default_config = {"stitch_count": 1}
     map_grid_to_integers = True
+    _region_colors: dict[Any, BgColor]
 
     def construct_puzzle(self) -> None:
         """Construct the rules of the puzzle."""
@@ -107,16 +109,10 @@ class Stitches(Solver):
         """
         # Create an array of distinct colors to cycle through
         stitch_colors = [
-            Color.RED,
-            Color.GREEN,
-            Color.BLUE,
-            Color.YELLOW,
-            Color.MAGENTA,
-            Color.CYAN,
-            Color.BRIGHT_RED,
-            Color.BRIGHT_GREEN,
-            Color.BRIGHT_BLUE,
+            Color.BRIGHT_MAGENTA,
+            Color.BRIGHT_CYAN,
             Color.BRIGHT_YELLOW,
+            Color.BRIGHT_GREEN,
         ]
 
         # Create a closure to track the color index
@@ -133,8 +129,22 @@ class Stitches(Solver):
                 RenderItem(loc=pred["loc2"], symbol="X", color=color),
             ]
 
+        puzzle_symbols = {}
+        for region_id, background_color in self._region_colors.items():
+            puzzle_symbols[region_id] = {"background": background_color, "symbol": "."}
+
         return {
+            "puzzle_symbols": puzzle_symbols,
             "predicates": {
                 "stitch": {"custom_renderer": stitch_renderer},
             },
+            "join_char": "",
         }
+
+    def _preprocess_config(self) -> None:
+        """Precompute region colors for rendering."""
+        regions: dict[Any, list[tuple[int, ...]]] = {}
+        for loc, region_id in self.grid_data:
+            regions.setdefault(region_id, []).append(loc)
+
+        self._region_colors = assign_region_colors(self.grid, regions)

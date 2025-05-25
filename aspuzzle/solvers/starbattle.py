@@ -1,6 +1,7 @@
 from typing import Any
 
-from aspuzzle.grids.rendering import Color
+from aspuzzle.grids.region_coloring import assign_region_colors
+from aspuzzle.grids.rendering import BgColor, Color
 from aspuzzle.solvers.base import Solver
 from aspuzzle.symbolset import SymbolSet
 from pyclingo import ANY, Predicate, create_variables
@@ -10,6 +11,7 @@ class Starbattle(Solver):
     solver_name = "Starbattle puzzle solver"
     default_config = {"star_count": 1}
     map_grid_to_integers = True
+    _region_colors: dict[Any, BgColor]
 
     def construct_puzzle(self) -> None:
         """Construct the rules of the puzzle."""
@@ -63,8 +65,29 @@ class Starbattle(Solver):
         Returns:
             Dictionary with rendering configuration for Star Battle
         """
+        puzzle_symbols = {}
+        for region_id, background_color in self._region_colors.items():
+            puzzle_symbols[region_id] = {"background": background_color, "symbol": "."}
+
         return {
+            "puzzle_symbols": puzzle_symbols,
             "predicates": {
-                "star": {"symbol": "★", "color": Color.YELLOW},
+                "star": {"symbol": "★", "color": Color.BRIGHT_YELLOW},
             },
+            "join_char": "",
         }
+
+    def _preprocess_config(self) -> None:
+        """Precompute region colors for rendering."""
+        regions: dict[Any, list[tuple[int, ...]]] = {}
+        for loc, region_id in self.grid_data:
+            regions.setdefault(region_id, []).append(loc)
+
+        colors = [
+            BgColor.BLUE,
+            BgColor.GREEN,
+            BgColor.RED,
+            BgColor.CYAN,
+        ]
+
+        self._region_colors = assign_region_colors(self.grid, regions, color_palette=colors)
