@@ -361,17 +361,30 @@ class Solver(ABC):
                 default_symbol = render_info.get("symbol", pred_name[0])
                 value_field: str | None = render_info.get("value", None)
 
-                priority_render_items[priority].extend(
-                    [
+                for pred in instances:
+                    if render_info.get("loop_directions"):
+                        # Handle loop directions
+                        dir1_field = render_info.get("dir1_field", "dir1")
+                        dir2_field = render_info.get("dir2_field", "dir2")
+                        dir1 = pred[dir1_field].value
+                        dir2 = pred[dir2_field].value
+                        combined = dir1 + dir2
+                        symbol = self.grid.line_characters.get(combined, None)
+                    elif value_field is not None:
+                        # Handle value field
+                        symbol = str(pred[value_field])
+                    else:
+                        # Use default symbol
+                        symbol = default_symbol
+
+                    priority_render_items[priority].append(
                         RenderItem(
                             loc=pred["loc"],
-                            symbol=str(pred[value_field]) if value_field is not None else default_symbol,
+                            symbol=symbol,
                             color=color,
                             background=background,
                         )
-                        for pred in instances
-                    ]
-                )
+                    )
 
         return priority_render_items
 

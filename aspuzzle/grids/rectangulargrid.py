@@ -67,6 +67,20 @@ class RectangularGrid(Grid):
         return ["n", "e", "s", "w"]
 
     @property
+    def opposite_directions(self) -> list[tuple[str, str]]:
+        """Returns the list of opposite direction names for this grid"""
+        return [
+            ("n", "s"),
+            ("ne", "sw"),
+            ("e", "w"),
+            ("se", "nw"),
+            ("s", "n"),
+            ("sw", "ne"),
+            ("w", "e"),
+            ("nw", "se"),
+        ]
+
+    @property
     def line_direction_names(self) -> list[str]:
         """Returns the list of line direction names for rectangular grid"""
         return ["e", "s"]  # e for rows, s for columns
@@ -75,6 +89,24 @@ class RectangularGrid(Grid):
     def line_direction_descriptions(self) -> dict[str, str]:
         """Returns descriptions for rectangular grid lines"""
         return {"e": "row", "s": "column"}
+
+    @property
+    def line_characters(self) -> dict[str, str]:
+        """Get ASCII line characters for direction combinations in rectangular grids."""
+        return {
+            "ew": "─",  # horizontal line
+            "ns": "│",  # vertical line
+            "es": "┌",  # top-left corner
+            "sw": "┐",  # top-right corner
+            "en": "└",  # bottom-left corner
+            "nw": "┘",  # bottom-right corner
+            "we": "─",  # horizontal line (reverse)
+            "sn": "│",  # vertical line (reverse)
+            "se": "┌",  # top-left corner (reverse)
+            "ws": "┐",  # top-right corner (reverse)
+            "ne": "└",  # bottom-left corner (reverse)
+            "wn": "┘",  # bottom-right corner (reverse)
+        }
 
     def get_line_count(self, direction: str) -> int:
         """Returns the number of lines in the specified direction for a rectangular grid"""

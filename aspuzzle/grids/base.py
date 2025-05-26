@@ -77,6 +77,11 @@ class Grid(Module, ABC):
 
     @property
     @abstractmethod
+    def opposite_directions(self) -> list[tuple[str, str]]:
+        """Returns the list of opposite direction names for this grid"""
+
+    @property
+    @abstractmethod
     def orthogonal_direction_names(self) -> list[str]:
         """Returns the list of orthogonal direction names for this grid"""
 
@@ -89,6 +94,12 @@ class Grid(Module, ABC):
     @abstractmethod
     def line_direction_descriptions(self) -> dict[str, str]:
         """Returns human-readable descriptions of line directions"""
+        pass
+
+    @property
+    @abstractmethod
+    def line_characters(self) -> dict[str, str]:
+        """Get ASCII line characters for direction combination."""
         pass
 
     @abstractmethod
@@ -135,6 +146,16 @@ class Grid(Module, ABC):
 
     @property
     @cached_predicate
+    def Opposite(self) -> type[Predicate]:
+        """Get the Opposite predicate, which identifies which directions are opposites."""
+        Opposite = Predicate.define("opposite", ["direction1", "direction2"], namespace=self.namespace, show=False)
+        self.section("All directions")
+        for dir1, dir2 in self.opposite_directions:
+            self.fact(Opposite(dir1, dir2))
+        return Opposite
+
+    @property
+    @cached_predicate
     def OrthogonalDirections(self) -> type[Predicate]:
         """Get the OrthogonalDirections predicate, identifying orthogonal directions."""
         OrthogonalDirections = Predicate.define("orthogonal_directions", ["name"], namespace=self.namespace, show=False)
@@ -171,6 +192,37 @@ class Grid(Module, ABC):
         )
 
         return Orthogonal
+
+    @property
+    @cached_predicate
+    def OrthogonalDir(self) -> type[Predicate]:
+        """Get the orthogonal adjacency + direction predicate (cells that share an edge)."""
+        OrthogonalDir = Predicate.define(
+            "orthogonal", ["cell1", "direction", "cell2"], namespace=self.namespace, show=False
+        )
+
+        D = create_variables("D")
+        cell = self.cell()
+        vector = self.cell(suffix="vec")
+        cell_plus_vector = self.add_vector_to_cell(cell, vector)
+
+        # Initialize predicates that we'll need
+        _ = self.Direction
+        _ = self.OrthogonalDirections
+
+        self.section("Orthogonal adjacency with direction definition")
+
+        self.when(
+            [
+                cell,
+                self.OrthogonalDirections(D),
+                self.Direction(D, vector=vector),
+                cell_plus_vector,
+            ],
+            OrthogonalDir(cell1=cell, direction=D, cell2=cell_plus_vector),
+        )
+
+        return OrthogonalDir
 
     @property
     @cached_predicate
