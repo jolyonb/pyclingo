@@ -148,3 +148,23 @@ class Numberlink(Solver):
             },
             "join_char": "",
         }
+
+    def validate_config(self) -> None:
+        """Validate the puzzle configuration."""
+        # Check that each symbol appears exactly twice
+        symbol_counts: dict[int | str, int] = {}
+        for row in self.config["grid"]:
+            for symbol in row:
+                if symbol != ".":  # Ignore empty cells
+                    symbol_counts[symbol] = symbol_counts.get(symbol, 0) + 1
+
+        # Check for symbols that don't appear exactly twice
+        invalid_symbols: list[str] = []
+        invalid_symbols.extend(
+            f"'{symbol}' appears {count} times" for symbol, count in symbol_counts.items() if count != 2
+        )
+
+        if invalid_symbols:
+            raise ValueError(
+                f"Each symbol in Numberlink must appear exactly twice. Invalid symbols: {', '.join(invalid_symbols)}"
+            )
