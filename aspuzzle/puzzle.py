@@ -177,10 +177,9 @@ class Puzzle:
         """The number of solutions found, or None if not solved yet."""
         return self._program.solution_count
 
-    @property
-    def statistics(self) -> dict[str, int | float] | None:
-        """Solver statistics after solving, or None if not solved yet."""
-        return self._program.statistics
+    def format_statistics_clingo_style(self) -> str:
+        """Returns formatted solving statistics."""
+        return self._program.format_statistics_clingo_style()
 
     def render(self) -> str:
         """

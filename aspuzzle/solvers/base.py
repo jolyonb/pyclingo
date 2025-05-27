@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import importlib
 import json
-import pprint
 from abc import ABC, abstractmethod
 from typing import Any
 
@@ -193,8 +192,9 @@ class Solver(ABC):
 
     def display_statistics(self) -> None:
         """Display statistics after solving."""
+        formatted_stats = self.puzzle.format_statistics_clingo_style()
         print("\n=== Statistics ===")
-        pprint.pprint(self.puzzle.statistics)
+        print(formatted_stats)
 
     def validate_solutions(self, solutions: list[dict]) -> bool:
         """Validate that solutions found match expected solutions."""

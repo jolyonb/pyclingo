@@ -149,7 +149,7 @@ class Grid(Module, ABC):
     def Opposite(self) -> type[Predicate]:
         """Get the Opposite predicate, which identifies which directions are opposites."""
         Opposite = Predicate.define("opposite", ["direction1", "direction2"], namespace=self.namespace, show=False)
-        self.section("All directions")
+        self.section("Opposite directions")
         for dir1, dir2 in self.opposite_directions:
             self.fact(Opposite(dir1, dir2))
         return Opposite
@@ -198,7 +198,7 @@ class Grid(Module, ABC):
     def OrthogonalDir(self) -> type[Predicate]:
         """Get the orthogonal adjacency + direction predicate (cells that share an edge)."""
         OrthogonalDir = Predicate.define(
-            "orthogonal", ["cell1", "direction", "cell2"], namespace=self.namespace, show=False
+            "orthogonal_dir", ["cell1", "direction", "cell2"], namespace=self.namespace, show=False
         )
 
         D = create_variables("D")

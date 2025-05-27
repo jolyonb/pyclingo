@@ -48,11 +48,13 @@ class Numberlink(Solver):
 
         # Rule 3: If a cell has a path in a direction, the adjacent cell must have a path back
         puzzle.section("Bidirectional path constraint")
-        puzzle.forbid(
-            Path(loc=Cell1, direction=D),
-            grid.OrthogonalDir(cell1=Cell1, cell2=Cell2, direction=D),
-            grid.Opposite(D, OppD),
-            Not(Path(loc=Cell2, direction=OppD)),
+        puzzle.when(
+            [
+                Path(loc=Cell1, direction=D),
+                grid.OrthogonalDir(cell1=Cell1, cell2=Cell2, direction=D),
+                grid.Opposite(D, OppD),
+            ],
+            let=Path(loc=Cell2, direction=OppD),
         )
 
         # Rule 4: Cells with symbols propagate their symbol
@@ -70,9 +72,11 @@ class Numberlink(Solver):
             PropagatedSymbol(loc=Cell2, sym=Sym),
         )
 
-        # Rule 6: Each cell must have exactly one propagated symbol
-        puzzle.section("Unique symbol per cell")
-        puzzle.count_constraint(count_over=Sym, condition=PropagatedSymbol(loc=cell, sym=Sym), when=cell, exactly=1)
+        # Rule 6: Each symbol cannot have another symbol propagated to it
+        puzzle.section("Symbols cannot be connected to different symbols")
+        puzzle.count_constraint(
+            count_over=Sym, condition=PropagatedSymbol(loc=Cell, sym=Sym), when=Symbol(Cell, ANY), exactly=1
+        )
 
         # Rule 7: Orthogonal cells with the same propagated symbol must be connected via path
         puzzle.section("Define connected relationship")
@@ -87,7 +91,7 @@ class Numberlink(Solver):
 
         puzzle.section("No self-touch constraint")
         puzzle.forbid(
-            grid.Orthogonal(cell1=Cell1, cell2=Cell2),
+            grid.OrthogonalDir(cell1=Cell1, direction=ANY, cell2=Cell2),
             PropagatedSymbol(loc=Cell1, sym=Sym),
             PropagatedSymbol(loc=Cell2, sym=Sym),
             Not(Connected(loc1=Cell1, loc2=Cell2)),
