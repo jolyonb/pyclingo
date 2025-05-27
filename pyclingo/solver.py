@@ -394,10 +394,6 @@ class ASPProgram:
         if self._clingo_statistics is None:
             return "No statistics available"
 
-        import pprint
-
-        pprint.pprint(self._clingo_statistics)
-
         stats = self._clingo_statistics  # Raw clingo statistics
 
         # Models and Calls
