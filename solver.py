@@ -18,6 +18,7 @@ def solve(
     visualize: bool = True,
     validate: bool = True,
     output_file: str | None = None,
+    no_output_file: bool = False,
     quiet: bool = False,
 ) -> None:
     """
@@ -34,7 +35,8 @@ def solve(
         display_stats: Whether to display solver statistics
         visualize: Whether to visualize the solution as ASCII
         validate: Whether to validate solutions against expected solutions
-        output_file: Optional file to write the ASP program to
+        output_file: File to write the ASP program to (defaults to solver_scripts/[puzzle_name].pl)
+        no_output_file: Don't write the ASP program to a file
         quiet: Suppress all output except errors
     """
     # Find the file to open
@@ -64,16 +66,28 @@ def solve(
         print(solver.render_puzzle())
 
     # Render the puzzle
+    asp_program = solver.puzzle.render()
     if render and not quiet:
         print("\n=== Clingo Script ===")
-        asp_program = solver.puzzle.render()
         print(asp_program)
 
+    # Save the script to file
+    if not no_output_file:
         if output_file:
             output_path = pathlib.Path(output_file)
-            with open(output_path, "w") as f:
-                f.write(asp_program)
-            print(f"\nASP program written to {output_path}")
+            if not output_path.suffix:
+                output_path = output_path.with_suffix(".pl")
+        else:
+            # Create default output path
+            puzzle_name = pathlib.Path(filename).stem
+            output_dir = pathlib.Path("solver_scripts")
+            output_path = output_dir / f"{puzzle_name}.pl"
+
+        with open(output_path, "w") as f:
+            f.write(asp_program)
+
+        if not quiet:
+            print(f"% (Script program written to {output_path})")
 
     # Solve the puzzle
     if solve_puzzle:
@@ -110,7 +124,10 @@ def main() -> None:
     render_exclusive.add_argument(
         "--render-only", action="store_true", help="Only render the ASP program without solving"
     )
-    render_group.add_argument("--output-file", "-o", help="Write the ASP program to this file")
+    render_group.add_argument(
+        "--output-file", "-o", help="Write the ASP program to this file (default: solver_scripts/[puzzle_name].pl)"
+    )
+    render_group.add_argument("--no-output-file", action="store_true", help="Don't write the ASP program to a file")
 
     # Solve options
     solve_group = parser.add_argument_group("Solving options")
@@ -148,6 +165,7 @@ def main() -> None:
         visualize=not args.no_viz and not args.quiet,
         validate=not args.no_validation and not args.quiet,
         output_file=args.output_file,
+        no_output_file=args.no_output_file,
         quiet=args.quiet,
     )
 
