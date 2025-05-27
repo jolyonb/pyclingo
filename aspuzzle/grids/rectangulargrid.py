@@ -340,7 +340,7 @@ class RectangularGrid(Grid):
         """Create a rectangular grid from configuration."""
         # Get explicit grid parameters if provided
         grid_params = config.get("grid_params", {}).copy()
-        grid: list[str] | None = config.get("grid")
+        grid: list[str] | list[list[str | int]] | None = config.get("grid")
 
         # Determine rows
         if "rows" in grid_params:
@@ -367,12 +367,14 @@ class RectangularGrid(Grid):
             primary_namespace=primary_namespace,
         )
 
-    def parse_grid(self, grid_data: list[str], map_to_integers: bool = False) -> list[GridCellData]:
+    def parse_grid(
+        self, grid_data: list[str] | list[list[str | int]], map_to_integers: bool = False
+    ) -> list[GridCellData]:
         """
         Parse a rectangular grid into organized structures, ignoring any "." characters.
 
         Args:
-            grid_data: The raw grid data as a list of strings
+            grid_data: The raw grid data as a list of strings, or a list of lists of strings or integers
             map_to_integers: Whether to convert symbols to unique integers
 
         Returns:
@@ -381,10 +383,13 @@ class RectangularGrid(Grid):
         rows = self.rows
         cols = self.cols
 
+        # Turn the input grid_data into a list of lists version as necessary
+        clean_grid_data: list[list[str | int]] = [e if isinstance(e, list) else list(e) for e in grid_data]
+
         # Validate grid dimensions
-        if len(grid_data) != rows:
-            raise ValueError(f"Expected {rows} rows in grid, got {len(grid_data)}")
-        for row in grid_data:
+        if len(clean_grid_data) != rows:
+            raise ValueError(f"Expected {rows} rows in grid, got {len(clean_grid_data)}")
+        for row in clean_grid_data:
             if len(row) != cols:
                 raise ValueError(f"Expected {cols} cols in row, got {len(row)}")
 
@@ -392,7 +397,7 @@ class RectangularGrid(Grid):
         if map_to_integers:
             # First, collect all unique symbols
             unique_symbols = set()
-            for row in grid_data:
+            for row in clean_grid_data:
                 for char in row:
                     if char != ".":
                         unique_symbols.add(char)
@@ -403,7 +408,7 @@ class RectangularGrid(Grid):
 
             # Map numeric symbols first
             for symbol in unique_symbols:
-                if symbol.isdigit():
+                if isinstance(symbol, int) or (isinstance(symbol, str) and symbol.isdigit()):
                     id_num = int(symbol)
                     symbol_to_id[symbol] = id_num
                     used_ids.add(id_num)
@@ -421,7 +426,7 @@ class RectangularGrid(Grid):
         # Parse cells
         cells: list[GridCellData] = []
 
-        for r, line in enumerate(grid_data):
+        for r, line in enumerate(clean_grid_data):
             for c, char in enumerate(line):
                 # Special case: ignore "." characters
                 if char == ".":
@@ -432,7 +437,7 @@ class RectangularGrid(Grid):
                 if map_to_integers and char in symbol_to_id:
                     value = symbol_to_id[char]
                 else:
-                    value = int(char) if char.isdigit() else char
+                    value = int(char) if isinstance(char, str) and char.isdigit() else char
 
                 # Add to cells list
                 cell_entry = ((r + 1, c + 1), value)

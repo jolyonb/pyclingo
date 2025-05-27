@@ -153,10 +153,8 @@ class Numberlink(Solver):
         """Validate the puzzle configuration."""
         # Check that each symbol appears exactly twice
         symbol_counts: dict[int | str, int] = {}
-        for row in self.config["grid"]:
-            for symbol in row:
-                if symbol != ".":  # Ignore empty cells
-                    symbol_counts[symbol] = symbol_counts.get(symbol, 0) + 1
+        for loc, symbol in self.grid_data:
+            symbol_counts[symbol] = symbol_counts.get(symbol, 0) + 1
 
         # Check for symbols that don't appear exactly twice
         invalid_symbols: list[str] = []

@@ -47,12 +47,14 @@ class Grid(Module, ABC):
         pass
 
     @abstractmethod
-    def parse_grid(self, grid_data: list[str], map_to_integers: bool = False) -> list[GridCellData]:
+    def parse_grid(
+        self, grid_data: list[str] | list[list[str | int]], map_to_integers: bool = False
+    ) -> list[GridCellData]:
         """
         Parse the grid data into a structured format.
 
         Args:
-            grid_data: The raw grid data as a list of strings
+            grid_data: The raw grid data as a list of strings, or a list of lists of integers or strings
             map_to_integers: Whether to convert symbols to unique integers
 
         Returns:

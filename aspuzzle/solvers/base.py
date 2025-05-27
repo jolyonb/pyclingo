@@ -62,8 +62,8 @@ class Solver(ABC):
         self.config = {**self.default_config, **config}
 
         self.create_grid()
-        self.validate()
         _ = self.grid_data  # Preprocess this so it's ready!
+        self.validate()
         self._preprocess_config()
 
     def create_grid(self) -> None:
@@ -136,15 +136,12 @@ class Solver(ABC):
             return  # Nothing to validate
 
         # Check each cell against supported symbols
-        for r, row in enumerate(self.config["grid"]):
-            for c, symbol in enumerate(row):
-                if symbol.isdigit():
-                    symbol = int(symbol)
-                if symbol not in self.supported_symbols:
-                    raise ValueError(
-                        f"Unsupported symbol '{symbol}' at position ({r + 1}, {c + 1}). "
-                        f"Supported symbols: {', '.join(str(s) for s in self.supported_symbols)}"
-                    )
+        for loc, symbol in self.grid_data:
+            if symbol not in self.supported_symbols:
+                raise ValueError(
+                    f"Unsupported symbol '{symbol}' at position {loc}. "
+                    f"Supported symbols: {', '.join(str(s) for s in self.supported_symbols)}"
+                )
 
     def validate_config(self) -> None:
         """Function to perform extra validation on the puzzle config as needed."""
