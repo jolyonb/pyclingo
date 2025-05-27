@@ -510,10 +510,11 @@ class ASPProgram:
             max_executed = int(jumps_data.get("max_executed", max_jump))
 
             # Calculate averages
-            # Note: there seems to be a bug in clasp's calculation of avg_executed jumps
-            # I opened a bug report: https://github.com/potassco/clasp/issues/111
+            # Note: executed average uses total_jumps as denominator (not executed_jumps)
+            # This represents "average executed levels per jump" across all jumps
+            # See https://github.com/potassco/clasp/issues/111 for a detailed explanation
             avg_total = (total_levels / total_jumps) if total_jumps > 0 else 0
-            avg_executed = (executed_levels / executed_jumps) if executed_jumps > 0 else 0
+            avg_executed = (executed_levels / total_jumps) if total_jumps > 0 else 0
             avg_bounded = (bounded_levels / bounded_jumps) if bounded_jumps > 0 else 0
 
             # Calculate ratios
