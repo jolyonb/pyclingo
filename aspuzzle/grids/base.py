@@ -5,7 +5,7 @@ from typing import Any, TypeAlias
 
 from aspuzzle.grids.rendering import RenderItem
 from aspuzzle.puzzle import Module, Puzzle, cached_predicate
-from pyclingo import ANY, ExplicitPool, Not, Predicate, Variable, create_variables
+from pyclingo import ANY, ExplicitPool, Min, Not, Predicate, Variable, create_variables
 from pyclingo.conditional_literal import ConditionalLiteral
 
 # Representing a location and a value
@@ -263,14 +263,13 @@ class Grid(Module, ABC):
     def OrderedLine(self) -> type[Predicate]:
         """Get the OrderedLine predicate defining major lines in the grid, with position indexing."""
 
-    @abstractmethod
     def find_anchor_cell(
         self,
         condition_predicate: type[Predicate],
         cell_field: str,
         anchor_name: str,
-        fixed_fields: dict[str, Any] | None = None,
-        preserved_fields: list[str] | None = None,
+        condition_fields: dict[str, Any] | None = None,
+        anchor_fields: list[str] | None = None,
         segment: str | None = None,
     ) -> type[Predicate]:
         """
@@ -280,13 +279,52 @@ class Grid(Module, ABC):
             condition_predicate: The predicate class to check
             cell_field: The name of the field that contains the cell location
             anchor_name: Name for the anchor predicate
-            fixed_fields: Dictionary of field names to values for the condition predicate
-            preserved_fields: List of field names from fixed_fields to include in the anchor predicate
+            condition_fields: Dictionary of field names to values to include in the condition predicate
+            anchor_fields: List of field names from condition_fields to include in the anchor predicate
             segment: Segment to publish these rules to
 
         Returns:
             The anchor predicate class that marks the anchor cell
+
+        Example:
+            ```
+            # Find anchor for white cells with specific value
+            anchor = grid.find_anchor_cell(
+                condition_predicate=WhiteCell,
+                cell_field="loc",
+                anchor_name="white_anchor",
+                condition_fields={"value": 5},  # Only white cells with value=5
+                anchor_fields=["value"]         # Include value in anchor predicate
+            )
+            # Creates: white_anchor(loc=min_cell, value=5)
+            ```
         """
+        self.puzzle.section(f"Find anchor cell for {condition_predicate.__name__}", segment=segment)
+
+        if condition_fields is None:
+            condition_fields = {}
+        if anchor_fields is None:
+            anchor_fields = []
+
+        # Validate that anchor_fields are actually in condition_fields
+        for field in anchor_fields:
+            if field not in condition_fields:
+                raise ValueError(f"Anchor field '{field}' not found in condition_fields")
+
+        # Define the anchor predicate
+        AnchorPred = Predicate.define(anchor_name, [cell_field] + anchor_fields, namespace=self.namespace, show=False)
+
+        # Construct the anchor cell
+        Cmin, Cell = create_variables("Cmin", "Cell")
+        self.puzzle.when(
+            [
+                Cmin == Min(Cell, condition=condition_predicate(**{cell_field: Cell}, **condition_fields)),
+            ],
+            AnchorPred(**{cell_field: Cmin}, **{k: v for k, v in condition_fields.items() if k in anchor_fields}),
+            segment=segment,
+        )
+
+        return AnchorPred
 
     def cell(self, suffix: str = "") -> Predicate:
         """Get a cell predicate for this grid with variable values."""

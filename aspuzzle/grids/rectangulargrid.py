@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Any
 from aspuzzle.grids.base import Grid, GridCellData
 from aspuzzle.grids.rendering import BgColor, Color, RenderItem, colorize
 from aspuzzle.puzzle import Puzzle, cached_predicate
-from pyclingo import Min, Not, Predicate, RangePool, create_variables
+from pyclingo import Not, Predicate, RangePool, create_variables
 
 if TYPE_CHECKING:
     from pyclingo.types import PREDICATE_RAW_INPUT_TYPE
@@ -244,90 +244,6 @@ class RectangularGrid(Grid):
         )
 
         return OrderedLine
-
-    def find_anchor_cell(
-        self,
-        condition_predicate: type[Predicate],
-        cell_field: str,
-        anchor_name: str,
-        fixed_fields: dict[str, Any] | None = None,
-        preserved_fields: list[str] | None = None,
-        segment: str | None = None,
-    ) -> type[Predicate]:
-        """
-        Find the lexicographically minimum cell that satisfies the given condition.
-        The anchor is the cell with minimum row, and among those, minimum column.
-
-        Args:
-            condition_predicate: The predicate class to check
-            cell_field: The name of the field that contains the cell location
-            anchor_name: Name for the anchor predicate
-            fixed_fields: Dictionary of field names to values for the condition predicate
-            preserved_fields: List of field names from fixed_fields to include in the anchor predicate
-            segment: Segment to publish these rules to
-
-        Returns:
-            The anchor predicate class that marks the anchor cell
-        """
-        self.puzzle.section(f"Find anchor cell for {condition_predicate.__name__}", segment=segment)
-
-        if fixed_fields is None:
-            fixed_fields = {}
-
-        if preserved_fields is None:
-            preserved_fields = []
-
-        # Validate that preserved fields are actually in fixed_fields
-        for field in preserved_fields:
-            if field not in fixed_fields:
-                raise ValueError(f"Preserved field '{field}' not found in fixed_fields")
-
-        # Define the anchor predicate with the cell field and any preserved fields
-        anchor_field_names = [cell_field] + preserved_fields
-        AnchorPred = Predicate.define(anchor_name, anchor_field_names, namespace=self.namespace, show=False)
-
-        R, C, MinR, MinC = create_variables("R", "C", "MinR", "MinC")
-        cell = self.Cell(row=R, col=C)
-
-        # Build the condition with fixed fields and cell
-        condition_args = {**fixed_fields, cell_field: cell}
-
-        # Find minimum row among cells that satisfy the condition
-        MinRowPred = Predicate.define(
-            f"min_row_for_{anchor_name}", ["row"] + preserved_fields, namespace=self.namespace, show=False
-        )
-
-        # Build arguments for MinRowPred
-        min_row_args = {"row": MinR}
-        for field in preserved_fields:
-            min_row_args[field] = fixed_fields[field]
-
-        # Find the minimum row
-        self.puzzle.when(
-            MinR == Min(R, condition=[condition_predicate(**condition_args), R.in_(RangePool(1, self.rows))]),
-            MinRowPred(**min_row_args),
-            segment=segment,
-        )
-
-        # Find minimum column among cells in the minimum row
-        min_row_condition_args = {**fixed_fields, cell_field: self.Cell(row=MinR, col=C)}
-
-        # Build the final anchor predicate arguments
-        anchor_args = {cell_field: self.Cell(row=MinR, col=MinC)}
-        for field in preserved_fields:
-            anchor_args[field] = fixed_fields[field]
-
-        self.puzzle.when(
-            [
-                MinRowPred(**min_row_args),
-                MinC
-                == Min(C, condition=[condition_predicate(**min_row_condition_args), C.in_(RangePool(1, self.rows))]),
-            ],
-            AnchorPred(**anchor_args),
-            segment=segment,
-        )
-
-        return AnchorPred
 
     @classmethod
     def from_config(

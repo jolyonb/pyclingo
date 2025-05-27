@@ -216,8 +216,8 @@ class SymbolSet(Module):
                 condition_predicate=symbol_pred,
                 cell_field="loc",
                 anchor_name=f"{symbol_name}_anchor",
-                fixed_fields=value_field,
-                preserved_fields=[symbol.value_field] if symbol.value_field else None,
+                condition_fields=value_field,
+                anchor_fields=[symbol.value_field] if symbol.value_field else None,
                 segment=self._name,
             )
             anchor_cell = anchor_pred(loc=self.grid.cell(), **value_field)
