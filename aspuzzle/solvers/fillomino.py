@@ -8,7 +8,7 @@ from pyclingo import Not, Predicate, create_variables
 
 class Fillomino(Solver):
     solver_name = "Fillomino puzzle solver"
-    supported_symbols = list(range(1, 30)) + ["."]  # Support numbers + empty cells
+    max_num: int = 0
 
     def construct_puzzle(self) -> None:
         """Construct the rules of the puzzle."""
@@ -103,6 +103,21 @@ class Fillomino(Solver):
         #     S != S2,
         # )
 
+    def validate_grid_symbols(self) -> None:
+        """Validate that the grid contains only supported symbols."""
+        max_num = 0
+        for loc, symbol in self.grid_data:
+            if isinstance(symbol, int) or symbol.isdigit():
+                val = int(symbol)
+                if val < 1:
+                    raise ValueError(f"Found number {val} in the grid; values must be >= 1.")
+                max_num = max(max_num, val)
+                continue
+            if symbol == ".":
+                continue
+            raise ValueError(f"Unsupported symbol '{symbol}' at position {loc}. Supported symbols: numbers and '.'")
+        self.max_num = max_num
+
     def get_render_config(self) -> dict[str, Any]:
         """
         Get the rendering configuration for the Fillomino solver.
@@ -110,7 +125,7 @@ class Fillomino(Solver):
         Returns:
             Dictionary with rendering configuration for Fillomino
         """
-        # Basic colors for the numbers
+        # Colors for the initial clues
         colors = [
             Color.BLUE,  # 1
             Color.GREEN,  # 2
@@ -123,35 +138,33 @@ class Fillomino(Solver):
             Color.BRIGHT_RED,  # 9
         ]
 
-        # Define backgrounds for each region size
+        # Background colors for solved regions
         backgrounds = [
-            None,  # 1 (no background)
-            BgColor.BRIGHT_BLACK,  # 2
-            BgColor.BLUE,  # 3
-            BgColor.GREEN,  # 4
-            BgColor.RED,  # 5
-            BgColor.MAGENTA,  # 6
-            BgColor.CYAN,  # 7
-            BgColor.YELLOW,  # 8
-            BgColor.WHITE,  # 9
+            BgColor.BLUE,  # 1
+            BgColor.GREEN,  # 2
+            BgColor.RED,  # 3
+            BgColor.MAGENTA,  # 4
+            BgColor.CYAN,  # 5
+            BgColor.YELLOW,  # 6
+            BgColor.BRIGHT_BLUE,  # 7
+            BgColor.BRIGHT_GREEN,  # 8
+            BgColor.BRIGHT_RED,  # 9
         ]
 
-        # Map initial clues to symbols with appropriate colors
-        puzzle_symbols = {i: {"symbol": str(i) if i > 10 else "#", "color": colors[(i - 1) % 9]} for i in range(1, 30)}
+        # Map initial clues to symbols with colors
+        puzzle_symbols = {
+            i: {"symbol": str(i) if i < 10 else "#", "color": colors[(i - 1) % 9]} for i in range(1, self.max_num)
+        }
 
         # Setup predicates for rendering
-        # The actual number will be shown with the appropriate color
-        # The background will help visually identify different regions
         predicates = {
             "number": {
-                "value": "size",
-                "color": None,  # Will use color from puzzle_symbols
                 "custom_renderer": lambda pred: [
                     RenderItem(
                         loc=pred["loc"],
                         symbol=str(pred["size"].value),
-                        color=colors[pred["size"].value - 1] if 1 <= pred["size"].value <= 9 else Color.WHITE,
-                        background=backgrounds[pred["size"].value - 1] if 1 <= pred["size"].value <= 9 else None,
+                        color=Color.BRIGHT_WHITE,
+                        background=backgrounds[(pred["size"].value - 1) % 9],  # Cycle colors for large regions
                     )
                 ],
             }
