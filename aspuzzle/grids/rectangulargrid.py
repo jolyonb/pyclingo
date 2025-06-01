@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from aspuzzle.grids.base import Grid, GridCellData
-from aspuzzle.grids.rendering import BgColor, Color, RenderItem, colorize
+from aspuzzle.grids.rendering import RenderItem, RenderSymbol, colorize
 from aspuzzle.puzzle import Puzzle, cached_predicate
 from pyclingo import Not, Predicate, RangePool, create_variables
 
@@ -472,9 +472,7 @@ class RectangularGrid(Grid):
             ASCII string representation of the grid
         """
         # Initialize grid with dots
-        grid: list[list[tuple[str, Color | None, BgColor | None]]] = [
-            [(".", None, None) for _ in range(self.cols)] for _ in range(self.rows)
-        ]
+        grid: list[list[RenderSymbol]] = [[RenderSymbol(".") for _ in range(self.cols)] for _ in range(self.rows)]
 
         # Combine all render items in priority order
         # Puzzle symbols are lowest priority
@@ -494,26 +492,25 @@ class RectangularGrid(Grid):
             if grid_row < 0 or grid_row >= self.rows or grid_col < 0 or grid_col >= self.cols:
                 continue
 
-            # Get current cell content for preservation
-            current_symbol, current_fg, current_bg = grid[grid_row][grid_col]
-
-            # Combine symbol, foreground, and background with existing content
-            grid[grid_row][grid_col] = (
-                item.symbol or current_symbol,
-                item.color or current_fg,
-                item.background or current_bg,
-            )
+            # Update what we're rendering
+            render_symbol: RenderSymbol = grid[grid_row][grid_col]
+            if item.symbol:
+                render_symbol.symbol = item.symbol
+            if item.color:
+                render_symbol.color = item.color
+            if item.background:
+                render_symbol.bgcolor = item.background
 
         # Convert grid to string
         rows = []
         join_char = render_config.get("join_char", " ")
         for row_in_grid in grid:
             row_str = []
-            for char, color, background in row_in_grid:
+            for render_symbol in row_in_grid:
                 if use_colors:
-                    row_str.append(colorize(char, color, background))
+                    row_str.append(colorize(render_symbol.symbol, render_symbol.color, render_symbol.bgcolor))
                 else:
-                    row_str.append(char)
+                    row_str.append(render_symbol.symbol)
 
             rows.append(join_char.join(row_str))
 

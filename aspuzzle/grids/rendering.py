@@ -108,3 +108,10 @@ class RenderItem:
     symbol: str | None = None
     color: Color | None = None
     background: BgColor | None = None
+
+
+@dataclass
+class RenderSymbol:
+    symbol: str
+    color: Color | None = None
+    bgcolor: BgColor | None = None
