@@ -170,18 +170,19 @@ class Galaxies(Solver):
                 )
             ]
 
+        center_color = Color.RESET
         return {
             "puzzle_symbols": {
-                ".": {"symbol": ".", "color": Color.WHITE},  # Dot for empty cells
-                "o": {"symbol": "o", "color": Color.BRIGHT_RED},
-                "^": {"symbol": "^", "color": Color.BRIGHT_RED},
-                "v": {"symbol": "v", "color": Color.BRIGHT_RED},
-                "<": {"symbol": "<", "color": Color.BRIGHT_RED},
-                ">": {"symbol": ">", "color": Color.BRIGHT_RED},
-                1: {"symbol": "/", "color": Color.BRIGHT_RED},
-                2: {"symbol": "\\", "color": Color.BRIGHT_RED},
-                3: {"symbol": "\\", "color": Color.BRIGHT_RED},
-                4: {"symbol": "/", "color": Color.BRIGHT_RED},
+                ".": {"symbol": ".", "color": Color.BRIGHT_WHITE},
+                "o": {"symbol": "o", "color": center_color},
+                "^": {"symbol": "^", "color": center_color},
+                "v": {"symbol": "v", "color": center_color},
+                "<": {"symbol": "<", "color": center_color},
+                ">": {"symbol": ">", "color": center_color},
+                1: {"symbol": "/", "color": center_color},
+                2: {"symbol": "\\", "color": center_color},
+                3: {"symbol": "\\", "color": center_color},
+                4: {"symbol": "/", "color": center_color},
             },
             "predicates": {
                 "galaxy": {"custom_renderer": region_renderer},
@@ -195,5 +196,9 @@ class Galaxies(Solver):
             return
 
         self._region_colors = assign_region_colors_from_predicates(
-            self.grid, solution["galaxy"], id_field="id", loc_field="loc"
+            self.grid,
+            solution["galaxy"],
+            id_field="id",
+            loc_field="loc",
+            color_palette=[BgColor.YELLOW, BgColor.BRIGHT_BLUE, BgColor.GREEN, BgColor.RED],
         )

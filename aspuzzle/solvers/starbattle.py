@@ -84,7 +84,7 @@ class Starbattle(Solver):
             regions.setdefault(region_id, []).append(loc)
 
         colors = [
-            BgColor.BLUE,
+            BgColor.BRIGHT_BLUE,
             BgColor.GREEN,
             BgColor.RED,
             BgColor.CYAN,

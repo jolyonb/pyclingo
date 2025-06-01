@@ -58,6 +58,6 @@ class Starbattle_Shapeless(Solver):
                 "#": {"color": Color.WHITE},
             },
             "predicates": {
-                "star": {"symbol": "★", "color": Color.YELLOW},
+                "star": {"symbol": "★", "color": Color.BRIGHT_RED},
             },
         }

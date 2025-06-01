@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 from typing import TYPE_CHECKING, Any
 
 from aspuzzle.grids.base import Grid, GridCellData
@@ -471,8 +472,18 @@ class RectangularGrid(Grid):
         Returns:
             ASCII string representation of the grid
         """
+        # Construct the dot representation
+        dot_config = render_config.get("puzzle_symbols", {}).get(".", {})
+        dot = RenderSymbol(
+            symbol=dot_config.get("symbol", "."),
+            color=dot_config.get("color", None),
+            bgcolor=dot_config.get("background", None),
+        )
+
         # Initialize grid with dots
-        grid: list[list[RenderSymbol]] = [[RenderSymbol(".") for _ in range(self.cols)] for _ in range(self.rows)]
+        grid: list[list[RenderSymbol]] = [
+            [dataclasses.replace(dot) for _ in range(self.cols)] for _ in range(self.rows)
+        ]
 
         # Combine all render items in priority order
         # Puzzle symbols are lowest priority
