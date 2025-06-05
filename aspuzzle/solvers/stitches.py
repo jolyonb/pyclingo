@@ -1,7 +1,7 @@
 from typing import Any
 
 from aspuzzle.grids.region_coloring import assign_region_colors
-from aspuzzle.grids.rendering import BgColor, Color, RenderItem
+from aspuzzle.grids.rendering import BgColor, Color, RenderItem, RenderSymbol
 from aspuzzle.solvers.base import Solver
 from pyclingo import ANY, Choice, Count, Predicate, create_variables
 
@@ -131,7 +131,7 @@ class Stitches(Solver):
 
         puzzle_symbols = {}
         for region_id, background_color in self._region_colors.items():
-            puzzle_symbols[region_id] = {"background": background_color, "symbol": "."}
+            puzzle_symbols[region_id] = RenderSymbol(".", bgcolor=background_color)
 
         return {
             "puzzle_symbols": puzzle_symbols,

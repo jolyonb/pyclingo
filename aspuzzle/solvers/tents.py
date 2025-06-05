@@ -1,6 +1,6 @@
 from typing import Any
 
-from aspuzzle.grids.rendering import Color
+from aspuzzle.grids.rendering import Color, RenderSymbol
 from aspuzzle.solvers.base import Solver
 from pyclingo import ANY, Choice, Not, Predicate, create_variables
 
@@ -102,7 +102,7 @@ class Tents(Solver):
         """
         return {
             "puzzle_symbols": {
-                "T": {"symbol": "T", "color": Color.GREEN},
+                "T": RenderSymbol("T", Color.GREEN),
             },
             "predicates": {
                 "tent": {"symbol": "A", "color": Color.YELLOW},

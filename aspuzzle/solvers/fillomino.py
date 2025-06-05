@@ -1,6 +1,6 @@
 from typing import Any
 
-from aspuzzle.grids.rendering import BgColor, Color, RenderItem
+from aspuzzle.grids.rendering import BgColor, Color, RenderItem, RenderSymbol
 from aspuzzle.regionconstructor import RegionConstructor
 from aspuzzle.solvers.base import Solver
 from pyclingo import Not, Predicate, create_variables
@@ -153,7 +153,11 @@ class Fillomino(Solver):
 
         # Map initial clues to symbols with colors
         puzzle_symbols = {
-            i: {"symbol": str(i) if i < 10 else "#", "color": colors[(i - 1) % 9]} for i in range(1, self.max_num)
+            i: RenderSymbol(
+                symbol=str(i) if i < 10 else "#",
+                color=colors[(i - 1) % 9],
+            )
+            for i in range(1, self.max_num)
         }
 
         # Setup predicates for rendering

@@ -1,6 +1,6 @@
 from typing import Any
 
-from aspuzzle.grids.rendering import BgColor, Color
+from aspuzzle.grids.rendering import BgColor, Color, RenderSymbol
 from aspuzzle.solvers.base import Solver
 from aspuzzle.symbolset import SymbolSet
 from pyclingo import Predicate, create_variables
@@ -67,15 +67,15 @@ class Hitori(Solver):
         """
         return {
             "puzzle_symbols": {
-                1: {"symbol": "1", "color": Color.BLUE},
-                2: {"symbol": "2", "color": Color.BLUE},
-                3: {"symbol": "3", "color": Color.BLUE},
-                4: {"symbol": "4", "color": Color.BLUE},
-                5: {"symbol": "5", "color": Color.BLUE},
-                6: {"symbol": "6", "color": Color.BLUE},
-                7: {"symbol": "7", "color": Color.BLUE},
-                8: {"symbol": "8", "color": Color.BLUE},
-                9: {"symbol": "9", "color": Color.BLUE},
+                1: RenderSymbol("1", Color.BLUE),
+                2: RenderSymbol("2", Color.BLUE),
+                3: RenderSymbol("3", Color.BLUE),
+                4: RenderSymbol("4", Color.BLUE),
+                5: RenderSymbol("5", Color.BLUE),
+                6: RenderSymbol("6", Color.BLUE),
+                7: RenderSymbol("7", Color.BLUE),
+                8: RenderSymbol("8", Color.BLUE),
+                9: RenderSymbol("9", Color.BLUE),
             },
             "predicates": {
                 "black": {"symbol": None, "background": BgColor.WHITE},

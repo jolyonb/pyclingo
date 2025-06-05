@@ -473,12 +473,7 @@ class RectangularGrid(Grid):
             ASCII string representation of the grid
         """
         # Construct the dot representation
-        dot_config = render_config.get("puzzle_symbols", {}).get(".", {})
-        dot = RenderSymbol(
-            symbol=dot_config.get("symbol", "."),
-            color=dot_config.get("color", None),
-            bgcolor=dot_config.get("background", None),
-        )
+        dot = render_config.get("puzzle_symbols", {}).get(".", RenderSymbol("."))
 
         # Initialize grid with dots
         grid: list[list[RenderSymbol]] = [

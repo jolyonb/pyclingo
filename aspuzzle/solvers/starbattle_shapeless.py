@@ -1,6 +1,6 @@
 from typing import Any
 
-from aspuzzle.grids.rendering import Color
+from aspuzzle.grids.rendering import Color, RenderSymbol
 from aspuzzle.solvers.base import Solver
 from aspuzzle.symbolset import SymbolSet
 from pyclingo import ANY, Predicate, create_variables
@@ -55,7 +55,7 @@ class Starbattle_Shapeless(Solver):
         """
         return {
             "puzzle_symbols": {
-                "#": {"color": Color.WHITE},
+                "#": RenderSymbol("#", Color.WHITE),
             },
             "predicates": {
                 "star": {"symbol": "★", "color": Color.BRIGHT_RED},

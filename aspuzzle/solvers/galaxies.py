@@ -2,7 +2,7 @@ from typing import Any
 
 from aspuzzle.grids.rectangulargrid import RectangularGrid
 from aspuzzle.grids.region_coloring import assign_region_colors_from_predicates
-from aspuzzle.grids.rendering import BgColor, Color, RenderItem
+from aspuzzle.grids.rendering import BgColor, Color, RenderItem, RenderSymbol
 from aspuzzle.regionconstructor import RegionConstructor
 from aspuzzle.solvers.base import Solver
 from pyclingo import ANY, Not, Predicate, create_variables
@@ -173,16 +173,16 @@ class Galaxies(Solver):
         center_color = Color.RESET
         return {
             "puzzle_symbols": {
-                ".": {"symbol": ".", "color": Color.BRIGHT_WHITE},
-                "o": {"symbol": "o", "color": center_color},
-                "^": {"symbol": "^", "color": center_color},
-                "v": {"symbol": "v", "color": center_color},
-                "<": {"symbol": "<", "color": center_color},
-                ">": {"symbol": ">", "color": center_color},
-                1: {"symbol": "/", "color": center_color},
-                2: {"symbol": "\\", "color": center_color},
-                3: {"symbol": "\\", "color": center_color},
-                4: {"symbol": "/", "color": center_color},
+                ".": RenderSymbol(".", Color.BRIGHT_WHITE),
+                "o": RenderSymbol("o", center_color),
+                "^": RenderSymbol("^", center_color),
+                "v": RenderSymbol("v", center_color),
+                "<": RenderSymbol("<", center_color),
+                ">": RenderSymbol(">", center_color),
+                1: RenderSymbol("/", center_color),
+                2: RenderSymbol("\\", center_color),
+                3: RenderSymbol("\\", center_color),
+                4: RenderSymbol("/", center_color),
             },
             "predicates": {
                 "galaxy": {"custom_renderer": region_renderer},

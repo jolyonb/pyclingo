@@ -1,6 +1,6 @@
 from typing import Any
 
-from aspuzzle.grids.rendering import Color
+from aspuzzle.grids.rendering import Color, RenderSymbol
 from aspuzzle.solvers.base import Solver
 from pyclingo import ANY, Choice, Not, Predicate, create_variables
 
@@ -134,10 +134,10 @@ class Numberlink(Solver):
         ]
 
         puzzle_symbols = {
-            i: {
-                "symbol": str(i) if i <= 9 else "#",
-                "color": colors[(i - 1) % len(colors)],
-            }
+            i: RenderSymbol(
+                symbol=str(i) if i <= 9 else "#",
+                color=colors[(i - 1) % len(colors)],
+            )
             for i in range(1, 100)
         }
 

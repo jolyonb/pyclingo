@@ -1,6 +1,6 @@
 from typing import Any
 
-from aspuzzle.grids.rendering import Color
+from aspuzzle.grids.rendering import Color, RenderSymbol
 from aspuzzle.solvers.base import Solver
 from aspuzzle.symbolset import SymbolSet
 from pyclingo import ANY, Predicate, create_variables
@@ -57,15 +57,15 @@ class Minesweeper(Solver):
         """
         return {
             "puzzle_symbols": {
-                0: {"color": Color.WHITE},
-                1: {"color": Color.BLUE},
-                2: {"color": Color.GREEN},
-                3: {"color": Color.RED},
-                4: {"color": Color.MAGENTA},
-                5: {"color": Color.CYAN},
-                6: {"color": Color.YELLOW},
-                7: {"color": Color.WHITE},
-                8: {"color": Color.WHITE},
+                0: RenderSymbol("0", Color.WHITE),
+                1: RenderSymbol("1", Color.BLUE),
+                2: RenderSymbol("2", Color.GREEN),
+                3: RenderSymbol("3", Color.RED),
+                4: RenderSymbol("4", Color.MAGENTA),
+                5: RenderSymbol("5", Color.CYAN),
+                6: RenderSymbol("6", Color.YELLOW),
+                7: RenderSymbol("7", Color.WHITE),
+                8: RenderSymbol("8", Color.WHITE),
             },
             "predicates": {
                 "mine": {"symbol": "*", "color": Color.RED},

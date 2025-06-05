@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 from typing import Any
 
 from aspuzzle.grids.base import Grid, GridCellData
-from aspuzzle.grids.rendering import RenderItem
+from aspuzzle.grids.rendering import RenderItem, RenderSymbol
 from aspuzzle.puzzle import Puzzle
 from pyclingo import Predicate
 
@@ -295,6 +295,8 @@ class Solver(ABC):
         """
         Preprocess puzzle definition symbols for rendering.
 
+        Expects puzzle_symbols to be a mapping from values to RenderSymbol objects.
+
         Returns:
             List of RenderItem objects ready for rendering
         """
@@ -304,17 +306,18 @@ class Solver(ABC):
         processed_symbols = []
 
         for loc, value in self.grid_data:
-            symbol_config = puzzle_symbols.get(value)
-            if symbol_config is None:
+            render_symbol = puzzle_symbols.get(value)
+            if render_symbol is None:
                 continue
-            assert isinstance(symbol_config, dict)
 
-            display_symbol = symbol_config.get("symbol", str(value))
-            foreground_color = symbol_config.get("color", None)
-            background_color = symbol_config.get("background", None)
+            if not isinstance(render_symbol, RenderSymbol):
+                raise ValueError(f"Expected RenderSymbol for puzzle symbol '{value}', got {type(render_symbol)}")
 
             render_item = RenderItem(
-                loc=self.grid.Cell(*loc), symbol=display_symbol, color=foreground_color, background=background_color
+                loc=self.grid.Cell(*loc),
+                symbol=render_symbol.symbol,
+                color=render_symbol.color,
+                background=render_symbol.bgcolor,
             )
             processed_symbols.append(render_item)
 
@@ -403,7 +406,7 @@ class Solver(ABC):
             Dictionary with rendering configuration
         """
         return {
-            "puzzle_symbols": {},  # Map puzzle values to display symbols
+            "puzzle_symbols": {},  # Map puzzle values to RenderSymbol objects
             "predicates": {},  # Map predicate names to rendering info
         }
 

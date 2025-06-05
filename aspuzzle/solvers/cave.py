@@ -2,7 +2,7 @@ from typing import Any
 
 from aspuzzle.grids.base import do_not_show_outside
 from aspuzzle.grids.rectangulargrid import RectangularGrid
-from aspuzzle.grids.rendering import BgColor, Color
+from aspuzzle.grids.rendering import BgColor, Color, RenderSymbol
 from aspuzzle.solvers.base import Solver
 from aspuzzle.symbolset import SymbolSet
 from pyclingo import ANY, Predicate, create_variables
@@ -94,11 +94,11 @@ class Cave(Solver):
             Dictionary with rendering configuration
         """
         # For numbers 1-9, use the digit as is
-        puzzle_symbols = {i: {"symbol": str(i), "color": Color.BRIGHT_BLUE} for i in range(1, 10)}
+        puzzle_symbols = {i: RenderSymbol(str(i), Color.BRIGHT_BLUE) for i in range(1, 10)}
 
         # For numbers 10+, use # with a distinctive color
         for i in range(10, 30):
-            puzzle_symbols[i] = {"symbol": "#", "color": Color.RED}
+            puzzle_symbols[i] = RenderSymbol("#", Color.RED)
 
         return {
             "puzzle_symbols": puzzle_symbols,

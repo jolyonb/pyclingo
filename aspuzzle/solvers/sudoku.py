@@ -1,7 +1,7 @@
 from typing import Any
 
 from aspuzzle.grids.rectangulargrid import RectangularGrid
-from aspuzzle.grids.rendering import Color
+from aspuzzle.grids.rendering import Color, RenderSymbol
 from aspuzzle.solvers.base import Solver
 from aspuzzle.symbolset import SymbolSet
 from pyclingo import Predicate, RangePool, create_variables
@@ -138,10 +138,10 @@ class Sudoku(Solver):
         grid_size = self.grid.rows
 
         puzzle_symbols = {
-            i: {
-                "symbol": str(i) if i <= 9 else chr(ord("A") + i - 10),
-                "color": Color.BLUE,
-            }
+            i: RenderSymbol(
+                symbol=str(i) if i <= 9 else chr(ord("A") + i - 10),
+                color=Color.BLUE,
+            )
             for i in range(1, grid_size + 1)
         }
 

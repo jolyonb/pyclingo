@@ -2,7 +2,7 @@ from typing import Any
 
 from aspuzzle.grids.base import do_not_show_outside
 from aspuzzle.grids.rectangulargrid import RectangularGrid
-from aspuzzle.grids.rendering import BgColor, Color
+from aspuzzle.grids.rendering import BgColor, Color, RenderSymbol
 from aspuzzle.solvers.base import Solver
 from aspuzzle.symbolset import SymbolSet
 from pyclingo import Not, Predicate, create_variables
@@ -112,12 +112,12 @@ class Slitherlink(Solver):
         """
         return {
             "puzzle_symbols": {
-                0: {"symbol": "0", "color": Color.BRIGHT_BLUE},
-                1: {"symbol": "1", "color": Color.BRIGHT_BLUE},
-                2: {"symbol": "2", "color": Color.BRIGHT_BLUE},
-                3: {"symbol": "3", "color": Color.BRIGHT_BLUE},
-                "S": {"symbol": "S", "color": Color.BRIGHT_WHITE},
-                "W": {"symbol": "W", "color": Color.BRIGHT_RED},
+                0: RenderSymbol("0", Color.BRIGHT_BLUE),
+                1: RenderSymbol("1", Color.BRIGHT_BLUE),
+                2: RenderSymbol("2", Color.BRIGHT_BLUE),
+                3: RenderSymbol("3", Color.BRIGHT_BLUE),
+                "S": RenderSymbol("S", Color.BRIGHT_WHITE),
+                "W": RenderSymbol("W", Color.BRIGHT_RED),
             },
             "predicates": {
                 "inside": {"symbol": None, "background": BgColor.BRIGHT_GREEN},

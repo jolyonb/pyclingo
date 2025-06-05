@@ -1,6 +1,6 @@
 from typing import Any
 
-from aspuzzle.grids.rendering import BgColor, Color
+from aspuzzle.grids.rendering import BgColor, Color, RenderSymbol
 from aspuzzle.regionconstructor import RegionConstructor
 from aspuzzle.solvers.base import Solver
 from pyclingo import ANY, Predicate, create_variables
@@ -67,7 +67,7 @@ class Nurikabe(Solver):
             Dictionary with rendering configuration for Nurikabe
         """
         # For clue numbers, use the digits as is
-        puzzle_symbols = {i: {"symbol": str(i), "color": Color.BRIGHT_BLUE} for i in range(1, 100)}
+        puzzle_symbols = {i: RenderSymbol(str(i), Color.BRIGHT_BLUE) for i in range(1, 100)}
 
         return {
             "puzzle_symbols": puzzle_symbols,
