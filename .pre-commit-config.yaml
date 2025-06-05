@@ -33,6 +33,8 @@ repos:
         entry: pyright
         language: system
         types: [python]
+        env:
+          PYRIGHT_PYTHON_FORCE_VERSION: "1.1.400"
 
       # Run pytest
       - id: pytest
