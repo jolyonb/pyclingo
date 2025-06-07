@@ -482,6 +482,22 @@ class RectangularGrid(Grid):
         Returns:
             ASCII string representation of the grid
         """
+        # Build the grid of render symbols
+        grid = self._build_render_grid(puzzle_render_items, predicate_render_items, render_config)
+
+        # Check if we need complex box drawing
+        if render_config.get("draw_box", False):
+            return self._render_grid_with_boxes(grid, render_config, use_colors)
+        else:
+            return self._render_grid_simple(grid, render_config, use_colors)
+
+    def _build_render_grid(
+        self,
+        puzzle_render_items: list[RenderItem],
+        predicate_render_items: dict[int, list[RenderItem]],
+        render_config: dict[str, Any],
+    ) -> list[list[RenderSymbol]]:
+        """Build the 2D grid of RenderSymbol objects from render items."""
         # Construct the dot representation
         dot = render_config.get("puzzle_symbols", {}).get(".", RenderSymbol("."))
 
@@ -491,9 +507,7 @@ class RectangularGrid(Grid):
         ]
 
         # Combine all render items in priority order
-        # Puzzle symbols are lowest priority
         all_render_items = list(puzzle_render_items)
-        # Add predicate items in priority order
         for priority in sorted(predicate_render_items.keys()):
             all_render_items.extend(predicate_render_items[priority])
 
@@ -517,13 +531,32 @@ class RectangularGrid(Grid):
             if item.background:
                 render_symbol.bgcolor = item.background
 
-        return self._render_grid_to_ascii(grid, render_config, use_colors)
+        return grid
 
-    def _render_grid_to_ascii(
+    @staticmethod
+    def _render_grid_simple(grid: list[list[RenderSymbol]], render_config: dict[str, Any], use_colors: bool) -> str:
+        """Render grid without box drawing - just cells with separators."""
+        join_char = render_config.get("join_char", " ")
+
+        result_lines = []
+        for row_symbols in grid:
+            row_parts = []
+            for symbol in row_symbols:
+                if use_colors:
+                    cell_str = colorize(symbol.symbol, symbol.color, symbol.bgcolor)
+                else:
+                    cell_str = symbol.symbol
+                row_parts.append(cell_str)
+
+            result_lines.append(join_char.join(row_parts))
+
+        return "\n".join(result_lines)
+
+    def _render_grid_with_boxes(
         self, grid: list[list[RenderSymbol]], render_config: dict[str, Any], use_colors: bool
     ) -> str:
         """
-        Convert a grid of RenderSymbol objects to ASCII text with optional box drawing.
+        Convert a grid of RenderSymbol objects to ASCII text with complex box drawing.
 
         Args:
             grid: 2D grid of RenderSymbol objects to render
@@ -531,25 +564,26 @@ class RectangularGrid(Grid):
             use_colors: Whether to apply ANSI color codes
 
         Returns:
-            ASCII string representation of the grid
+            ASCII string representation of the grid with boxes
         """
         join_char = render_config.get("join_char", " ")
         cols_per_box = render_config.get("cols_per_box")
         rows_per_box = render_config.get("rows_per_box")
-        draw_box = render_config.get("draw_box", False)
         line_chars = self.line_characters
 
         # Validate box drawing requirements
-        if draw_box and len(join_char) > 1:
+        if len(join_char) > 1:
             raise ValueError(
                 f"Box drawing requires join_char to be at most 1 character, got {len(join_char)}: {join_char!r}"
             )
 
-        result_lines = []
+        # Precompute the three horizontal line types
+        top_line = self._build_horizontal_line(cols_per_box, join_char, "top")
+        separator_line = self._build_horizontal_line(cols_per_box, join_char, "separator")
+        bottom_line = self._build_horizontal_line(cols_per_box, join_char, "bottom")
 
-        # Add top border if needed
-        if draw_box:
-            result_lines.append(self._build_horizontal_line(cols_per_box, join_char, "top"))
+        # Start with top border
+        result_lines = [top_line]
 
         # Process each grid row
         for r, row_in_grid in enumerate(grid):
@@ -568,23 +602,22 @@ class RectangularGrid(Grid):
                     separator = self._get_separator_char(c, cols_per_box, line_chars["ns"], join_char)
                     row_str.append(separator)
 
-            # Add side borders if needed and add to result
+            # Add side borders and add to result
             content_line = "".join(row_str)
-            if draw_box:
-                content_line = line_chars["ns"] + content_line + line_chars["ns"]
+            content_line = line_chars["ns"] + content_line + line_chars["ns"]
             result_lines.append(content_line)
 
             # Add horizontal separator if needed
             if rows_per_box is not None and (r + 1) % rows_per_box == 0 and r < len(grid) - 1:
-                result_lines.append(self._build_horizontal_line(cols_per_box, join_char, "separator"))
+                result_lines.append(separator_line)
 
-        # Add bottom border if needed
-        if draw_box:
-            result_lines.append(self._build_horizontal_line(cols_per_box, join_char, "bottom"))
+        # Add bottom border
+        result_lines.append(bottom_line)
 
         return "\n".join(result_lines)
 
-    def _get_separator_char(self, col_index: int, cols_per_box: int | None, grid_char: str, normal_char: str) -> str:
+    @staticmethod
+    def _get_separator_char(col_index: int, cols_per_box: int | None, grid_char: str, normal_char: str) -> str:
         """
         Determine which separator character to use between columns.
 
