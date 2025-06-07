@@ -107,6 +107,13 @@ class RectangularGrid(Grid):
             "ws": "┐",  # top-right corner (reverse)
             "ne": "└",  # bottom-left corner (reverse)
             "wn": "┘",  # bottom-right corner (reverse)
+            # Three-line T-junctions (alphabetically sorted)
+            "ens": "├",  # T pointing right
+            "enw": "┴",  # T pointing up
+            "esw": "┬",  # T pointing down
+            "nsw": "┤",  # T pointing left
+            # Four-line cross
+            "ensw": "┼",  # cross/plus
         }
 
     def get_line_count(self, direction: str) -> int:
@@ -467,6 +474,9 @@ class RectangularGrid(Grid):
             predicate_render_items: Dictionary mapping priority levels to lists of RenderItem objects
             render_config: Additional rendering configuration including:
                 - 'join_char': Character to use in joining cells (default: " ")
+                - 'draw_box': Whether to draw a box around the grid (default: False)
+                - 'rows_per_box': Draw horizontal lines every N rows (default: None)
+                - 'cols_per_box': Draw vertical lines every N columns (default: None)
             use_colors: Whether to use ANSI colors in the output
 
         Returns:
@@ -510,14 +520,138 @@ class RectangularGrid(Grid):
         # Convert grid to string
         rows = []
         join_char = render_config.get("join_char", " ")
+        cols_per_box = render_config.get("cols_per_box")
+        line_chars = self.line_characters
+
         for row_in_grid in grid:
             row_str = []
-            for render_symbol in row_in_grid:
+            for c, render_symbol in enumerate(row_in_grid):
                 if use_colors:
-                    row_str.append(colorize(render_symbol.symbol, render_symbol.color, render_symbol.bgcolor))
+                    cell_str = colorize(render_symbol.symbol, render_symbol.color, render_symbol.bgcolor)
                 else:
-                    row_str.append(render_symbol.symbol)
+                    cell_str = render_symbol.symbol
 
-            rows.append(join_char.join(row_str))
+                row_str.append(cell_str)
 
-        return "\n".join(rows)
+                # Add vertical separator after every cols_per_box columns (except the last column)
+                if cols_per_box is not None and (c + 1) % cols_per_box == 0 and c < len(row_in_grid) - 1:
+                    row_str.append(line_chars["ns"])  # vertical line
+                elif c < len(row_in_grid) - 1:
+                    row_str.append(join_char)
+
+            rows.append("".join(row_str))
+
+        return self._add_box_drawing(rows, render_config, join_char)
+
+    def _add_box_drawing(self, rows: list[str], render_config: dict[str, Any], join_char: str) -> str:
+        """
+        Add box drawing around the grid rows with optional internal separators.
+
+        Takes into account the join character, which has already been placed in the rows.
+
+        Note that we add box drawing after placing the join character in the rows, because otherwise the horizontal
+        lines will also get join characters in between them!
+
+        Args:
+            rows: List of rendered grid row strings
+            render_config: Rendering configuration
+            join_char: Character used for joining cells
+
+        Returns:
+            Grid with box drawing applied, or plain grid if draw_box is False
+        """
+        if not rows:
+            return ""
+
+        # Check if we should draw a box around the grid
+        if not render_config.get("draw_box", False):
+            return "\n".join(rows)
+
+        # Box drawing only works with single-character or empty join_char
+        assert len(join_char) <= 1, (
+            f"Box drawing requires join_char to be at most 1 character, got {len(join_char)}: {join_char!r}"
+        )
+
+        cols_per_box = render_config.get("cols_per_box")
+        rows_per_box = render_config.get("rows_per_box")
+        line_chars = self.line_characters
+
+        # Build top and bottom border lines
+        top_line = self._build_horizontal_border_line("top", cols_per_box, join_char)
+        bottom_line = self._build_horizontal_border_line("bottom", cols_per_box, join_char)
+
+        # Wrap content rows with side borders and add horizontal separators
+        boxed_rows = [top_line]
+        for i, row in enumerate(rows):
+            boxed_rows.append(line_chars["ns"] + row + line_chars["ns"])
+
+            # Add horizontal separator if needed
+            if rows_per_box is not None and (i + 1) % rows_per_box == 0 and i < len(rows) - 1:
+                separator_line = self._build_horizontal_separator_line(cols_per_box, join_char)
+                boxed_rows.append(separator_line)
+
+        boxed_rows.append(bottom_line)
+        return "\n".join(boxed_rows)
+
+    def _build_horizontal_border_line(self, border_type: str, cols_per_box: int | None, join_char: str) -> str:
+        """Build top or bottom border line with proper intersections."""
+        line_chars = self.line_characters
+
+        # Calculate full width including borders
+        if cols_per_box:
+            num_vertical_separators = (self.cols - 1) // cols_per_box
+            num_join_chars = (self.cols - 1) - num_vertical_separators
+            content_width = self.cols + num_vertical_separators + num_join_chars * len(join_char)
+        else:
+            content_width = self.cols + (self.cols - 1) * len(join_char)
+
+        full_width = content_width + 2  # Add left and right borders
+
+        # Start with all horizontal lines
+        parts = [line_chars["ew"]] * full_width
+
+        # Set corners
+        if border_type == "top":
+            parts[0] = line_chars["es"]  # top-left corner
+            parts[-1] = line_chars["sw"]  # top-right corner
+            t_junction = line_chars["esw"]  # T pointing down
+        else:  # bottom
+            parts[0] = line_chars["en"]  # bottom-left corner
+            parts[-1] = line_chars["nw"]  # bottom-right corner
+            t_junction = line_chars["enw"]  # T pointing up
+
+        # Add T-junctions for vertical separators if needed
+        if cols_per_box:
+            pos = 1  # Start after left border
+            for c in range(self.cols - 1):  # For each gap between columns
+                pos += 1  # Move past the cell
+                if (c + 1) % cols_per_box == 0:
+                    # This is where a vertical separator goes - place T-junction
+                    parts[pos] = t_junction
+                    pos += 1  # Move past the separator
+                else:
+                    # This is where join_char goes
+                    pos += len(join_char)
+
+        return "".join(parts)
+
+    def _build_horizontal_separator_line(self, cols_per_box: int | None, join_char: str) -> str:
+        """Build horizontal separator line with proper intersections."""
+        line_chars = self.line_characters
+
+        pos = 0
+        parts: list[str] = []
+        for c in range(self.cols):
+            parts.append(line_chars["ew"])
+            pos += 1
+
+            if c < self.cols - 1:  # Not the last column
+                if cols_per_box is not None and (c + 1) % cols_per_box == 0:
+                    parts.append(line_chars["ensw"])  # Cross intersection
+                    pos += 1
+                else:
+                    # Add horizontal line for join characters
+                    parts.extend([line_chars["ew"]] * len(join_char))
+                    pos += len(join_char)
+
+        return "".join([line_chars["ens"]] + parts + [line_chars["nsw"]])

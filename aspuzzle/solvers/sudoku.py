@@ -150,4 +150,7 @@ class Sudoku(Solver):
             "predicates": {
                 "number": {"value": "value", "color": Color.GREEN},
             },
+            "draw_box": True,
+            "rows_per_box": self.block_rows,
+            "cols_per_box": self.block_cols,
         }
