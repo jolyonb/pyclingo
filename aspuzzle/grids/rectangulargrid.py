@@ -577,8 +577,8 @@ class RectangularGrid(Grid):
         line_chars = self.line_characters
 
         # Build top and bottom border lines
-        top_line = self._build_horizontal_border_line("top", cols_per_box, join_char)
-        bottom_line = self._build_horizontal_border_line("bottom", cols_per_box, join_char)
+        top_line = self._build_horizontal_line(cols_per_box, join_char, "top")
+        bottom_line = self._build_horizontal_line(cols_per_box, join_char, "bottom")
 
         # Wrap content rows with side borders and add horizontal separators
         boxed_rows = [top_line]
@@ -587,71 +587,43 @@ class RectangularGrid(Grid):
 
             # Add horizontal separator if needed
             if rows_per_box is not None and (i + 1) % rows_per_box == 0 and i < len(rows) - 1:
-                separator_line = self._build_horizontal_separator_line(cols_per_box, join_char)
+                separator_line = self._build_horizontal_line(cols_per_box, join_char)
                 boxed_rows.append(separator_line)
 
         boxed_rows.append(bottom_line)
         return "\n".join(boxed_rows)
 
-    def _build_horizontal_border_line(self, border_type: str, cols_per_box: int | None, join_char: str) -> str:
-        """Build top or bottom border line with proper intersections."""
+    def _build_horizontal_line(self, cols_per_box: int | None, join_char: str, line_type: str = "separator") -> str:
+        """Build horizontal line (border or separator) with proper intersections."""
         line_chars = self.line_characters
 
-        # Calculate full width including borders
-        if cols_per_box:
-            num_vertical_separators = (self.cols - 1) // cols_per_box
-            num_join_chars = (self.cols - 1) - num_vertical_separators
-            content_width = self.cols + num_vertical_separators + num_join_chars * len(join_char)
+        # Choose junction characters based on line type
+        if line_type == "top":
+            left_char = line_chars["es"]  # top-left corner
+            right_char = line_chars["sw"]  # top-right corner
+            intersection_char = line_chars["esw"]  # T pointing down
+        elif line_type == "bottom":
+            left_char = line_chars["en"]  # bottom-left corner
+            right_char = line_chars["nw"]  # bottom-right corner
+            intersection_char = line_chars["enw"]  # T pointing up
+        elif line_type == "separator":
+            left_char = line_chars["ens"]  # T pointing right
+            right_char = line_chars["nsw"]  # T pointing left
+            intersection_char = line_chars["ensw"]  # cross
         else:
-            content_width = self.cols + (self.cols - 1) * len(join_char)
+            raise ValueError(f"Unknown line type: {line_type}")
 
-        full_width = content_width + 2  # Add left and right borders
-
-        # Start with all horizontal lines
-        parts = [line_chars["ew"]] * full_width
-
-        # Set corners
-        if border_type == "top":
-            parts[0] = line_chars["es"]  # top-left corner
-            parts[-1] = line_chars["sw"]  # top-right corner
-            t_junction = line_chars["esw"]  # T pointing down
-        else:  # bottom
-            parts[0] = line_chars["en"]  # bottom-left corner
-            parts[-1] = line_chars["nw"]  # bottom-right corner
-            t_junction = line_chars["enw"]  # T pointing up
-
-        # Add T-junctions for vertical separators if needed
-        if cols_per_box:
-            pos = 1  # Start after left border
-            for c in range(self.cols - 1):  # For each gap between columns
-                pos += 1  # Move past the cell
-                if (c + 1) % cols_per_box == 0:
-                    # This is where a vertical separator goes - place T-junction
-                    parts[pos] = t_junction
-                    pos += 1  # Move past the separator
-                else:
-                    # This is where join_char goes
-                    pos += len(join_char)
-
-        return "".join(parts)
-
-    def _build_horizontal_separator_line(self, cols_per_box: int | None, join_char: str) -> str:
-        """Build horizontal separator line with proper intersections."""
-        line_chars = self.line_characters
-
-        pos = 0
-        parts: list[str] = []
+        # Build the content part (cells + separators)
+        content_parts: list[str] = []
         for c in range(self.cols):
-            parts.append(line_chars["ew"])
-            pos += 1
+            content_parts.append(line_chars["ew"])  # horizontal line for cell
 
             if c < self.cols - 1:  # Not the last column
                 if cols_per_box is not None and (c + 1) % cols_per_box == 0:
-                    parts.append(line_chars["ensw"])  # Cross intersection
-                    pos += 1
+                    content_parts.append(intersection_char)  # Vertical separator intersection
                 else:
                     # Add horizontal line for join characters
-                    parts.extend([line_chars["ew"]] * len(join_char))
-                    pos += len(join_char)
+                    content_parts.extend([line_chars["ew"]] * len(join_char))
 
-        return "".join([line_chars["ens"]] + parts + [line_chars["nsw"]])
+        # Assemble the full line
+        return left_char + "".join(content_parts) + right_char
