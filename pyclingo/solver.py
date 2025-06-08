@@ -37,31 +37,36 @@ class ASPProgram:
         self._segments: defaultdict[str, list[ProgramElement]] = defaultdict(list)
         self._symbolic_constants: dict[str, int | str] = {}
         self.header = header
-        self.default_segment = default_segment
+        self.default_segment = default_segment.lower()
 
     def add_segment(self, segment: str) -> None:
         """Add a new segment to the program."""
-        if segment in self._segments:
+        # Normalize segment name to lowercase for case-insensitive handling
+        normalized_segment = segment.lower()
+        if normalized_segment in self._segments:
             raise ValueError(f"Segment '{segment}' already exists")
-        self._segments[segment] = []
+        self._segments[normalized_segment] = []
 
     def fact(self, *predicates: Predicate, segment: str | None = None) -> None:
         """Add one or more unconditional facts to the program."""
         assert all(isinstance(predicate, Predicate) for predicate in predicates)
         for predicate in predicates:
-            self._segments[segment or self.default_segment].append(Rule(head=predicate))
+            segment_key = (segment or self.default_segment).lower()
+            self._segments[segment_key].append(Rule(head=predicate))
 
     def when(self, conditions: Term | Sequence[Term], let: Term, segment: str | None = None) -> None:
         """Create a clingo rule which sets the let term when all conditions are satisfied."""
         condition_list = list(conditions) if isinstance(conditions, Sequence) else [conditions]
         assert all(isinstance(condition, Term) for condition in condition_list)
         assert isinstance(let, Term)
-        self._segments[segment or self.default_segment].append(Rule(head=let, body=condition_list))
+        segment_key = (segment or self.default_segment).lower()
+        self._segments[segment_key].append(Rule(head=let, body=condition_list))
 
     def forbid(self, *conditions: Term, segment: str | None = None) -> None:
         """Creates a clingo constraint which forbids the specified combination of conditions."""
         assert all(isinstance(condition, Term) for condition in conditions)
-        self._segments[segment or self.default_segment].append(Rule(body=list(conditions)))
+        segment_key = (segment or self.default_segment).lower()
+        self._segments[segment_key].append(Rule(body=list(conditions)))
 
     def comment(self, text: str, segment: str | None = None) -> None:
         """
@@ -71,11 +76,13 @@ class ASPProgram:
             text: The comment text.
             segment: The segment to add this comment to
         """
-        self._segments[segment or self.default_segment].append(Comment(text))
+        segment_key = (segment or self.default_segment).lower()
+        self._segments[segment_key].append(Comment(text))
 
     def blank_line(self, segment: str | None = None) -> None:
         """Add a blank line to the program for formatting."""
-        self._segments[segment or self.default_segment].append(BlankLine())
+        segment_key = (segment or self.default_segment).lower()
+        self._segments[segment_key].append(BlankLine())
 
     def section(self, title: str, segment: str | None = None) -> None:
         """
