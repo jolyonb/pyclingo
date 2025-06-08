@@ -380,22 +380,32 @@ class RectangularGrid(Grid):
         # Create new cell with added coordinates
         return self.Cell(row=row + dr, col=col + dc)
 
-    def forbid_2x2_blocks(self, symbol_predicate: type[Predicate], **fixed_fields: PREDICATE_RAW_INPUT_TYPE) -> None:
+    def forbid_2x2_blocks(
+        self,
+        symbol_predicate: type[Predicate],
+        fixed_fields: dict[str, PREDICATE_RAW_INPUT_TYPE] | None = None,
+        segment: str | None = None,
+    ) -> None:
         """
         Forbid 2x2 blocks of a specific symbol/predicate in a rectangular grid.
 
         Args:
             symbol_predicate: The predicate class representing the symbol to constrain
-            **fixed_fields: Fixed field values for the predicate (for multi-field predicates)
+            fixed_fields: Fixed field values for the predicate (for multi-field predicates)
+            segment: Optional segment name to publish these rules to
 
         Example:
             # Forbid 2x2 blocks of mines
             grid.forbid_2x2_blocks(symbols["mine"])
 
             # For a predicate with multiple fields, specify which fields to fix
-            grid.forbid_2x2_blocks(symbols["digit"], value=Var)  # Forbid 2x2 blocks of any individual digit
+            grid.forbid_2x2_blocks(symbols["digit"], fixed_fields={"value": Var})
+            # This forbids 2x2 blocks of any individual digit
         """
-        self.puzzle.section(f"Forbid 2x2 blocks of {symbol_predicate.__name__}")
+        if fixed_fields is None:
+            fixed_fields = {}
+
+        self.puzzle.section(f"Forbid 2x2 blocks of {symbol_predicate.__name__}", segment=segment)
 
         R, C = create_variables("R", "C")
         top_left_cell = self.Cell(row=R, col=C)
@@ -410,9 +420,15 @@ class RectangularGrid(Grid):
             symbol_predicate(loc=bottom_right_cell, **fixed_fields),
             top_left_cell,
             bottom_right_cell,
+            segment=segment,
         )
 
-    def forbid_checkerboard(self, symbol_predicate: type[Predicate], **fixed_fields: PREDICATE_RAW_INPUT_TYPE) -> None:
+    def forbid_checkerboard(
+        self,
+        symbol_predicate: type[Predicate],
+        fixed_fields: dict[str, PREDICATE_RAW_INPUT_TYPE] | None = None,
+        segment: str | None = None,
+    ) -> None:
         """
         Forbids a 2x2 block checkerboard pattern of a given predicate in a rectangular grid.
         If the symbol is contiguous and not(symbol) is also contiguous, this configuration is invalid, as
@@ -420,9 +436,15 @@ class RectangularGrid(Grid):
 
         Args:
             symbol_predicate: The predicate class representing the symbol to constrain
-            **fixed_fields: Fixed field values for the predicate (for multi-field predicates)
+            fixed_fields: Fixed field values for the predicate (for multi-field predicates)
+            segment: Optional segment name to publish these rules to
         """
-        self.puzzle.section(f"Forbid disconnecting checkerboard pattern for {symbol_predicate.__name__}")
+        if fixed_fields is None:
+            fixed_fields = {}
+
+        self.puzzle.section(
+            f"Forbid disconnecting checkerboard pattern for {symbol_predicate.__name__}", segment=segment
+        )
 
         R, C = create_variables("R", "C")
         top_left_cell = self.Cell(row=R, col=C)
@@ -443,6 +465,7 @@ class RectangularGrid(Grid):
             Not(bottom_left),
             top_left_cell,
             bottom_right_cell,
+            segment=segment,
         )
 
         # Forbid checkerboard on the other diagonal
@@ -453,6 +476,7 @@ class RectangularGrid(Grid):
             Not(bottom_right),
             top_left_cell,
             bottom_right_cell,
+            segment=segment,
         )
 
     def render_ascii(

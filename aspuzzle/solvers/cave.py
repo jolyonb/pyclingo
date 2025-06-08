@@ -84,7 +84,7 @@ class Cave(Solver):
 
         # Supplementary Rule: No checkerboard patterns
         if isinstance(grid, RectangularGrid):
-            grid.forbid_checkerboard(symbols["cave"])
+            grid.forbid_checkerboard(symbols["cave"], segment=symbols.name)
 
     def get_render_config(self) -> dict[str, Any]:
         """

@@ -237,7 +237,7 @@ class RegionConstructor(Module):
         if self.forbid_regionless_pools:
             self.section("Forbid regionless pools")
             if isinstance(self.grid, RectangularGrid):
-                self.grid.forbid_2x2_blocks(self.Regionless)  # TODO: Make this use the correct segment output
+                self.grid.forbid_2x2_blocks(self.Regionless, segment=self.name)
             else:
                 raise ValueError("Don't know how to forbid pools with this grid type")
 
@@ -245,7 +245,7 @@ class RegionConstructor(Module):
         if self.forbid_region_pools:
             self.section("Forbid region pools")
             if isinstance(self.grid, RectangularGrid):
-                self.grid.forbid_2x2_blocks(self.Region, anchor=A)  # TODO: Make this use the correct segment output
+                self.grid.forbid_2x2_blocks(self.Region, fixed_fields={"anchor": A}, segment=self.name)
             else:
                 raise ValueError("Don't know how to forbid pools with this grid type")
 
@@ -277,7 +277,7 @@ class RegionConstructor(Module):
                 condition_predicate=self.Regionless,
                 cell_field="loc",
                 anchor_name="regionless_anchor",
-                segment=self._name,
+                segment=self.name,
             )
 
             self.section("Contiguity for regionless cells")

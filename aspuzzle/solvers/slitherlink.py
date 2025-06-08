@@ -101,7 +101,7 @@ class Slitherlink(Solver):
 
         # Helper for rectangular grids: no checkerboard patterns
         if isinstance(grid, RectangularGrid):
-            grid.forbid_checkerboard(symbols["inside"])
+            grid.forbid_checkerboard(symbols["inside"], segment=symbols.name)
 
     def get_render_config(self) -> dict[str, Any]:
         """
