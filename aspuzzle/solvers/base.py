@@ -170,9 +170,11 @@ class Solver(ABC):
         if not self.puzzle.satisfiable:
             print("No solutions found")
         else:
-            print(json.dumps(solutions[:2], indent=2, default=repr))
-            if len(solutions) > 2:
-                print(f"(... suppressed ({len(solutions) - 2} more)")
+            # Only show full clingo predicates if there isn't a solution in the config
+            if "solutions" not in self.config:
+                print(json.dumps(solutions[:2], indent=2, default=repr))
+                if len(solutions) > 2:
+                    print(f"(... suppressed ({len(solutions) - 2} more)")
 
             # Visualize the first couple of solutions if requested
             if visualize and solutions:
