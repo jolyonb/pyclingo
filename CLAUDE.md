@@ -53,16 +53,16 @@ Low Level:    clingo       - ASP solver engine
 **Key Usage Patterns**:
 ```bash
 # Basic solving with statistics
-python solver.py minesweeper --stats
+python solveit.py minesweeper --stats
 
 # Render ASP program only (for debugging)
-python solver.py sudoku --render-only
+python solveit.py sudoku --render-only
 
 # Performance testing with limits
-python solver.py fillomino --max-solutions 10 --timeout 30
+python solveit.py fillomino --max-solutions 10 --timeout 30
 
 # Quiet mode for automation
-python solver.py nurikabe --quiet --no-viz
+python solveit.py nurikabe --quiet --no-viz
 ```
 
 **Optimization Workflow**: Use `solver.py` repeatedly with different rule implementations to compare performance:
@@ -161,7 +161,7 @@ When a puzzle solver is too slow, follow this systematic workflow:
 **Step 1: Baseline Performance Check**
 ```bash
 # Get timing statistics for your puzzle
-python solver.py puzzle --stats
+python solveit.py puzzle --stats
 ```
 - **Target**: 10×10 puzzle should solve in < 0.1s in most cases
 - If significantly slower, investigate scaling issues
@@ -170,9 +170,9 @@ python solver.py puzzle --stats
 Test the same puzzle type with different grid sizes:
 ```bash
 # Test different sizes if possible
-python solver.py small_puzzle --stats    # e.g., 5×5
-python solver.py medium_puzzle --stats   # e.g., 10×10  
-python solver.py large_puzzle --stats    # e.g., 15×15
+python solveit.py small_puzzle --stats    # e.g., 5×5
+python solveit.py medium_puzzle --stats   # e.g., 10×10  
+python solveit.py large_puzzle --stats    # e.g., 15×15
 ```
 - Compare solve times: should scale roughly O(N²) where N = number of cells
 - If scaling > O(N²), you have grounding explosion
@@ -187,7 +187,7 @@ Look at the generated .pl file and analyze each predicate:
 For fast debugging without Python overhead:
 ```bash
 # Generate ASP file once
-python solver.py puzzle --render-only
+python solveit.py puzzle --render-only
 # Test modifications directly with clingo
 python -m clingo solver_scripts/puzzle.pl -n 0
 ```
@@ -203,7 +203,7 @@ Focus on rules with poor scaling:
 
 **Step 6: Verify Improvement**
 ```bash
-python solver.py puzzle --stats
+python solveit.py puzzle --stats
 ```
 - Confirm improved scaling with larger grid sizes
 - Ensure solution correctness is maintained
