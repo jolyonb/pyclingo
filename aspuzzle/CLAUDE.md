@@ -50,3 +50,25 @@ A `Module` for managing symbols that can be placed in grid cells:
 3. **Grid Integration**: Seamless integration with various grid types through abstract interfaces
 4. **Performance Optimized**: Cached predicates and efficient rule generation
 5. **Extensible**: Easy to add new modules and extend existing functionality
+
+## Design Philosophy
+
+### Grid-Agnostic Puzzle Construction
+**Core Principle**: Puzzle solvers should be implemented using geometric abstractions rather than specific coordinate systems or grid implementations.
+
+The aspuzzle framework is fundamentally designed to separate puzzle logic from grid geometry:
+
+**Geometric Vocabulary**: Solvers should use the rich geometric primitives provided by the `Grid` class:
+- **Adjacency**: `Orthogonal`, `VertexSharing`, directional relationships
+- **Spatial Structure**: `Line`, `Direction`, vector operations  
+- **Coordinate Independence**: Abstract cell references rather than (row, col) tuples
+
+**Benefits of Grid-Agnostic Design**:
+- **Portability**: Same puzzle logic can work on rectangular, hexagonal, triangular, or custom grid topologies
+- **Cleaner Code**: Solvers express puzzle rules in natural geometric terms
+- **Extensibility**: New grid types can be added without modifying existing solvers
+- **Maintainability**: Grid-specific optimizations are isolated to grid implementations
+
+**Rare Exceptions**: Some puzzle rules are intrinsically tied to specific grid properties (e.g., Spiral Galaxies' rotational symmetry rules). These exceptions are accommodated but should be minimized.
+
+**Design Goal**: ~99% of puzzle logic should be expressible using geometric abstractions, enabling true grid independence for the vast majority of constraints.
