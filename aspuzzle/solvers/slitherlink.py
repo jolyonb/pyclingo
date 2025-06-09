@@ -5,7 +5,7 @@ from aspuzzle.grids.rectangulargrid import RectangularGrid
 from aspuzzle.grids.rendering import BgColor, Color, RenderSymbol
 from aspuzzle.solvers.base import Solver
 from aspuzzle.symbolset import SymbolSet
-from pyclingo import Not, Predicate, create_variables
+from pyclingo import Predicate, create_variables
 
 
 class Slitherlink(Solver):
@@ -72,7 +72,7 @@ class Slitherlink(Solver):
             puzzle.forbid(
                 Clue(loc=C, num=0),
                 symbols[t](loc=C),
-                Not(symbols[t](loc=C_adj)),
+                ~symbols[t](loc=C_adj),
                 grid.Orthogonal(C, C_adj),
             )
 

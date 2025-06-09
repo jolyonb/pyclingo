@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Any
 from aspuzzle.grids.base import Grid
 from aspuzzle.grids.rectangulargrid import RectangularGrid
 from aspuzzle.puzzle import Module, Puzzle, cached_predicate
-from pyclingo import ANY, Choice, Count, Not, Predicate, create_variables
+from pyclingo import ANY, Choice, Count, Predicate, create_variables
 from pyclingo.term import Term
 
 if TYPE_CHECKING:
@@ -146,7 +146,7 @@ class RegionConstructor(Module):
         # Apply the choice rule for each valid cell
         conditions: list[Term] = [cell]
         if self.grid.has_outside_border:
-            conditions.append(Not(self.grid.outside_grid()))
+            conditions.append(~self.grid.outside_grid())
 
         self.when(conditions, let=choice)
 
@@ -157,7 +157,7 @@ class RegionConstructor(Module):
             anchor_args = {**self._anchor_fields, "loc": C}
             anchor_conditions: list[Term] = [self._anchor_predicate(**anchor_args)]
             if self.grid.has_outside_border:
-                anchor_conditions.append(Not(self.grid.OutsideGrid(loc=C)))
+                anchor_conditions.append(~self.grid.OutsideGrid(loc=C))
             self.when(anchor_conditions, let=self.Anchor(loc=C))
 
             # Anchor cells are connected
@@ -169,7 +169,7 @@ class RegionConstructor(Module):
         # Connected cells can connect to other orthogonal cells
         choice_conditions: list[CHOICE_CONDITION_TYPE] = [self.grid.Orthogonal(cell1=C, cell2=N)]
         if self.allow_regionless:
-            choice_conditions.append(Not(self.Regionless(loc=N)))
+            choice_conditions.append(~self.Regionless(loc=N))
         choice = Choice(self.ConnectsTo(loc1=C, loc2=N), condition=choice_conditions)
         if self.dynamic_anchors:
             # Dynamic anchors: connected cells must have at least one connection (as they're not anchors)
@@ -198,7 +198,7 @@ class RegionConstructor(Module):
         if not self.dynamic_anchors:
             # These constraints enforce a single region per cell, but do so more cheaply than using a count aggregate
             # Connected cells must have at least one anchor
-            self.forbid(self.Connected(loc=C), Not(self.Region(loc=C, anchor=ANY)))
+            self.forbid(self.Connected(loc=C), ~self.Region(loc=C, anchor=ANY))
             # Cells cannot belong to multiple different regions
             self.when(
                 [self.Region(loc=C, anchor=A1), self.Region(loc=C, anchor=A2)],
@@ -210,7 +210,7 @@ class RegionConstructor(Module):
             # All cells must have exactly one anchor
             conditions = [cell, N == Count(A, condition=self.Region(loc=cell, anchor=A))]
             if self.allow_regionless:
-                conditions.append(Not(self.Regionless(loc=cell)))
+                conditions.append(~self.Regionless(loc=cell))
             self.when(conditions, let=(N == 1))
 
             # Anchor must be the lexicographically smallest cell in its region
@@ -258,8 +258,8 @@ class RegionConstructor(Module):
             self.forbid(
                 self.Region(loc=C1, anchor=A),
                 self.grid.Orthogonal(cell1=C1, cell2=C2),
-                Not(self.Region(loc=C2, anchor=A)),
-                Not(self.Regionless(loc=C2)),
+                ~self.Region(loc=C2, anchor=A),
+                ~self.Regionless(loc=C2),
             )
 
         # Contiguous regionless area
@@ -298,7 +298,7 @@ class RegionConstructor(Module):
             )
 
             # Forbid disconnected regionless cells
-            self.forbid(self.Regionless(loc=C), Not(Connected(loc=C)))
+            self.forbid(self.Regionless(loc=C), ~Connected(loc=C))
 
         # Min/Max region sizes
         if self.min_region_size or self.max_region_size:

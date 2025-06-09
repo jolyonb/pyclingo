@@ -3,7 +3,7 @@ from typing import Any
 from aspuzzle.grids.rendering import BgColor, Color, RenderItem, RenderSymbol
 from aspuzzle.regionconstructor import RegionConstructor
 from aspuzzle.solvers.base import Solver
-from pyclingo import Not, Predicate, create_variables
+from pyclingo import Predicate, create_variables
 
 
 class Fillomino(Solver):
@@ -63,7 +63,7 @@ class Fillomino(Solver):
             [
                 grid.Orthogonal(cell1=C, cell2=C_adj),
                 region_constructor.Region(loc=C, anchor=A),
-                Not(region_constructor.Region(loc=C_adj, anchor=A)),
+                ~region_constructor.Region(loc=C_adj, anchor=A),
             ],
             let=DifferentRegions(cell1=C, cell2=C_adj),
         )

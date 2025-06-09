@@ -5,7 +5,7 @@ from typing import Optional, Self
 
 from aspuzzle.grids.base import Grid
 from aspuzzle.puzzle import Module
-from pyclingo import Choice, Not, Predicate, Variable, create_variables
+from pyclingo import Choice, Predicate, Variable, create_variables
 from pyclingo.expression import Comparison
 from pyclingo.negation import NegatedLiteral
 from pyclingo.pool import Pool
@@ -168,13 +168,13 @@ class SymbolSet(Module):
 
         # Add the condition that the cell is not excluded
         conditions: list[Predicate | NegatedLiteral] = [cell]
-        conditions.extend(Not(excl) for excl in self._excluded_cells)
+        conditions.extend(~excl for excl in self._excluded_cells)
 
         # Add grid outside border to exclusions if it exists
         if self.grid.has_outside_border:
             # This is safe to do because we're in the finalize method, which is
             # called after all rules that might create the outside border have been defined.
-            conditions.append(Not(self.grid.outside_grid()))
+            conditions.append(~self.grid.outside_grid())
 
         self.section("Place symbols in the grid")
         self.when(conditions, choice)
@@ -245,6 +245,6 @@ class SymbolSet(Module):
         )
 
         # Forbid symbol cells that aren't connected
-        self.forbid(symbol_pred(loc=C, **value_field), Not(Connected(loc=C, **value_field)))
+        self.forbid(symbol_pred(loc=C, **value_field), ~Connected(loc=C, **value_field))
 
         return self

@@ -2,7 +2,7 @@ from typing import Any
 
 from aspuzzle.grids.rendering import Color, RenderSymbol
 from aspuzzle.solvers.base import Solver
-from pyclingo import ANY, Choice, Not, Predicate, create_variables
+from pyclingo import ANY, Choice, Predicate, create_variables
 
 
 class Tents(Solver):
@@ -60,7 +60,7 @@ class Tents(Solver):
         puzzle.section("Tent placement")
         puzzle.when(TieDestination(tree_loc=ANY, tent_loc=C), Tent(loc=C))
         # Tents can only be placed in a valid cell
-        puzzle.forbid(Tent(loc=cell), Not(cell))
+        puzzle.forbid(Tent(loc=cell), ~cell)
         # Tents cannot be placed on a tree
         puzzle.forbid(Tent(C), Tree(C))
 

@@ -2,7 +2,7 @@ from typing import Any
 
 from aspuzzle.grids.rendering import Color, RenderSymbol
 from aspuzzle.solvers.base import Solver
-from pyclingo import ANY, Choice, Not, Predicate, create_variables
+from pyclingo import ANY, Choice, Predicate, create_variables
 
 
 class Numberlink(Solver):
@@ -33,7 +33,7 @@ class Numberlink(Solver):
         cell = grid.cell()
         PathDegree = Predicate.define("path_degree", ["loc", "degree"], show=False)
         puzzle.when(HasSymbol(loc=Cell), PathDegree(loc=Cell, degree=1))
-        puzzle.when([cell, Not(HasSymbol(loc=cell))], PathDegree(loc=cell, degree=2))
+        puzzle.when([cell, ~HasSymbol(loc=cell)], PathDegree(loc=cell, degree=2))
 
         # Rule 2: Choose path directions for each cell
         puzzle.section("Path choice constraints")
@@ -94,7 +94,7 @@ class Numberlink(Solver):
             grid.OrthogonalDir(cell1=Cell1, direction=ANY, cell2=Cell2),
             PropagatedSymbol(loc=Cell1, sym=Sym),
             PropagatedSymbol(loc=Cell2, sym=Sym),
-            Not(Connected(loc1=Cell1, loc2=Cell2)),
+            ~Connected(loc1=Cell1, loc2=Cell2),
         )
 
         # Rule 8: Solution extraction - compute the two directions for each non-symbol cell
@@ -105,7 +105,7 @@ class Numberlink(Solver):
         puzzle.when(
             [
                 cell,
-                Not(HasSymbol(loc=cell)),
+                ~HasSymbol(loc=cell),
                 Path(loc=cell, direction=D1),
                 Path(loc=cell, direction=D2),
                 D1 < D2,  # Ensure canonical ordering to avoid duplicates

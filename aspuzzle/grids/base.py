@@ -5,7 +5,7 @@ from typing import Any, TypeAlias
 
 from aspuzzle.grids.rendering import RenderItem
 from aspuzzle.puzzle import Module, Puzzle, cached_predicate
-from pyclingo import ANY, ExplicitPool, Min, Not, Predicate, Variable, create_variables
+from pyclingo import ANY, ExplicitPool, Min, Predicate, Variable, create_variables
 from pyclingo.conditional_literal import ConditionalLiteral
 
 # Representing a location and a value
@@ -424,4 +424,4 @@ def do_not_show_outside(pred: Predicate, grid: Grid) -> None:
     This helper function sets the show directive on a predicate to not display for cells outside the grid.
     The predicate must be instantiated with the grid.cell() location.
     """
-    pred.__class__.set_show_directive(ConditionalLiteral(pred, [pred, Not(grid.outside_grid())]))
+    pred.__class__.set_show_directive(ConditionalLiteral(pred, [pred, ~grid.outside_grid()]))

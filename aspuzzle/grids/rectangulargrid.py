@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 from aspuzzle.grids.base import Grid, GridCellData
 from aspuzzle.grids.rendering import RenderItem, RenderSymbol, colorize
 from aspuzzle.puzzle import Puzzle, cached_predicate
-from pyclingo import Not, Predicate, RangePool, create_variables
+from pyclingo import Predicate, RangePool, create_variables
 
 if TYPE_CHECKING:
     from pyclingo.types import PREDICATE_RAW_INPUT_TYPE
@@ -464,8 +464,8 @@ class RectangularGrid(Grid):
         self.puzzle.forbid(
             top_left,
             bottom_right,
-            Not(top_right),
-            Not(bottom_left),
+            ~top_right,
+            ~bottom_left,
             top_left_cell,
             bottom_right_cell,
             segment=segment,
@@ -475,8 +475,8 @@ class RectangularGrid(Grid):
         self.puzzle.forbid(
             top_right,
             bottom_left,
-            Not(top_left),
-            Not(bottom_right),
+            ~top_left,
+            ~bottom_right,
             top_left_cell,
             bottom_right_cell,
             segment=segment,

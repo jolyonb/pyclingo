@@ -4,7 +4,7 @@ from aspuzzle.grids.rectangulargrid import RectangularGrid
 from aspuzzle.grids.rendering import Color, RenderSymbol
 from aspuzzle.solvers.base import Solver
 from aspuzzle.symbolset import SymbolSet
-from pyclingo import Not, Predicate, RangePool, create_variables
+from pyclingo import Predicate, RangePool, create_variables
 
 
 class Skyscrapers(Solver):
@@ -109,7 +109,7 @@ class Skyscrapers(Solver):
         puzzle.when(
             [
                 grid.LineOfSight(direction=Dir, index=Idx, position=Pos, loc=C),
-                Not(Blocked(dir=Dir, index=Idx, position=Pos)),
+                ~Blocked(dir=Dir, index=Idx, position=Pos),
             ],
             let=Visible(dir=Dir, index=Idx, position=Pos),
         )

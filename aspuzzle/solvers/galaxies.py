@@ -5,7 +5,7 @@ from aspuzzle.grids.region_coloring import assign_region_colors_from_predicates
 from aspuzzle.grids.rendering import BgColor, Color, RenderItem, RenderSymbol
 from aspuzzle.regionconstructor import RegionConstructor
 from aspuzzle.solvers.base import Solver
-from pyclingo import ANY, Not, Predicate, create_variables
+from pyclingo import ANY, Predicate, create_variables
 
 
 class Galaxies(Solver):
@@ -133,7 +133,7 @@ class Galaxies(Solver):
         puzzle.forbid(
             Center(loc=grid.Cell(R1, C1), loc2=grid.Cell(R2, C2), id=Id),
             region_constructor.Region(loc=grid.Cell(R, C), anchor=grid.Cell(R1, C1)),
-            Not(region_constructor.Region(loc=grid.Cell(R1 + R2 - R, C1 + C2 - C), anchor=grid.Cell(R1, C1))),
+            ~region_constructor.Region(loc=grid.Cell(R1 + R2 - R, C1 + C2 - C), anchor=grid.Cell(R1, C1)),
         )
 
         # Define a predicate to extract the regions from the puzzle for solution display purposes
