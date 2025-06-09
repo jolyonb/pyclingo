@@ -20,7 +20,7 @@ Abstract base class and utilities for all grid types:
   - `Orthogonal` - Cells sharing an edge
   - `VertexSharing` - Cells sharing any vertex
   - `Line` - Major lines in the grid (rows, columns, etc.)
-  - `OrderedLine` - Lines with position indexing
+  - `LineOfSight` - Lines with position indexing
 
 - **`do_not_show_outside()`** - Utility to hide predicates for outside border cells
 

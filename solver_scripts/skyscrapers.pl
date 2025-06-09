@@ -11,16 +11,16 @@ line("s", C, cell(R, C)) :- cell(R, C).
 
 % Define ordered positions along major lines in all four directions for line-of-sight
 % East: along rows, position increases with column (1, 2, 3, 4)
-ordered_line("e", R, C, cell(R, C)) :- cell(R, C).
+line_of_sight("e", R, C, cell(R, C)) :- cell(R, C).
 
 % South: along columns, position increases with row (1, 2, 3, 4)  
-ordered_line("s", C, R, cell(R, C)) :- cell(R, C).
+line_of_sight("s", C, R, cell(R, C)) :- cell(R, C).
 
 % West: along rows, position increases from right to left (1, 2, 3, 4)
-ordered_line("w", R, C, cell(R, 5-C)) :- cell(R, C).
+line_of_sight("w", R, C, cell(R, 5-C)) :- cell(R, C).
 
 % North: along columns, position increases from bottom to top (1, 2, 3, 4)
-ordered_line("n", C, R, cell(5-R, C)) :- cell(R, C).
+line_of_sight("n", C, R, cell(5-R, C)) :- cell(R, C).
 
 % ===== Skyscraper Heights =====
 
@@ -34,9 +34,9 @@ C1 = C2 :- height(C1, H), height(C2, H), line(D, Idx, C1), line(D, Idx, C2).
 
 % A building is blocked if there's a taller building at an earlier position
 blocked(Dir, Idx, Pos) :-
-    ordered_line(Dir, Idx, Pos, Cell),
+    line_of_sight(Dir, Idx, Pos, Cell),
     height(Cell, H),
-    ordered_line(Dir, Idx, EarlierPos, EarlierCell),
+    line_of_sight(Dir, Idx, EarlierPos, EarlierCell),
     EarlierPos < Pos,
     height(EarlierCell, EarlierH),
     EarlierH > H.

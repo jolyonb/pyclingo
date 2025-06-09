@@ -260,8 +260,8 @@ class Grid(Module, ABC):
 
     @property
     @abstractmethod
-    def OrderedLine(self) -> type[Predicate]:
-        """Get the OrderedLine predicate defining major lines in the grid, with position indexing."""
+    def LineOfSight(self) -> type[Predicate]:
+        """Get the LineOfSight predicate defining major lines in the grid, with position indexing."""
 
     def find_anchor_cell(
         self,

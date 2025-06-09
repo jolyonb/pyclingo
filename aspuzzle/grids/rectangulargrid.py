@@ -214,15 +214,15 @@ class RectangularGrid(Grid):
 
     @property
     @cached_predicate
-    def OrderedLine(self) -> type[Predicate]:
+    def LineOfSight(self) -> type[Predicate]:
         """
-        Get the OrderedLine predicate defining lines in all orthogonal directions with position ordering.
+        Get the LineOfSight predicate defining lines in all orthogonal directions with position ordering.
 
         For a rectangular grid, this defines lines in all 4 orthogonal directions (n, e, s, w)
         with a position parameter indicating the ordinal position along that line.
         """
-        OrderedLine = Predicate.define(
-            "ordered_line", ["direction", "index", "position", "loc"], namespace=self.namespace, show=False
+        LineOfSight = Predicate.define(
+            "line_of_sight", ["direction", "index", "position", "loc"], namespace=self.namespace, show=False
         )
 
         R, C = create_variables("R", "C")
@@ -233,28 +233,28 @@ class RectangularGrid(Grid):
         # East direction (rows): all cells in the same row, with column number as position
         self.when(
             [cell],
-            OrderedLine(direction="e", index=R, position=C, loc=cell),
+            LineOfSight(direction="e", index=R, position=C, loc=cell),
         )
 
         # West direction (rows): all cells in the same row, with reversed column position
         self.when(
             [cell],
-            OrderedLine(direction="w", index=R, position=self.cols + 1 - C, loc=cell),
+            LineOfSight(direction="w", index=R, position=self.cols + 1 - C, loc=cell),
         )
 
         # South direction (columns): all cells in the same column, with row number as position
         self.when(
             [cell],
-            OrderedLine(direction="s", index=C, position=R, loc=cell),
+            LineOfSight(direction="s", index=C, position=R, loc=cell),
         )
 
         # North direction (columns): all cells in the same column, with reversed row position
         self.when(
             [cell],
-            OrderedLine(direction="n", index=C, position=self.rows + 1 - R, loc=cell),
+            LineOfSight(direction="n", index=C, position=self.rows + 1 - R, loc=cell),
         )
 
-        return OrderedLine
+        return LineOfSight
 
     @classmethod
     def from_config(

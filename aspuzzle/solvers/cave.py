@@ -55,16 +55,16 @@ class Cave(Solver):
         puzzle.when(
             [
                 Number(loc=cell, value=ANY),
-                grid.OrderedLine(direction=Dir, index=Idx, position=Pos, loc=cell),
+                grid.LineOfSight(direction=Dir, index=Idx, position=Pos, loc=cell),
             ],
             let=CanSee(from_loc=cell, dir=Dir, index=Idx, position=Pos),
         )
 
-        # Define the recursive case: extend CanSee in positive direction only (all directions handled by OrderedLine)
+        # Define the recursive case: extend CanSee in positive direction only (all directions handled by LineOfSight)
         puzzle.when(
             [
                 CanSee(from_loc=cell, dir=Dir, index=Idx, position=Pos),
-                grid.OrderedLine(direction=Dir, index=Idx, position=Pos + 1, loc=cell_seen),
+                grid.LineOfSight(direction=Dir, index=Idx, position=Pos + 1, loc=cell_seen),
                 symbols["cave"](loc=cell_seen),
             ],
             let=CanSee(from_loc=cell, dir=Dir, index=Idx, position=Pos + 1),
@@ -75,7 +75,7 @@ class Cave(Solver):
             count_over=cell_seen,
             condition=[
                 CanSee(from_loc=cell, dir=Dir, index=Idx, position=Pos),
-                grid.OrderedLine(direction=Dir, index=Idx, position=Pos, loc=cell_seen),
+                grid.LineOfSight(direction=Dir, index=Idx, position=Pos, loc=cell_seen),
             ],
             when=Number(loc=cell, value=N),
             exactly=N,

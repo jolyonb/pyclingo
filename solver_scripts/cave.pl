@@ -28,10 +28,10 @@ orthogonal_directions("n"; "e"; "s"; "w").
 orthogonal(cell(R, C), cell(R + R_vec, C + C_vec)) :- cell(R, C), orthogonal_directions(D), direction(D, cell(R_vec, C_vec)), cell(R + R_vec, C + C_vec).
 
 % Define ordered positions along orthogonal lines in the grid
-ordered_line("e", R, C, cell(R, C)) :- cell(R, C).
-ordered_line("w", R, 10 - C, cell(R, C)) :- cell(R, C).
-ordered_line("s", C, R, cell(R, C)) :- cell(R, C).
-ordered_line("n", C, 10 - R, cell(R, C)) :- cell(R, C).
+line_of_sight("e", R, C, cell(R, C)) :- cell(R, C).
+line_of_sight("w", R, 10 - C, cell(R, C)) :- cell(R, C).
+line_of_sight("s", C, R, cell(R, C)) :- cell(R, C).
+line_of_sight("n", C, 10 - R, cell(R, C)) :- cell(R, C).
 
 % ===== Clues =====
 
@@ -86,9 +86,9 @@ wall(C) :- outside_grid(C).
 cave(C) :- number(C, _).
 
 % Line-of-sight counting
-can_see(cell(R, C), Dir, Idx, Pos) :- number(cell(R, C), _), ordered_line(Dir, Idx, Pos, cell(R, C)).
-can_see(cell(R, C), Dir, Idx, Pos + 1) :- can_see(cell(R, C), Dir, Idx, Pos), ordered_line(Dir, Idx, Pos + 1, cell(R_seen, C_seen)), cave(cell(R_seen, C_seen)).
-Count = N :- number(cell(R, C), N), Count = #count{cell(R_seen, C_seen) : can_see(cell(R, C), Dir, Idx, Pos), ordered_line(Dir, Idx, Pos, cell(R_seen, C_seen))}.
+can_see(cell(R, C), Dir, Idx, Pos) :- number(cell(R, C), _), line_of_sight(Dir, Idx, Pos, cell(R, C)).
+can_see(cell(R, C), Dir, Idx, Pos + 1) :- can_see(cell(R, C), Dir, Idx, Pos), line_of_sight(Dir, Idx, Pos + 1, cell(R_seen, C_seen)), cave(cell(R_seen, C_seen)).
+Count = N :- number(cell(R, C), N), Count = #count{cell(R_seen, C_seen) : can_see(cell(R, C), Dir, Idx, Pos), line_of_sight(Dir, Idx, Pos, cell(R_seen, C_seen))}.
 
 #show.
 #show cave/1.
