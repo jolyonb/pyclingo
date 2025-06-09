@@ -22,7 +22,7 @@ class Cave(Solver):
         CanSee = Predicate.define("can_see", ["from_loc", "dir", "index", "position"], show=False)
 
         # Create variables
-        C, Dir, Pos, Idx, Delta, N = create_variables("C", "Dir", "Pos", "Idx", "Delta", "N")
+        C, Dir, Pos, Idx, N = create_variables("C", "Dir", "Pos", "Idx", "N")
         cell = grid.cell()
         cell_seen = grid.cell(suffix="seen")
 
@@ -51,7 +51,7 @@ class Cave(Solver):
         # Rule 5: Line-of-sight count for numbered cells
         puzzle.section("Line-of-sight counting")
 
-        # Define the base case: a cell can see itself (along all lines it sits on)
+        # Define the base case: a cell can see itself (along all orthogonal lines it sits on)
         puzzle.when(
             [
                 Number(loc=cell, value=ANY),
@@ -60,15 +60,14 @@ class Cave(Solver):
             let=CanSee(from_loc=cell, dir=Dir, index=Idx, position=Pos),
         )
 
-        # Define the recursive case: We extend CanSee forwards and backwards whilever there are cave cells
+        # Define the recursive case: extend CanSee in positive direction only (all directions handled by OrderedLine)
         puzzle.when(
             [
                 CanSee(from_loc=cell, dir=Dir, index=Idx, position=Pos),
-                grid.OrderedLine(direction=Dir, index=Idx, position=Pos + Delta, loc=cell_seen),
-                Delta.in_([-1, 1]),
+                grid.OrderedLine(direction=Dir, index=Idx, position=Pos + 1, loc=cell_seen),
                 symbols["cave"](loc=cell_seen),
             ],
-            let=CanSee(from_loc=cell, dir=Dir, index=Idx, position=Pos + Delta),
+            let=CanSee(from_loc=cell, dir=Dir, index=Idx, position=Pos + 1),
         )
 
         # Count constraint: Numbered cells indicate how many cave cells they can see including themselves
