@@ -8,7 +8,7 @@ from pyclingo.value import Constant, StringConstant, Value
 
 if TYPE_CHECKING:
     from pyclingo.conditional_literal import ConditionalLiteral
-    from pyclingo.negation import ClassicalNegation
+    from pyclingo.negation import ClassicalNegation, DefaultNegation
     from pyclingo.types import (
         PREDICATE_CLASS_TYPE,
         PREDICATE_FIELD_TYPE,
@@ -292,6 +292,23 @@ class Predicate(BasicTerm):
         )
 
         return ClassicalNegation(self)
+
+    def __invert__(self) -> "DefaultNegation":
+        """
+        Support for using `~predicate` syntax to create default negation.
+
+        Returns:
+            DefaultNegation: A default negation of this predicate.
+
+        Example:
+            >>> person = Person(name="john")
+            >>> not_person = ~person  # Renders as: not person(john)
+        """
+        from pyclingo.negation import (
+            DefaultNegation,  # Import here to avoid circular imports
+        )
+
+        return DefaultNegation(self)
 
     def collect_variables(self) -> set[str]:
         """
