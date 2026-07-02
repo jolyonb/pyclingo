@@ -25,14 +25,16 @@ class Pool(BasicTerm, ABC):
         """
         Validates this pool for use in a specific position.
 
-        Pools can be used in both heads and bodies, but their
-        expansion behavior differs depending on the position.
+        A bare pool is not valid as a rule head or body element; pools belong
+        inside predicates (p(1..5)) or on the right of comparisons (X = 1..5).
 
         Args:
             is_in_head: True if validating for head position, False for body position.
+
+        Raises:
+            ValueError: Always — a standalone pool is a clingo syntax error.
         """
-        # Pools can appear in both heads and bodies.
-        pass
+        raise ValueError("Pools can only be used as arguments to predicates or in comparisons")
 
 
 class RangePool(Pool):
