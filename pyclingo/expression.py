@@ -53,7 +53,7 @@ class Expression(Term, ComparisonMixin):
         if first_term is not None and not isinstance(first_term, (int, Value, Expression)):
             raise TypeError(f"first_term must be a Value or Expression, got {type(first_term).__name__}")
         if not isinstance(second_term, (int, Value, Expression)):
-            raise TypeError(f"second_term must be a Value or Expression, got {type(first_term).__name__}")
+            raise TypeError(f"second_term must be a Value or Expression, got {type(second_term).__name__}")
 
         # Validate the expression structure
         if first_term is None and operator not in UNARY_OPERATIONS:
@@ -352,7 +352,7 @@ class Comparison(Term):
             )
 
         if not isinstance(operator, ComparisonOperator):
-            raise TypeError(f"Comparison operator must be a ComparisonOperator, got {type(left_term).__name__}")
+            raise TypeError(f"Comparison operator must be a ComparisonOperator, got {type(operator).__name__}")
         self._operator = operator
 
         if isinstance(right_term, Pool) and operator != ComparisonOperator.EQUAL:

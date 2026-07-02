@@ -57,7 +57,6 @@ Core building blocks for ASP facts and rules:
 Key methods:
 - `get_name()`: Returns predicate name with namespace
 - `get_arity()`: Returns number of arguments
-- `with_namespace()`: Creates namespaced version
 - `collect_predicates()`: Gathers all predicate classes used
 
 ### 3. Expressions (`expression.py`)

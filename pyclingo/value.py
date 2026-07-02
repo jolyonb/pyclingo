@@ -210,8 +210,10 @@ class Variable(Value):
         Raises:
             ValueError: If the name doesn't start with an uppercase letter and isn't '_'.
         """
-        if name != "_" and not name[0].isupper():
+        if not name or (name != "_" and not name[0].isupper()):
             raise ValueError(f"Variable name must start with an uppercase letter or be '_': {name}")
+        if not all(c.isalnum() or c == "_" for c in name):
+            raise ValueError(f"Variable name can only contain letters, digits, and underscores: {name}")
         self._name = name
 
     @property

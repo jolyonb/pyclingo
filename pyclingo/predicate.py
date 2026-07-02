@@ -44,24 +44,6 @@ class Predicate(BasicTerm):
         super().__init__(*args, **kwargs)
 
     @classmethod
-    def with_namespace(cls, namespace: str) -> PREDICATE_CLASS_TYPE:
-        """
-        Create a subclass of this predicate with the given namespace.
-
-        Args:
-            namespace: The namespace to add to the predicate
-
-        Returns:
-            A new predicate class with the same structure but a namespaced name
-        """
-        # Create a new class with the same structure but a different namespace
-        return type(  # type: ignore
-            f"{namespace}_{cls.__name__}",  # New class name for clarity
-            (cls,),  # Inherit from the original class
-            {"_namespace": namespace},  # Set the namespace
-        )
-
-    @classmethod
     def define(cls, name: str, fields: list[str], namespace: str = "", show: bool = True) -> Type[Predicate]:
         """
         Dynamically create a new Predicate subclass.
