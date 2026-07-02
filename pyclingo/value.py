@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Union, overload
+from typing import TYPE_CHECKING, Any, ClassVar, Self, Union, cast, overload
 
 from pyclingo.comparison_mixin import ComparisonMixin
 from pyclingo.operators import Operation
@@ -19,7 +19,34 @@ class Value(BasicTerm, ComparisonMixin, ABC):
 
     Values include variables and constants, representing the most basic
     elements in an ASP program.
+
+    Concrete Value subclasses are cached: constructing the same value twice returns the
+    same object, e.g. Variable("X") is Variable("X"). Values are immutable, so sharing
+    is safe — and because equal values are the same object, sets and dicts of Values
+    behave correctly even though __eq__ builds Comparison terms instead of comparing.
     """
+
+    _cache: ClassVar[dict[tuple[type, type, Any], "Value"]] = {}
+
+    def __new__(cls, *args: Any, **kwargs: Any) -> Self:
+        # All concrete Value subclasses take exactly one constructor argument; anything
+        # else falls through so __init__ can raise its own error. The key includes the
+        # argument's type so that e.g. Constant(True) and Constant(1) (bool is a subclass
+        # of int, and True == 1) do not share a cached instance.
+        if len(args) + len(kwargs) == 1:
+            value = args[0] if args else next(iter(kwargs.values()))
+            key = (cls, type(value), value)
+            try:
+                cached = Value._cache.get(key)
+            except TypeError:
+                # Unhashable constructor argument; let __init__ reject it with a clear error
+                pass
+            else:
+                if cached is None:
+                    cached = super().__new__(cls)
+                    Value._cache[key] = cached
+                return cast(Self, cached)
+        return super().__new__(cls)
 
     @abstractmethod
     def render(

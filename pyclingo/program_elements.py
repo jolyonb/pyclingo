@@ -127,11 +127,11 @@ class Rule(ProgramElement):
         """
         result = ""
 
-        if self.head:
+        if self.head is not None:
             result += self.head.render()
 
         if self.body:
-            result += " :- " if self.head else ":- "
+            result += " :- " if self.head is not None else ":- "
             result += ", ".join(term.render() for term in self.body)
 
         result += "."
@@ -148,7 +148,7 @@ class Rule(ProgramElement):
         predicates = set()
 
         # Collect from head if it exists
-        if self.head:
+        if self.head is not None:
             predicates.update(self.head.collect_predicates())
 
         # Collect from all body terms
@@ -167,7 +167,7 @@ class Rule(ProgramElement):
         constants = set()
 
         # Collect from head if it exists
-        if self.head:
+        if self.head is not None:
             constants.update(self.head.collect_symbolic_constants())
 
         # Collect from all body terms
@@ -187,7 +187,7 @@ class Rule(ProgramElement):
         body_vars = set()
 
         # Collect from head if it exists
-        if self.head:
+        if self.head is not None:
             head_vars.update(self.head.collect_variables())
 
         # Collect from all body terms

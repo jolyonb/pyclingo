@@ -376,6 +376,20 @@ class Comparison(Term):
         """Gets the right term of the comparison."""
         return self._right_term
 
+    def __bool__(self) -> bool:
+        """
+        Comparisons deliberately have no truth value.
+
+        Operators like == on pyclingo terms build ASP comparison terms rather than
+        evaluating anything, so code like `if x == y:` is almost certainly a bug.
+        Raising here turns that silent wrongness into a loud error.
+        """
+        raise TypeError(
+            f"A Comparison ({self.render()}) has no boolean value: comparison operators on "
+            "pyclingo terms build ASP terms rather than evaluating them. If you meant to "
+            "compare Python objects, compare their .render() output or use 'is'."
+        )
+
     @property
     def is_grounded(self) -> bool:
         """
@@ -407,13 +421,11 @@ class Comparison(Term):
         """
         Validates this comparison for use in a specific context.
 
-        Comparisons are valid in rule bodies but not in rule heads.
+        Comparisons are valid in both rule bodies and rule heads: a comparison head
+        like `C1 = C2 :- body` means the body forces the equality to hold.
 
         Args:
             is_in_head: True if validating for head position, False for body position.
-
-        Raises:
-            ValueError: When trying to use a comparison in a rule head.
         """
         pass
 

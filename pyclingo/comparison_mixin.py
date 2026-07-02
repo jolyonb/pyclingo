@@ -20,6 +20,11 @@ class ComparisonMixin(ABC):
     * Aggregate
     """
 
+    # Defining __eq__ sets __hash__ to None; restore identity hashing. This is safe because
+    # containers compare stored hash values before calling __eq__, so the ASP-building
+    # __eq__ below is never invoked between distinct objects.
+    __hash__ = object.__hash__
+
     def __lt__(self, other: Any) -> Comparison:
         """Creates a Comparison representing self < other."""
         from pyclingo.aggregates import Aggregate

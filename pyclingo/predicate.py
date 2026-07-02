@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     )
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class Predicate(BasicTerm):
     """
     This is a base class that represents a predicate in an ASP program.
@@ -27,8 +27,11 @@ class Predicate(BasicTerm):
     They can appear in rule heads and bodies, and can have Value
     or other Predicate objects as arguments.
 
-    Note: This class is a frozen dataclass, which automatically provides proper __eq__ and __hash__
-    methods, allowing Predicate instances to be used in sets and as dictionary keys.
+    Note: == on a Value builds an ASP Comparison term (X == 5 renders as "X = 5"), but
+    == on a predicate answers a question: two instances are equal iff they are the same
+    predicate class with identically-rendered arguments, and they hash consistently, so
+    instances can be used in sets and as dictionary keys. This asymmetry is deliberate —
+    predicates round-trip through the solver as solution facts, i.e. data.
     """
 
     # Class-level attributes
@@ -76,7 +79,10 @@ class Predicate(BasicTerm):
             >>> Person = Predicate.define("person", ["name", "age"])
             >>> john = Person(name="john", age=30)
             >>> john.render()
-            'person(john, 30)'
+            'person("john", 30)'
+
+        Note that Python strings become quoted ASP string constants; for an unquoted
+        symbolic constant argument, pass a SymbolicConstant registered with the program.
         """
         # Validate the predicate name
         if not name or not name[0].islower():
@@ -88,12 +94,16 @@ class Predicate(BasicTerm):
         # Create field specifications for make_dataclass
         field_specs = [(field_name, "pyclingo.types.PREDICATE_RAW_INPUT_TYPE") for field_name in fields]
 
-        # Create the new class with the provided name as the class name
+        # Create the new class with the provided name as the class name.
+        # eq=False is essential: the generated __eq__ would compare field tuples, whose
+        # elements have overloaded __eq__ returning always-truthy Comparisons — making
+        # every same-class instance compare equal. We inherit Predicate's __eq__/__hash__.
         new_class = make_dataclass(  # type: ignore
             cls_name=name,
             fields=field_specs,
             bases=(cls,),
             frozen=True,
+            eq=False,
         )
 
         assert issubclass(new_class, Predicate)
@@ -275,6 +285,28 @@ class Predicate(BasicTerm):
             constants.update(arg.collect_symbolic_constants())
 
         return constants
+
+    def __eq__(self, other: object) -> bool:
+        """
+        Value equality: same predicate class and identically-rendered arguments.
+
+        Rendered forms are compared because the arguments themselves overload __eq__
+        to build Comparison terms rather than answer equality questions.
+
+        Returns NotImplemented for non-Predicate operands so Python reflects the
+        comparison to the other side (e.g. a Variable, whose __eq__ builds ASP terms).
+        """
+        if not isinstance(other, Predicate):
+            return NotImplemented
+        return type(self) is type(other) and self.render() == other.render()
+
+    def __ne__(self, other: object) -> bool:
+        if not isinstance(other, Predicate):
+            return NotImplemented
+        return not self.__eq__(other)
+
+    def __hash__(self) -> int:
+        return hash((type(self), self.render()))
 
     def __neg__(self) -> "ClassicalNegation":
         """
