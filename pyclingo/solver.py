@@ -182,7 +182,7 @@ class ASPProgram:
             if len(self._segments) > 1 and len(elements) > 0:
                 # Don't put double newlines for the first segment
                 if not first_segment:
-                    lines.extend("")
+                    lines.append("")
                 else:
                     first_segment = False
                 lines.extend(("", f"% ===== {segment_name.title()} ====="))
