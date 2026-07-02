@@ -228,14 +228,16 @@ class ASPProgram:
             raise ValueError(f"Unregistered symbolic constants used in program: {', '.join(sorted(unregistered))}")
 
     def solve(
-        self, models: int = 0, timeout: int = 0, stop_on_log_level: LogLevel = LogLevel.INFO
+        self, models: int = 1000, timeout: int = 0, stop_on_log_level: LogLevel = LogLevel.INFO
     ) -> Generator[dict[str, list[Predicate]], None, None]:
         """
         Solve the ASP program and yield solutions as sets of Predicate objects.
 
         Args:
-            models: Maximum number of models to compute (0 for all)
-            timeout: Timeout in seconds (0 for no timeout)
+            models: Maximum number of models to compute. Pass 0 to enumerate all models —
+                    beware that an underconstrained program may make this effectively endless.
+            timeout: Wall-clock limit in seconds (0 for no limit). On timeout, models found
+                     so far will have been yielded and 'exhausted' remains False.
             stop_on_log_level: Log level at which to abort solving
 
         Yields:
@@ -259,9 +261,7 @@ class ASPProgram:
         # Configure and prepare the control object
         control = clingo.Control(logger=message_handler.on_message, arguments=["--stats"])
         assert isinstance(control.configuration.solve, clingo.Configuration)
-        control.configuration.solve.models = models or 1000  # Maximum of 1000 rather than unlimited
-        if timeout > 0:
-            control.configuration.solve.timeout = timeout
+        control.configuration.solve.models = models
 
         # Add and ground the program
         try:
@@ -297,18 +297,33 @@ class ASPProgram:
         # Get a mapping of predicate names to their types for reconstruction
         predicate_types = {pred.get_name(): pred for pred in self._collect_predicates()}
 
-        # Continue with solving
+        # Continue with solving. Wall-clock timeouts require async solving: clingo has no
+        # timeout configuration key; instead we wait on the handle and cancel at the deadline.
         self.exhausted = False
         self.solution_count = 0
-        with control.solve(yield_=True) as handle:
-            for model in handle:
+        deadline = time.monotonic() + timeout if timeout > 0 else None
+        with control.solve(yield_=True, async_=True) as handle:
+            while True:
+                handle.resume()
+                # Clamp to zero: wait() treats a negative timeout as "block forever",
+                # but a passed deadline should poll and cancel instead
+                remaining = None if deadline is None else max(0.0, deadline - time.monotonic())
+                if not handle.wait(remaining):
+                    # The deadline passed before the next model was found
+                    handle.cancel()
+                    break
+                model = handle.model()
+                if model is None:
+                    break
                 self.solution_count += 1
                 self.satisfiable = True
                 yield self._convert_model_to_predicates(model, predicate_types)
 
-            # Save final solve result information
+            # Save final solve result information. After a cancelled solve, satisfiability
+            # may be unknown (None); keep what we learned from any yielded models.
             result = handle.get()
-            self.satisfiable = result.satisfiable
+            if result.satisfiable is not None:
+                self.satisfiable = result.satisfiable
             self.exhausted = result.exhausted
 
         toc = time.perf_counter()
