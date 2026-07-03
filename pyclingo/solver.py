@@ -8,6 +8,7 @@ from typing import Any, Generator, Sequence
 import clingo
 
 from pyclingo.clingo_handler import ClingoMessageHandler, LogLevel
+from pyclingo.conditional_literal import ConditionalLiteral
 from pyclingo.predicate import Predicate
 from pyclingo.program_elements import BlankLine, Comment, ProgramElement, Rule
 from pyclingo.term import Term
@@ -36,6 +37,7 @@ class ASPProgram:
         """Initialize an empty ASP program."""
         self._segments: defaultdict[str, list[ProgramElement]] = defaultdict(list)
         self._symbolic_constants: dict[str, int | str] = {}
+        self._show_overrides: dict[type[Predicate], bool | ConditionalLiteral] = {}
         self.header = header
         self.default_segment = default_segment.lower()
 
@@ -128,6 +130,28 @@ class ASPProgram:
 
         return SymbolicConstant(name)
 
+    def show(self, predicate: type[Predicate]) -> None:
+        """Show this predicate in output, overriding its default visibility."""
+        self._show_overrides[predicate] = True
+
+    def hide(self, predicate: type[Predicate]) -> None:
+        """Hide this predicate from output, overriding its default visibility."""
+        self._show_overrides[predicate] = False
+
+    def show_when(self, predicate: type[Predicate], condition: ConditionalLiteral) -> None:
+        """
+        Show this predicate only where the condition holds, e.g.
+        show_when(P, ConditionalLiteral(p(C), [p(C), ~outside(C)])) renders as
+        "#show p(C) : p(C), not outside(C)."
+
+        Args:
+            predicate: The predicate class to show conditionally.
+            condition: The conditional literal to show.
+        """
+        if not isinstance(condition, ConditionalLiteral):
+            raise TypeError(f"show_when condition must be a ConditionalLiteral, got {type(condition).__name__}")
+        self._show_overrides[predicate] = condition
+
     def _collect_predicates(self) -> set[type[Predicate]]:
         """
         Collect all predicates used in the program.
@@ -188,14 +212,17 @@ class ASPProgram:
                 lines.extend(("", f"% ===== {segment_name.title()} ====="))
             lines.extend(element.render() for element in elements)
 
-        show_statements: set[str]
-        if show_statements := {
-            pred.get_show_directive()  # type: ignore[misc]
-            for pred in self._collect_predicates()
-            if pred.get_show_directive() is not None
-        }:
+        # Resolve visibility: program overrides first, class defaults second
+        show_statements: set[str] = set()
+        for pred in self._collect_predicates():
+            visibility = self._show_overrides.get(pred, pred.shown_by_default())
+            if visibility is True:
+                show_statements.add(f"#show {pred.get_name()}/{pred.get_arity()}.")
+            elif isinstance(visibility, ConditionalLiteral):
+                show_statements.add(f"#show {visibility.render()}.")
+        if show_statements:
             lines.extend(("", "#show."))
-            lines.extend(sorted(list(show_statements)))
+            lines.extend(sorted(show_statements))
 
         # 5. Join everything together
         return "\n".join(lines) + "\n"
