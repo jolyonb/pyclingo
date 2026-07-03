@@ -55,3 +55,44 @@ def test_no_timeout_unaffected() -> None:
     solutions = list(program.solve(timeout=60))
     assert len(solutions) == 4
     assert program.exhausted is True
+
+
+def test_early_close_finalizes_bookkeeping() -> None:
+    program = make_choice_program(3)  # 8 models
+    solutions = program.solve(models=0)
+    first = next(solutions)
+    assert isinstance(first, dict)
+    solutions.close()
+    assert program.exhausted is False  # we stopped early, truthfully reported
+    assert program.satisfiable is True
+    assert program.solution_count == 1
+    assert "No statistics" not in program.format_statistics_clingo_style()
+
+
+def test_second_solve_while_active_raises() -> None:
+    import pytest
+
+    program = make_choice_program(2)
+    running = program.solve()
+    with pytest.raises(RuntimeError, match="already in progress"):
+        program.solve()
+    running.close()
+    # Releasing the generator makes the program solvable again
+    assert len(list(program.solve())) == 4
+
+
+def test_setup_errors_raise_at_call_time() -> None:
+    import pytest
+
+    from pyclingo import ASPProgram, Variable
+    from pyclingo.predicate import Predicate
+
+    program = ASPProgram()
+    P = Predicate.define("p", ["x"])
+    Q = Predicate.define("q", ["x"])
+    X, Y = Variable("X"), Variable("Y")
+    program.when(conditions=P(x=X), let=Q(x=Y))  # Y is unsafe
+
+    # The grounding error surfaces at the solve() call, not at first iteration
+    with pytest.raises(RuntimeError):
+        program.solve()

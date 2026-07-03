@@ -27,7 +27,6 @@ class ASPProgram:
     header: str | None = None
     default_segment: str = "Rules"
 
-    solved: bool = False
     satisfiable: bool | None = None
     exhausted: bool | None = None
     solution_count: int | None = None
@@ -38,6 +37,7 @@ class ASPProgram:
         self._segments: defaultdict[str, list[ProgramElement]] = defaultdict(list)
         self._symbolic_constants: dict[str, int | str] = {}
         self._show_overrides: dict[type[Predicate], bool | ConditionalLiteral] = {}
+        self._solving = False
         self.header = header
         self.default_segment = default_segment.lower()
 
@@ -271,12 +271,22 @@ class ASPProgram:
             For each solution, a dictionary mapping Predicate types to lists of Predicate instances
 
         Raises:
-            RuntimeError: If an error occurs during solving or grounding, or if log level threshold is exceeded
+            RuntimeError: If a solve is already in progress on this program, if an error
+                occurs during parsing or grounding, or if the log level threshold is exceeded
 
         Notes:
-            After all models are yielded, solver statistics are stored in the
-            'statistics' attribute of the ASPProgram instance.
+            Rendering, grounding, and their error checks run eagerly at this call; only
+            model enumeration is lazy. One solve runs at a time per program: this call
+            claims the program, and exhausting or closing the returned generator releases
+            it. To stop early, call .close() on the generator; 'satisfiable', 'exhausted',
+            'solution_count', and the solver statistics are finalized on every exit path.
         """
+        if self._solving:
+            raise RuntimeError(
+                "A solve is already in progress on this program: "
+                "exhaust or close() the existing solve() generator first"
+            )
+
         tic = time.perf_counter()
 
         # Render the ASP program first
@@ -324,40 +334,73 @@ class ASPProgram:
         # Get a mapping of predicate names to their types for reconstruction
         predicate_types = {pred.get_name(): pred for pred in self._collect_predicates()}
 
-        # Continue with solving. Wall-clock timeouts require async solving: clingo has no
-        # timeout configuration key; instead we wait on the handle and cancel at the deadline.
+        # Claim the program and reset solve state before handing over to the lazy iterator
+        self._solving = True
+        self.satisfiable = None
         self.exhausted = False
         self.solution_count = 0
         deadline = time.monotonic() + timeout if timeout > 0 else None
-        with control.solve(yield_=True, async_=True) as handle:
-            while True:
-                handle.resume()
-                # Clamp to zero: wait() treats a negative timeout as "block forever",
-                # but a passed deadline should poll and cancel instead
-                remaining = None if deadline is None else max(0.0, deadline - time.monotonic())
-                if not handle.wait(remaining):
-                    # The deadline passed before the next model was found
+
+        generator = self._solve_iterator(control, predicate_types, deadline, tic)
+        # Prime past the sentinel yield so the iterator's cleanup is armed even if the
+        # caller closes or abandons the generator without ever iterating it
+        next(generator)
+        return generator
+
+    def _solve_iterator(
+        self,
+        control: clingo.Control,
+        predicate_types: dict[str, type[Predicate]],
+        deadline: float | None,
+        tic: float,
+    ) -> Generator[dict[str, list[Predicate]], None, None]:
+        """
+        Lazy half of solve(): yields models and finalizes bookkeeping on every exit path
+        (exhaustion, close(), exception, or garbage collection of the generator).
+        """
+        result: clingo.SolveResult | None = None
+        solution_count = 0
+        try:
+            # Sentinel consumed by solve()'s priming next(); callers never see it
+            yield {}
+
+            # Wall-clock timeouts require async solving: clingo has no timeout
+            # configuration key; instead we wait on the handle and cancel at the deadline.
+            with control.solve(yield_=True, async_=True) as handle:
+                try:
+                    while True:
+                        handle.resume()
+                        # Clamp to zero: wait() treats a negative timeout as "block forever",
+                        # but a passed deadline should poll and cancel instead
+                        remaining = None if deadline is None else max(0.0, deadline - time.monotonic())
+                        if not handle.wait(remaining):
+                            # The deadline passed before the next model was found
+                            break
+                        model = handle.model()
+                        if model is None:
+                            break
+                        solution_count += 1
+                        self.solution_count = solution_count
+                        self.satisfiable = True
+                        yield self._convert_model_to_predicates(model, predicate_types)
+                finally:
+                    # Also reached when the caller close()s mid-iteration. Cancelling a
+                    # finished search is a no-op, so this is safe on every path.
                     handle.cancel()
-                    break
-                model = handle.model()
-                if model is None:
-                    break
-                self.solution_count += 1
-                self.satisfiable = True
-                yield self._convert_model_to_predicates(model, predicate_types)
-
-            # Save final solve result information. After a cancelled solve, satisfiability
-            # may be unknown (None); keep what we learned from any yielded models.
-            result = handle.get()
-            if result.satisfiable is not None:
-                self.satisfiable = result.satisfiable
-            self.exhausted = result.exhausted
-
-        toc = time.perf_counter()
-
-        # Store the raw clingo statistics for detailed formatting
-        self._clingo_statistics = dict(control.statistics)
-        self._clingo_statistics["total_time"] = toc - tic
+                    # After a cancelled solve, satisfiability may be unknown (None);
+                    # keep what we learned from any yielded models.
+                    final: clingo.SolveResult = handle.get()
+                    if final.satisfiable is not None:
+                        self.satisfiable = final.satisfiable
+                    self.exhausted = final.exhausted
+                    result = final
+        finally:
+            self._solving = False
+            if result is not None:
+                # Store the raw clingo statistics for detailed formatting. Skipped if the
+                # generator was closed before solving began (statistics would be empty).
+                self._clingo_statistics = dict(control.statistics)
+                self._clingo_statistics["total_time"] = time.perf_counter() - tic
 
     def _convert_symbol_to_predicate(
         self, symbol: clingo.Symbol, predicate_types: dict[str, type[Predicate]]
