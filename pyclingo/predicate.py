@@ -235,18 +235,18 @@ class Predicate(BasicTerm):
 
         return predicates
 
-    def collect_symbolic_constants(self) -> set[str]:
+    def collect_defined_constants(self) -> set[str]:
         """
-        Collects all symbolic constant names used in this predicate.
+        Collects all defined constant names used in this predicate.
 
         Returns:
-            set[str]: A set of symbolic constant names used in this predicate.
+            set[str]: A set of defined constant names used in this predicate.
         """
         constants = set()
 
-        # Collect symbolic constants from all arguments
+        # Collect defined constants from all arguments
         for arg in self.arguments:
-            constants.update(arg.collect_symbolic_constants())
+            constants.update(arg.collect_defined_constants())
 
         return constants
 

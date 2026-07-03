@@ -11,7 +11,7 @@ The DSL overloads == on Values/Expressions/Aggregates to build ASP Comparison te
 import pytest
 
 from pyclingo import Predicate, Variable
-from pyclingo.value import Constant, StringConstant, SymbolicConstant
+from pyclingo.value import Constant, DefinedConstant, StringConstant
 
 
 class TestComparisonBool:
@@ -39,7 +39,7 @@ class TestValueCaching:
         assert Constant(1) is Constant(1)
         assert Constant(1) is not Constant(2)
         assert StringConstant("a") is StringConstant("a")
-        assert SymbolicConstant("foo") is SymbolicConstant("foo")
+        assert DefinedConstant("foo") is DefinedConstant("foo")
 
     def test_caching_distinguishes_classes_and_types(self) -> None:
         # str "1" vs int 1, and bool True vs int 1 (True == 1 in Python)

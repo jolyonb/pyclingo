@@ -285,9 +285,9 @@ class Variable(Value):
         """
         return set()
 
-    def collect_symbolic_constants(self) -> set[str]:
+    def collect_defined_constants(self) -> set[str]:
         """
-        Variables don't directly reference symbolic constants.
+        Variables don't directly reference defined constants.
 
         Returns:
             set[str]: An empty set.
@@ -360,7 +360,7 @@ class ConstantBase(Value, ABC):
 
     Constants are grounded values that can appear in predicates
     or directly in a program. This class serves as the foundation
-    for both regular constants and symbolic constants.
+    for both regular constants and defined constants.
     """
 
     @property
@@ -395,10 +395,10 @@ class ConstantBase(Value, ABC):
         """
         return set()
 
-    def collect_symbolic_constants(self) -> set[str]:
+    def collect_defined_constants(self) -> set[str]:
         """
-        Default implementation for collecting symbolic constants.
-        Subclasses should override this if they represent symbolic constants.
+        Default implementation for collecting defined constants.
+        Subclasses should override this if they represent defined constants.
 
         Returns:
             set[str]: An empty set by default.
@@ -555,40 +555,41 @@ class StringConstant(ConstantBase):
         return str(self.value)
 
 
-class SymbolicConstant(ConstantBase):
+class DefinedConstant(ConstantBase):
     """
-    Represents a symbolic constant in an ASP program.
+    Represents a #const-defined constant in an ASP program.
 
-    Symbolic constants in ASP are strings beginning with a lowercase letter
-    that must be registered with the ASPProgram for proper usage.
+    A defined constant is a name given a value via ASPProgram.define_constant(),
+    rendered as a "#const name = value." statement; occurrences are substituted
+    at grounding. For a plain symbolic term needing no definition, use Symbol.
     """
 
     def __init__(self, value: str):
         """
-        Initialize a symbolic constant with a string value.
+        Initialize a defined constant with its name.
 
         Args:
-            value: The string value of the symbolic constant. Must start with a lowercase letter
+            value: The name of the constant. Must start with a lowercase letter
                   and can contain letters, digits, and underscores.
 
         Raises:
             ValueError: If the value doesn't start with a lowercase letter or contains invalid characters.
         """
         if not value or not value[0].islower():
-            raise ValueError(f"Symbolic constant must start with a lowercase letter: {value}")
+            raise ValueError(f"Defined constant must start with a lowercase letter: {value}")
 
         if not all(c.isalnum() or c == "_" for c in value):
-            raise ValueError(f"Symbolic constant can only contain letters, digits, and underscores: {value}")
+            raise ValueError(f"Defined constant can only contain letters, digits, and underscores: {value}")
 
         self._value = value
 
     @property
     def value(self) -> str:
         """
-        Gets the string value of the symbolic constant.
+        Gets the name of the defined constant.
 
         Returns:
-            str: The value of the symbolic constant.
+            str: The name of the constant.
         """
         return self._value
 
@@ -609,12 +610,12 @@ class SymbolicConstant(ConstantBase):
         """
         return self.value
 
-    def collect_symbolic_constants(self) -> set[str]:
+    def collect_defined_constants(self) -> set[str]:
         """
-        Collects the symbolic constant name represented by this object.
+        Collects the defined constant name represented by this object.
 
         Returns:
-            set[str]: A set containing this symbolic constant's name.
+            set[str]: A set containing this defined constant's name.
         """
         return {self.value}
 
@@ -642,7 +643,7 @@ class Symbol(ConstantBase):
     Represents a plain symbolic constant term, e.g. the n in direction(n).
 
     Unlike StringConstant, a Symbol renders unquoted — n and "n" are different
-    terms in clingo. Unlike SymbolicConstant, a Symbol is not a #const definition
+    terms in clingo. Unlike DefinedConstant, a Symbol is not a #const definition
     and needs no registration with the program; it is just a term.
     """
 

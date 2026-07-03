@@ -32,13 +32,13 @@ class ProgramElement(ABC):
         """
         return set()
 
-    def collect_symbolic_constants(self) -> set[str]:
+    def collect_defined_constants(self) -> set[str]:
         """
-        Collects all symbolic constant names used in this program element.
+        Collects all defined constant names used in this program element.
         Default implementation returns an empty set.
 
         Returns:
-            set[str]: A set of symbolic constant names used in this element.
+            set[str]: A set of defined constant names used in this element.
         """
         return set()
 
@@ -157,22 +157,22 @@ class Rule(ProgramElement):
 
         return predicates
 
-    def collect_symbolic_constants(self) -> set[str]:
+    def collect_defined_constants(self) -> set[str]:
         """
-        Collects all symbolic constant names used in this rule.
+        Collects all defined constant names used in this rule.
 
         Returns:
-            set[str]: A set of symbolic constant names used in this rule.
+            set[str]: A set of defined constant names used in this rule.
         """
         constants = set()
 
         # Collect from head if it exists
         if self.head is not None:
-            constants.update(self.head.collect_symbolic_constants())
+            constants.update(self.head.collect_defined_constants())
 
         # Collect from all body terms
         for term in self.body:
-            constants.update(term.collect_symbolic_constants())
+            constants.update(term.collect_defined_constants())
 
         return constants
 

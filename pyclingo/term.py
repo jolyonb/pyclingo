@@ -74,12 +74,12 @@ class Term(ABC):
         pass
 
     @abstractmethod
-    def collect_symbolic_constants(self) -> set[str]:
+    def collect_defined_constants(self) -> set[str]:
         """
-        Collects all symbolic constant names used in this term.
+        Collects all defined constant names used in this term.
 
         Returns:
-            set[str]: A set of symbolic constant names used within this term.
+            set[str]: A set of defined constant names used within this term.
         """
         pass
 

@@ -17,7 +17,7 @@ Term (abstract base class)
 │   │       ├── Constant (numeric constants, e.g., 42)
 │   │       ├── StringConstant (string literals, e.g., "hello")
 │   │       ├── Symbol (plain symbolic terms, e.g., the n in direction(n))
-│   │       └── SymbolicConstant (#const-defined constants, e.g., max_size)
+│   │       └── DefinedConstant (#const-defined constants, e.g., max_size)
 │   ├── Predicate (e.g., person(john, 42))
 │   └── Pool (abstract)
 │       ├── RangePool (e.g., 1..5)
@@ -40,7 +40,8 @@ Fundamental data types for ASP programs:
 - **Variable**: ASP variables (must start with uppercase or be '_')
 - **Constant**: Numeric integer constants
 - **StringConstant**: String literals with quotes
-- **SymbolicConstant**: Named constants that must be registered with the program
+- **Symbol**: Plain symbolic terms, unquoted (the n in direction(n))
+- **DefinedConstant**: #const-defined names that must be declared via define_constant()
 
 Key features:
 - Variables support arithmetic operations (create Expression objects)
@@ -119,7 +120,7 @@ Main class for building and solving ASP programs:
 - **Rule creation**: `when()` method
 - **Constraint creation**: `forbid()` method
 - **Comments and formatting**: `comment()`, `section()`, `blank_line()`
-- **Symbolic constants**: `register_symbolic_constant()`
+- **Defined constants**: `define_constant()`
 - **Solving**: `solve()` method with clingo integration
 
 Key features:

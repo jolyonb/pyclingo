@@ -218,12 +218,12 @@ class Aggregate(Term, ComparisonMixin, ABC):
 
         return predicates
 
-    def collect_symbolic_constants(self) -> set[str]:
+    def collect_defined_constants(self) -> set[str]:
         """
-        Collects all symbolic constant names used in this aggregate.
+        Collects all defined constant names used in this aggregate.
 
         Returns:
-            set[str]: A set of symbolic constant names used in this aggregate.
+            set[str]: A set of defined constant names used in this aggregate.
         """
         constants = set()
 
@@ -231,11 +231,11 @@ class Aggregate(Term, ComparisonMixin, ABC):
         for element_tuple, conditions in self._elements:
             # Collect from elements
             for element in element_tuple:
-                constants.update(element.collect_symbolic_constants())
+                constants.update(element.collect_defined_constants())
 
             # Collect from conditions
             for condition in conditions:
-                constants.update(condition.collect_symbolic_constants())
+                constants.update(condition.collect_defined_constants())
 
         return constants
 

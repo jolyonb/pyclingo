@@ -123,21 +123,21 @@ class ConditionalLiteral(Term):
 
         return predicates
 
-    def collect_symbolic_constants(self) -> set[str]:
+    def collect_defined_constants(self) -> set[str]:
         """
-        Collects all symbolic constant names used in this conditional literal.
+        Collects all defined constant names used in this conditional literal.
 
         Returns:
-            set[str]: A set of symbolic constant names used.
+            set[str]: A set of defined constant names used.
         """
         constants = set()
 
         # Collect from key
-        constants.update(self.head.collect_symbolic_constants())
+        constants.update(self.head.collect_defined_constants())
 
         # Collect from all locks
         for cond in self.condition:
-            constants.update(cond.collect_symbolic_constants())
+            constants.update(cond.collect_defined_constants())
 
         return constants
 

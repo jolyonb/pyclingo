@@ -7,7 +7,7 @@ if TYPE_CHECKING:
     from pyclingo.expression import Expression
     from pyclingo.pool import Pool
     from pyclingo.predicate import Predicate
-    from pyclingo.value import Constant, SymbolicConstant, Value, Variable
+    from pyclingo.value import Constant, DefinedConstant, Value, Variable
 
     PREDICATE_RAW_INPUT_TYPE = Union[int, str, Value, Predicate, Expression, Pool]
     PREDICATE_FIELD_TYPE = Union[Value, Predicate, Expression, Pool]
@@ -20,4 +20,4 @@ if TYPE_CHECKING:
 
     VARIABLE_TYPE = Variable
 
-    NUMBER = Union[int, Constant, SymbolicConstant, Variable]
+    NUMBER = Union[int, Constant, DefinedConstant, Variable]

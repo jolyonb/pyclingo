@@ -130,18 +130,18 @@ class RangePool(Pool):
         """
         return set()
 
-    def collect_symbolic_constants(self) -> set[str]:
+    def collect_defined_constants(self) -> set[str]:
         """
-        Collects all symbolic constant names used in this range pool.
+        Collects all defined constant names used in this range pool.
 
         Returns:
-            set[str]: A set of symbolic constant names from start and end values.
+            set[str]: A set of defined constant names from start and end values.
         """
         constants = set()
 
         # Collect from start and end values
-        constants.update(self.start.collect_symbolic_constants())
-        constants.update(self.end.collect_symbolic_constants())
+        constants.update(self.start.collect_defined_constants())
+        constants.update(self.end.collect_defined_constants())
 
         return constants
 
@@ -244,17 +244,17 @@ class ExplicitPool(Pool):
 
         return predicates
 
-    def collect_symbolic_constants(self) -> set[str]:
+    def collect_defined_constants(self) -> set[str]:
         """
-        Collects all symbolic constant names used in this explicit pool.
+        Collects all defined constant names used in this explicit pool.
 
         Returns:
-            set[str]: A set of symbolic constant names used in this pool.
+            set[str]: A set of defined constant names used in this pool.
         """
         constants = set()
 
         for element in self.elements:
-            constants.update(element.collect_symbolic_constants())
+            constants.update(element.collect_defined_constants())
 
         return constants
 

@@ -362,28 +362,28 @@ class Choice(Term):
 
         return predicates
 
-    def collect_symbolic_constants(self) -> set[str]:
+    def collect_defined_constants(self) -> set[str]:
         """
-        Collects all symbolic constant names used in this choice rule.
+        Collects all defined constant names used in this choice rule.
 
         Returns:
-            set[str]: A set of symbolic constant names used in this choice rule.
+            set[str]: A set of defined constant names used in this choice rule.
         """
         constants = set()
 
         # Collect from all elements and their conditions
         for element, conditions in self._elements:
-            constants.update(element.collect_symbolic_constants())
+            constants.update(element.collect_defined_constants())
 
             for condition in conditions:
-                constants.update(condition.collect_symbolic_constants())
+                constants.update(condition.collect_defined_constants())
 
         # Check cardinality bounds
         if self.min_cardinality:
-            constants.update(self.min_cardinality.collect_symbolic_constants())
+            constants.update(self.min_cardinality.collect_defined_constants())
 
         if self.max_cardinality:
-            constants.update(self.max_cardinality.collect_symbolic_constants())
+            constants.update(self.max_cardinality.collect_defined_constants())
 
         return constants
 

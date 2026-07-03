@@ -40,7 +40,7 @@ def test_works_in_pools() -> None:
 
 
 def test_no_registration_required() -> None:
-    # Unlike SymbolicConstant (#const), a Symbol needs no register_symbolic_constant
+    # Unlike DefinedConstant (#const), a Symbol needs no define_constant
     program = ASPProgram()
     P = Predicate.define("direction", ["name"])
     program.fact(P(name=Symbol("n")))

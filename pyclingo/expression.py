@@ -260,21 +260,21 @@ class Expression(Term, ComparisonMixin):
 
         return predicates
 
-    def collect_symbolic_constants(self) -> set[str]:
+    def collect_defined_constants(self) -> set[str]:
         """
-        Collects all symbolic constant names used in this expression.
+        Collects all defined constant names used in this expression.
 
         Returns:
-            set[str]: A set of symbolic constant names used in this expression.
+            set[str]: A set of defined constant names used in this expression.
         """
         constants = set()
 
         # Collect from first term if it exists (not the case for unary operations)
         if self.first_term is not None:
-            constants.update(self.first_term.collect_symbolic_constants())
+            constants.update(self.first_term.collect_defined_constants())
 
         # Collect from second term
-        constants.update(self.second_term.collect_symbolic_constants())
+        constants.update(self.second_term.collect_defined_constants())
 
         return constants
 
@@ -449,18 +449,18 @@ class Comparison(Term):
 
         return predicates
 
-    def collect_symbolic_constants(self) -> set[str]:
+    def collect_defined_constants(self) -> set[str]:
         """
-        Collects all symbolic constant names used in this comparison.
+        Collects all defined constant names used in this comparison.
 
         Returns:
-            set[str]: A set of symbolic constant names used in this comparison.
+            set[str]: A set of defined constant names used in this comparison.
         """
         constants = set()
 
         # Collect from left and right terms
-        constants.update(self.left_term.collect_symbolic_constants())
-        constants.update(self.right_term.collect_symbolic_constants())
+        constants.update(self.left_term.collect_defined_constants())
+        constants.update(self.right_term.collect_defined_constants())
 
         return constants
 

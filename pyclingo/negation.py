@@ -57,14 +57,14 @@ class NegatedLiteral(Term, ABC):
         """
         return self._term.collect_predicates()
 
-    def collect_symbolic_constants(self) -> set[str]:
+    def collect_defined_constants(self) -> set[str]:
         """
-        Collects all symbolic constant names used in the negated term.
+        Collects all defined constant names used in the negated term.
 
         Returns:
-            set[str]: A set of symbolic constant names used in this term.
+            set[str]: A set of defined constant names used in this term.
         """
-        return self._term.collect_symbolic_constants()
+        return self._term.collect_defined_constants()
 
     def collect_variables(self) -> set[str]:
         """
