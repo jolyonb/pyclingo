@@ -48,7 +48,8 @@ fixable = ["ALL"]
 known-first-party = ["pyclingo", "aspuzzle"]
 section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
 
-[tool.pytest]
-testpaths = ["tests"]
+[tool.pytest.ini_options]
+testpaths = ["tests", "pyclingo"]
+addopts = "--doctest-modules"
 python_files = "test_*.py"
 python_functions = "test_*"

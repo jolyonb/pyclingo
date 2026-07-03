@@ -41,7 +41,7 @@ repos:
         entry: pytest
         language: system
         pass_filenames: false
-        args: ["-xvs", "tests/"]
+        args: ["-xvs", "tests/", "pyclingo/"]
 
   # Verify that the pre-commit configuration is valid
   - repo: local

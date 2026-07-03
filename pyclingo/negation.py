@@ -219,9 +219,13 @@ def Not(term: Union[Predicate, Comparison, NegatedLiteral]) -> DefaultNegation:
         Term: A default negation of the given term, simplified if needed.
 
     Example:
+        >>> Person = Predicate.define("person", ["name"])
         >>> person = Person(name="john")
-        >>> not_person = Not(person)  # Renders as: not person(john)
-        >>> not_not_person = Not(not_person)  # Renders as: not not person(john)
-        >>> not_not_not_person = Not(not_not_person)  # Simplifies to: not person(john)
+        >>> Not(person).render()
+        'not person("john")'
+        >>> Not(Not(person)).render()
+        'not not person("john")'
+        >>> Not(Not(Not(person))).render()  # triple negation simplifies
+        'not person("john")'
     """
     return DefaultNegation(term)

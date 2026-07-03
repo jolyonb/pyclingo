@@ -337,11 +337,16 @@ class Variable(Value):
             Comparison: A comparison term representing "X = pool_or_range"
 
         Examples:
+            >>> from pyclingo import RangePool
             >>> X = Variable("X")
-            >>> X.in_(RangePool(1, 5))  # X = 1..5
-            >>> X.in_([1, 3, 5])  # X = (1;3;5)
-            >>> X.in_(range(1, 6))  # X = 1..5
-            >>> X.in_(range(1, 10, 2))  # X = (1;3;5;7;9)
+            >>> X.in_(RangePool(1, 5)).render()
+            'X = 1..5'
+            >>> X.in_([1, 3, 5]).render()
+            'X = (1; 3; 5)'
+            >>> X.in_(range(1, 6)).render()
+            'X = 1..5'
+            >>> X.in_(range(1, 10, 2)).render()
+            'X = (1; 3; 5; 7; 9)'
 
         Raises:
             TypeError: If pool_or_range is not a Pool, list, tuple or range,

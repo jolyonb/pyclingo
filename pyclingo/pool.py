@@ -285,9 +285,12 @@ def pool(elements: Union[range, Sequence[int | str | ConstantBase | Predicate], 
         An appropriate Pool object (RangePool for continuous ranges, ExplicitPool otherwise)
 
     Examples:
-        >>> pool(range(1, 6))  # Creates a RangePool equivalent to 1..5
-        >>> pool([1, 3, 5])    # Creates an ExplicitPool equivalent to (1;3;5)
-        >>> pool(["a", "b"])   # Creates an ExplicitPool of string constants
+        >>> pool(range(1, 6)).render()
+        '1..5'
+        >>> pool([1, 3, 5]).render()
+        '(1; 3; 5)'
+        >>> pool(["a", "b"]).render()
+        '("a"; "b")'
 
     Raises:
         TypeError: If elements is not a supported type or contains unsupported elements

@@ -280,8 +280,9 @@ class Predicate(BasicTerm):
             ClassicalNegation: A classical negation of this predicate.
 
         Example:
-            >>> person = Person(name="john")
-            >>> neg_person = -person  # Renders as: -person(john)
+            >>> Person = Predicate.define("person", ["name"])
+            >>> (-Person(name="john")).render()
+            '-person("john")'
         """
         from pyclingo.negation import (
             ClassicalNegation,  # Import here to avoid circular imports
@@ -297,8 +298,9 @@ class Predicate(BasicTerm):
             DefaultNegation: A default negation of this predicate.
 
         Example:
-            >>> person = Person(name="john")
-            >>> not_person = ~person  # Renders as: not person(john)
+            >>> Person = Predicate.define("person", ["name"])
+            >>> (~Person(name="john")).render()
+            'not person("john")'
         """
         from pyclingo.negation import (
             DefaultNegation,  # Import here to avoid circular imports
