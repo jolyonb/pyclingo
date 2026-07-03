@@ -64,7 +64,7 @@ class Predicate(BasicTerm):
             'person("john", 30)'
 
         Note that Python strings become quoted ASP string constants; for an unquoted
-        symbolic constant argument, pass a SymbolicConstant registered with the program.
+        symbolic constant argument like person(john), pass Symbol("john").
         """
         # Validate the predicate name
         if not name or not name[0].islower():

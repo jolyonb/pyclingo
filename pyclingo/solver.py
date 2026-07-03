@@ -12,7 +12,7 @@ from pyclingo.conditional_literal import ConditionalLiteral
 from pyclingo.predicate import Predicate
 from pyclingo.program_elements import BlankLine, Comment, ProgramElement, Rule
 from pyclingo.term import Term
-from pyclingo.value import Constant, ConstantBase, StringConstant, SymbolicConstant
+from pyclingo.value import Constant, ConstantBase, StringConstant, Symbol, SymbolicConstant
 
 
 class ASPProgram:
@@ -450,9 +450,13 @@ class ASPProgram:
             elif arg.type == clingo.SymbolType.String:
                 kwargs[field_name] = StringConstant(arg.string)
             elif arg.type == clingo.SymbolType.Function:
-                # Recursively convert nested predicates
-                nested_pred = self._convert_symbol_to_predicate(arg, predicate_types)
-                kwargs[field_name] = nested_pred
+                if not arg.arguments and arg.name not in predicate_types:
+                    # A zero-arity function that isn't a known predicate is a plain
+                    # symbolic constant, e.g. the n in direction(n)
+                    kwargs[field_name] = Symbol(arg.name)
+                else:
+                    # Recursively convert nested predicates
+                    kwargs[field_name] = self._convert_symbol_to_predicate(arg, predicate_types)
             else:
                 raise ValueError(f"Unsupported symbol type in argument {i} of {pred_name}: {arg.type}")
 

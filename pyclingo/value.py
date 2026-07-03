@@ -637,6 +637,63 @@ class SymbolicConstant(ConstantBase):
         return str(self.value)
 
 
+class Symbol(ConstantBase):
+    """
+    Represents a plain symbolic constant term, e.g. the n in direction(n).
+
+    Unlike StringConstant, a Symbol renders unquoted — n and "n" are different
+    terms in clingo. Unlike SymbolicConstant, a Symbol is not a #const definition
+    and needs no registration with the program; it is just a term.
+    """
+
+    def __init__(self, value: str):
+        """
+        Initialize a symbol.
+
+        Args:
+            value: The symbol name. Must start with a lowercase letter and can
+                   contain letters, digits, and underscores.
+
+        Raises:
+            ValueError: If the name doesn't fit clingo's identifier syntax.
+        """
+        if not value or not value[0].islower():
+            raise ValueError(f"Symbol must start with a lowercase letter: {value}")
+
+        if not all(c.isalnum() or c == "_" for c in value):
+            raise ValueError(f"Symbol can only contain letters, digits, and underscores: {value}")
+
+        self._value = value
+
+    @property
+    def value(self) -> str:
+        """Gets the name of the symbol."""
+        return self._value
+
+    def render(
+        self,
+        context: RenderingContext = RenderingContext.DEFAULT,
+        parent_op: Operation | None = None,
+        is_right_operand: bool = False,
+    ) -> str:
+        """
+        Renders the term as a string in Clingo syntax.
+
+        Args:
+            context: The context in which the Term is being rendered.
+
+        Returns:
+            str: The symbol, unquoted.
+        """
+        return self._value
+
+    def __repr__(self) -> str:
+        return f"Symbol({self._value!r})"
+
+    def __str__(self) -> str:
+        return self._value
+
+
 ANY = Variable("_")
 
 

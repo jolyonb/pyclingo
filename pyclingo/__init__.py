@@ -20,4 +20,4 @@ from .negation import Not
 from .pool import ExplicitPool, RangePool
 from .predicate import Predicate
 from .solver import ASPProgram
-from .value import ANY, Variable, create_variables
+from .value import ANY, Symbol, Variable, create_variables
