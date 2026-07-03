@@ -6,7 +6,7 @@ from pyclingo.expression import Comparison
 from pyclingo.negation import ClassicalNegation, NegatedLiteral
 from pyclingo.predicate import Predicate
 from pyclingo.term import RenderingContext, Term
-from pyclingo.value import Constant, StringConstant, Value, Variable
+from pyclingo.value import Number, String, Value, Variable
 
 if TYPE_CHECKING:
     from pyclingo.types import PREDICATE_CLASS_TYPE
@@ -131,14 +131,14 @@ class Choice(Term):
             raise TypeError(f"{description} must be an integer or Value, got {type(count).__name__}")
 
         # Reject string constants which don't make sense for cardinality
-        if isinstance(count, StringConstant):
-            raise TypeError(f"{description} cannot be a StringConstant")
+        if isinstance(count, String):
+            raise TypeError(f"{description} cannot be a String")
 
         # Check for negative integers
         if isinstance(count, int) and count < 0:
             raise ValueError(f"{description} must be a non-negative integer, got {count}")
 
-        return Constant(count) if isinstance(count, int) else count
+        return Number(count) if isinstance(count, int) else count
 
     def exactly(self, count: CARDINALITY_TYPE) -> Self:
         """

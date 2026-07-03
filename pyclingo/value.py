@@ -30,9 +30,9 @@ class Value(BasicTerm, ComparisonMixin, ABC):
 
     def __new__(cls, *args: Any, **kwargs: Any) -> Self:
         # All concrete Value subclasses take exactly one constructor argument; anything
-        # else falls through so __init__ can raise its own error. The key includes the
-        # argument's type so that e.g. Constant(True) and Constant(1) (bool is a subclass
-        # of int, and True == 1) do not share a cached instance.
+        # else falls through so __init__ can raise its own error. The cache key includes
+        # the argument's type so that equal-but-distinct-type arguments never share an
+        # instance.
         if len(args) + len(kwargs) == 1:
             value = args[0] if args else next(iter(kwargs.values()))
             key = (cls, type(value), value)
@@ -63,7 +63,7 @@ class Value(BasicTerm, ComparisonMixin, ABC):
             Other arguments are ignored, but present to assist with rendering of expressions.
 
         Returns:
-            str: The string representation of the symbolic constant.
+            str: The string representation of the value.
         """
         pass
 
@@ -338,7 +338,7 @@ class Variable(Value):
 
         Examples:
             >>> X = Variable("X")
-            >>> X.in_(RangePool(Constant(1), Constant(5)))  # X = 1..5
+            >>> X.in_(RangePool(1, 5))  # X = 1..5
             >>> X.in_([1, 3, 5])  # X = (1;3;5)
             >>> X.in_(range(1, 6))  # X = 1..5
             >>> X.in_(range(1, 10, 2))  # X = (1;3;5;7;9)
@@ -415,7 +415,7 @@ class ConstantBase(Value, ABC):
         return set()
 
 
-class Constant(ConstantBase):
+class Number(ConstantBase):
     """
     Represents a numeric constant in an ASP program.
 
@@ -433,9 +433,9 @@ class Constant(ConstantBase):
         Raises:
             TypeError: If the value is not an integer.
         """
-
-        if not isinstance(value, int):
-            raise TypeError(f"Constant value must be an integer, got {type(value).__name__}")
+        # bool subclasses int, and a boolean is never a valid ASP term
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise TypeError(f"Number value must be an integer, got {type(value).__name__}")
         self._value = value
 
     @property
@@ -484,7 +484,7 @@ class Constant(ConstantBase):
         return str(self.value)
 
 
-class StringConstant(ConstantBase):
+class String(ConstantBase):
     """
     Represents a string constant in an ASP program.
 
@@ -642,7 +642,7 @@ class Symbol(ConstantBase):
     """
     Represents a plain symbolic constant term, e.g. the n in direction(n).
 
-    Unlike StringConstant, a Symbol renders unquoted — n and "n" are different
+    Unlike String, a Symbol renders unquoted — n and "n" are different
     terms in clingo. Unlike DefinedConstant, a Symbol is not a #const definition
     and needs no registration with the program; it is just a term.
     """

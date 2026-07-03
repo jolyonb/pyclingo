@@ -4,7 +4,7 @@ PyClingo: A Python library for building clingo ASP (Answer Set Programming) prog
 with a clean, object-oriented interface.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 from .aggregates import (
     Count,

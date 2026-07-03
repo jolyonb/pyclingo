@@ -11,7 +11,7 @@ The DSL overloads == on Values/Expressions/Aggregates to build ASP Comparison te
 import pytest
 
 from pyclingo import Predicate, Variable
-from pyclingo.value import Constant, DefinedConstant, StringConstant
+from pyclingo.value import DefinedConstant, Number, String
 
 
 class TestComparisonBool:
@@ -26,7 +26,7 @@ class TestComparisonBool:
 
     def test_if_statement_on_comparison_raises(self) -> None:
         with pytest.raises(TypeError, match="no boolean value"):
-            if Constant(1) == Constant(2):
+            if Number(1) == Number(2):
                 pass
 
 
@@ -36,26 +36,29 @@ class TestValueCaching:
         assert Variable("X") is not Variable("Y")
 
     def test_constants_are_cached(self) -> None:
-        assert Constant(1) is Constant(1)
-        assert Constant(1) is not Constant(2)
-        assert StringConstant("a") is StringConstant("a")
+        assert Number(1) is Number(1)
+        assert Number(1) is not Number(2)
+        assert String("a") is String("a")
         assert DefinedConstant("foo") is DefinedConstant("foo")
 
     def test_caching_distinguishes_classes_and_types(self) -> None:
-        # str "1" vs int 1, and bool True vs int 1 (True == 1 in Python)
-        assert StringConstant("1") is not Constant(1)
-        assert Constant(True) is not Constant(1)
+        assert String("1") is not Number(1)  # str "1" vs int 1
+
+    def test_booleans_are_rejected(self) -> None:
+        # bool subclasses int, but a boolean is never a valid ASP term
+        with pytest.raises(TypeError, match="got bool"):
+            Number(True)
 
     def test_values_are_hashable_with_set_semantics(self) -> None:
         assert len({Variable("X"), Variable("X"), Variable("Y")}) == 2
-        assert len({Constant(1), Constant(1), Constant(2)}) == 2
+        assert len({Number(1), Number(1), Number(2)}) == 2
         d = {Variable("X"): "first"}
         d[Variable("X")] = "second"
         assert d == {Variable("X"): "second"}
 
     def test_invalid_construction_still_raises_cleanly(self) -> None:
         with pytest.raises(TypeError):
-            Constant([1, 2])  # type: ignore[arg-type]  # unhashable and invalid
+            Number([1, 2])  # type: ignore[arg-type]  # unhashable and invalid
         with pytest.raises(ValueError):
             Variable("lowercase")
 

@@ -6,7 +6,7 @@ import pytest
 
 from pyclingo import ASPProgram, ExplicitPool, Symbol
 from pyclingo.predicate import Predicate
-from pyclingo.value import StringConstant
+from pyclingo.value import String
 
 
 def test_renders_unquoted() -> None:
@@ -16,8 +16,8 @@ def test_renders_unquoted() -> None:
 
 
 def test_distinct_from_string_constant() -> None:
-    assert Symbol("n") is not StringConstant("n")
-    assert Symbol("n").render() != StringConstant("n").render()
+    assert Symbol("n") is not String("n")
+    assert Symbol("n").render() != String("n").render()
 
 
 def test_cached_like_other_values() -> None:

@@ -12,7 +12,7 @@ from pyclingo.conditional_literal import ConditionalLiteral
 from pyclingo.predicate import Predicate
 from pyclingo.program_elements import BlankLine, Comment, ProgramElement, Rule
 from pyclingo.term import Term
-from pyclingo.value import Constant, ConstantBase, DefinedConstant, StringConstant, Symbol
+from pyclingo.value import ConstantBase, DefinedConstant, Number, String, Symbol
 
 
 class ASPProgram:
@@ -119,10 +119,10 @@ class ASPProgram:
         # Validate name
         assert isinstance(name, str)
         if not name or not name[0].islower():
-            raise ValueError(f"Constant name must start with a lowercase letter: {name}")
+            raise ValueError(f"Number name must start with a lowercase letter: {name}")
 
         if not all(c.isalnum() or c == "_" for c in name):
-            raise ValueError(f"Constant name can only contain letters, digits, and underscores: {name}")
+            raise ValueError(f"Number name can only contain letters, digits, and underscores: {name}")
 
         # Check for duplicate registration
         if name in self._defined_constants:
@@ -130,7 +130,7 @@ class ASPProgram:
 
         # Validate value type
         if not isinstance(value, (int, str)):
-            raise TypeError(f"Constant value must be an integer or string, got {type(value).__name__}")
+            raise TypeError(f"Number value must be an integer or string, got {type(value).__name__}")
 
         # Store the constant
         self._defined_constants[name] = value
@@ -179,7 +179,7 @@ class ASPProgram:
         Render the complete ASP program.
 
         Generates the program text including:
-        1. Constant definitions
+        1. Number definitions
         2. Program elements (rules, comments, etc.)
         3. Show directives
 
@@ -446,9 +446,9 @@ class ASPProgram:
         for i, (arg, field_name) in enumerate(zip(symbol.arguments, field_names)):
             # Convert argument based on its type
             if arg.type == clingo.SymbolType.Number:
-                kwargs[field_name] = Constant(arg.number)
+                kwargs[field_name] = Number(arg.number)
             elif arg.type == clingo.SymbolType.String:
-                kwargs[field_name] = StringConstant(arg.string)
+                kwargs[field_name] = String(arg.string)
             elif arg.type == clingo.SymbolType.Function:
                 if not arg.arguments and arg.name not in predicate_types:
                     # A zero-arity function that isn't a known predicate is a plain

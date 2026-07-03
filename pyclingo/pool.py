@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Sequence, Union
 
 from pyclingo.predicate import Predicate
 from pyclingo.term import BasicTerm, RenderingContext
-from pyclingo.value import Constant, ConstantBase, StringConstant
+from pyclingo.value import ConstantBase, Number, String
 
 if TYPE_CHECKING:
     from pyclingo.expression import Expression
@@ -58,11 +58,11 @@ class RangePool(Pool):
         """
         from pyclingo.expression import Expression
 
-        # Convert integers to Constant objects
+        # Convert integers to Number objects
         if isinstance(start, int):
-            start = Constant(start)
+            start = Number(start)
         if isinstance(end, int):
-            end = Constant(end)
+            end = Number(end)
 
         if not isinstance(start, (ConstantBase, Expression)):
             raise TypeError(f"Range start must be an int, ConstantBase or Expression, got {type(start).__name__}")
@@ -188,9 +188,9 @@ class ExplicitPool(Pool):
                 raise ValueError(f"Predicate in pool must be grounded: {element.render()}")
 
             if isinstance(element, str):
-                element = StringConstant(element)
+                element = String(element)
             elif isinstance(element, int):
-                element = Constant(element)
+                element = Number(element)
 
             self._elements.append(element)
 
@@ -301,8 +301,8 @@ def pool(elements: Union[range, Sequence[int | str | ConstantBase | Predicate], 
 
     elif isinstance(elements, range):
         if elements.step == 1:
-            return RangePool(Constant(elements.start), Constant(elements.stop - 1))
-        if pool_elements := [Constant(x) for x in elements]:
+            return RangePool(Number(elements.start), Number(elements.stop - 1))
+        if pool_elements := [Number(x) for x in elements]:
             return ExplicitPool(pool_elements)
         raise ValueError("Cannot create an empty pool from empty range")
 
@@ -315,9 +315,9 @@ def pool(elements: Union[range, Sequence[int | str | ConstantBase | Predicate], 
         pool_elements = []
         for element in elements:
             if isinstance(element, int):
-                pool_elements.append(Constant(element))
+                pool_elements.append(Number(element))
             elif isinstance(element, str):
-                pool_elements.append(StringConstant(element))
+                pool_elements.append(String(element))
             elif isinstance(element, (ConstantBase, Predicate)):
                 # Ensure the predicate is grounded
                 if isinstance(element, Predicate) and not element.is_grounded:

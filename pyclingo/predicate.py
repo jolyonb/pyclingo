@@ -4,7 +4,7 @@ from dataclasses import Field, dataclass, fields, make_dataclass
 from typing import TYPE_CHECKING, Any, ClassVar, Type
 
 from pyclingo.term import BasicTerm, RenderingContext
-from pyclingo.value import Constant, StringConstant, Value
+from pyclingo.value import Number, String, Value
 
 if TYPE_CHECKING:
     from pyclingo.negation import ClassicalNegation, DefaultNegation
@@ -107,9 +107,9 @@ class Predicate(BasicTerm):
 
             # Convert literals to appropriate Value objects
             if isinstance(value, int):
-                object.__setattr__(self, field_info.name, Constant(value))
+                object.__setattr__(self, field_info.name, Number(value))
             elif isinstance(value, str):
-                object.__setattr__(self, field_info.name, StringConstant(value))
+                object.__setattr__(self, field_info.name, String(value))
             elif not isinstance(value, (Value, Predicate, Expression, Pool)):
                 raise TypeError(
                     f"Predicate argument {field_info.name} must be a Value, Predicate, Expression, Pool, int or str, "

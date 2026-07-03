@@ -11,8 +11,8 @@ The library is built around a rich hierarchy of term types that represent differ
     - `Value` (abstract, for basic values)
       - `Variable` (e.g., `X`, `Y`)
       - `ConstantBase` (abstract)
-        - `Constant` (numeric constants, e.g., `42`)
-        - `StringConstant` (string literals, e.g., `"hello"`)
+        - `Number` (numeric constants, e.g., `42`)
+        - `String` (string literals, e.g., `"hello"`)
         - `Symbol` (plain symbolic terms, e.g., the `n` in `direction(n)`)
         - `DefinedConstant` (#const-defined constants, e.g., `max_size`)
     - `Predicate` (e.g., `person(john, 42)`)
@@ -33,14 +33,15 @@ The library is built around a rich hierarchy of term types that represent differ
 
 ### Values
 
-Values represent basic elements in an ASP program:
+Values represent basic elements in an ASP program. Plain Python literals coerce
+automatically wherever terms are expected — an int becomes an ASP number, a str
+becomes a quoted ASP string. The two values you construct by hand:
 
 ```python
-from pyclingo import Variable, Constant, StringConstant
+from pyclingo import Symbol, Variable
 
-X = Variable("X")
-age = Constant(42)
-name = StringConstant("john")
+X = Variable("X")  # an ASP variable
+n = Symbol("n")    # an unquoted symbolic term: n, as distinct from the string "n"
 ```
 
 ### Predicates
@@ -63,19 +64,21 @@ mary = Person(name="mary", age=25)
 Build rules with clear syntax:
 
 ```python
-from pyclingo import ASPProgram
+from pyclingo import ASPProgram, Variable
 
 program = ASPProgram()
+X, Y = Variable("X"), Variable("Y")
+Adult = Predicate.define("adult", ["name"])
 
 # Facts
 program.fact(john)
 program.fact(mary)
 
 # Rules
-program.when(Person(name=X, age=Y), Older(person=X))
+program.when([Person(name=X, age=Y), Y >= 18], let=Adult(name=X))
 
 # Constraints
-program.forbid(Person(name=X), Person(name=X, age=Y), Y < 0)
+program.forbid(Person(name=X, age=Y), Y < 0)
 ```
 
 ### Comparisons
@@ -91,10 +94,10 @@ X < Y  # Creates a comparison X < Y
 Use aggregates for advanced computations:
 
 ```python
-from pyclingo import Count, Variable
+from pyclingo import ANY, Count, Variable
 
 X = Variable("X")
-count = Count(X, Person(name=X)) > 5
+count = Count(X, Person(name=X, age=ANY)) > 5
 ```
 
 ### Solving

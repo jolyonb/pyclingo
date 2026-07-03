@@ -1,13 +1,13 @@
 from pyclingo.expression import Abs
-from pyclingo.value import Constant, Variable
+from pyclingo.value import Number, Variable
 
 
 def test_basic_expression_rendering() -> None:
     """Test basic expression rendering with different operators."""
     X = Variable("X")
     Y = Variable("Y")
-    c1 = Constant(1)
-    c2 = Constant(2)
+    c1 = Number(1)
+    c2 = Number(2)
 
     # Basic operations
     assert (X + Y).render() == "X + Y"

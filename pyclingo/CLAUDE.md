@@ -14,8 +14,8 @@ Term (abstract base class)
 │   ├── Value (abstract, for basic values)
 │   │   ├── Variable (e.g., X, Y)
 │   │   └── ConstantBase (abstract)
-│   │       ├── Constant (numeric constants, e.g., 42)
-│   │       ├── StringConstant (string literals, e.g., "hello")
+│   │       ├── Number (numeric constants, e.g., 42)
+│   │       ├── String (string literals, e.g., "hello")
 │   │       ├── Symbol (plain symbolic terms, e.g., the n in direction(n))
 │   │       └── DefinedConstant (#const-defined constants, e.g., max_size)
 │   ├── Predicate (e.g., person(john, 42))
@@ -38,8 +38,8 @@ Term (abstract base class)
 ### 1. Values (`value.py`)
 Fundamental data types for ASP programs:
 - **Variable**: ASP variables (must start with uppercase or be '_')
-- **Constant**: Numeric integer constants
-- **StringConstant**: String literals with quotes
+- **Number**: Numeric integer constants
+- **String**: String literals with quotes
 - **Symbol**: Plain symbolic terms, unquoted (the n in direction(n))
 - **DefinedConstant**: #const-defined names that must be declared via define_constant()
 

@@ -13,7 +13,7 @@ from pyclingo.operators import (
 )
 from pyclingo.pool import Pool
 from pyclingo.term import RenderingContext, Term
-from pyclingo.value import Constant, StringConstant, Value, Variable
+from pyclingo.value import Number, String, Value, Variable
 
 if TYPE_CHECKING:
     from pyclingo.types import (
@@ -84,9 +84,9 @@ class Expression(Term, ComparisonMixin):
             return value
 
         if isinstance(value, int):
-            from pyclingo.value import Constant
+            from pyclingo.value import Number
 
-            return Constant(value)
+            return Number(value)
 
         raise TypeError(f"Cannot convert {type(value).__name__} to an ASP term")
 
@@ -330,9 +330,9 @@ class Comparison(Term):
 
         # Convert Python literals to ASP values
         if isinstance(left_term, int):
-            self._left_term = Constant(left_term)
+            self._left_term = Number(left_term)
         elif isinstance(left_term, str):
-            self._left_term = StringConstant(left_term)
+            self._left_term = String(left_term)
         elif isinstance(left_term, (Value, Expression, Aggregate)):
             self._left_term = left_term
         else:
@@ -341,9 +341,9 @@ class Comparison(Term):
             )
 
         if isinstance(right_term, int):
-            self._right_term = Constant(right_term)
+            self._right_term = Number(right_term)
         elif isinstance(right_term, str):
-            self._right_term = StringConstant(right_term)
+            self._right_term = String(right_term)
         elif isinstance(right_term, (Value, Expression, Aggregate, Pool)):
             self._right_term = right_term
         else:
