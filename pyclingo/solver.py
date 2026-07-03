@@ -547,10 +547,13 @@ class ASPProgram:
             model_level = extra["models_level"]
             lines.append(f"Model-Level  : {model_level}")
 
-        # Problems section
+        # Problems section, matching clasp's TextOutput: problem count is the number of
+        # guiding paths (units of split work; always 1 for sequential solving) and
+        # average length is avgGp() = ratio(guiding_paths_lits, guiding_paths)
         splits = int(extra.get("splits", 0))
-        problems = 1  # Assuming single problem for now
-        avg_length = 1.00  # This might need to be calculated differently
+        problems = int(extra.get("guiding_paths", 1))
+        guiding_path_lits = int(extra.get("guiding_paths_lits", 0))
+        avg_length = guiding_path_lits / problems if problems > 0 else 0.0
         lines.append(f"Problems     : {problems:<8} (Average Length: {avg_length:.2f} Splits: {splits})")
 
         # Enhanced Lemmas section (replace your current lemma section with this):
