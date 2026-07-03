@@ -471,21 +471,9 @@ class Number(ConstantBase):
         return str(self.value)
 
     def __repr__(self) -> str:
-        """
-        Renders the constant as a string.
-
-        Returns:
-             str: The string representation of the constant.
-        """
-        return str(self.value)
+        return f"Number({self._value!r})"
 
     def __str__(self) -> str:
-        """
-        Renders the constant as a string.
-
-        Returns:
-             str: The string representation of the constant.
-        """
         return str(self.value)
 
 
@@ -542,22 +530,11 @@ class String(ConstantBase):
         return f'"{self.value}"'
 
     def __repr__(self) -> str:
-        """
-        Renders the constant as a string.
-
-        Returns:
-             str: The string representation of the constant.
-        """
-        return str(self.value)
+        return f"String({self._value!r})"
 
     def __str__(self) -> str:
-        """
-        Renders the constant as a string.
-
-        Returns:
-             str: The string representation of the constant.
-        """
-        return str(self.value)
+        """The rendered ASP text, quotes included: "e" is a string, e is a symbol."""
+        return f'"{self.value}"'
 
 
 class DefinedConstant(ConstantBase):
@@ -625,21 +602,9 @@ class DefinedConstant(ConstantBase):
         return {self.value}
 
     def __repr__(self) -> str:
-        """
-        Renders the constant as a string.
-
-        Returns:
-             str: The string representation of the constant.
-        """
-        return str(self.value)
+        return f"DefinedConstant({self._value!r})"
 
     def __str__(self) -> str:
-        """
-        Renders the constant as a string.
-
-        Returns:
-             str: The string representation of the constant.
-        """
         return str(self.value)
 
 

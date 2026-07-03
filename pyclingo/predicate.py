@@ -323,12 +323,30 @@ class Predicate(BasicTerm):
 
         return variables
 
+    def canonical_str(self) -> str:
+        """
+        The canonical named-field form of this fact, e.g. number(loc=cell(row=1, col=1), value=6).
+
+        This is the format recorded in expected-solutions files. Unlike the positional
+        ASP text from str(), it names each field, so it reads without knowing field
+        order and survives reordering. The three representations: str() is ASP,
+        repr() is Python, canonical_str() is this explicit form.
+        """
+        if not self.argument_fields():
+            return f"{self.get_name()}()"
+        args = ", ".join(
+            f"{f.name}={value.canonical_str() if isinstance(value, Predicate) else value.render()}"
+            for f in self.argument_fields()
+            for value in (self[f.name],)
+        )
+        return f"{self.get_name()}({args})"
+
     def __str__(self) -> str:
         """
-        Human-readable string representation of the predicate.
+        The predicate rendered as ASP text.
 
         Returns:
-            A string in the format: name(arg1=value1, arg2=value2)
+            A string in the format: name(value1, value2)
         """
         return self.render()
 
