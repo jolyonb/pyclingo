@@ -144,7 +144,7 @@ class Predicate(BasicTerm):
         Raises:
             KeyError: If the field doesn't exist
         """
-        if not hasattr(self, key):
+        if key not in self.field_names():
             raise KeyError(f"Predicate has no field named '{key}'")
         return getattr(self, key)
 
