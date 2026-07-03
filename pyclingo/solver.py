@@ -42,7 +42,14 @@ class ASPProgram:
         self.default_segment = default_segment.lower()
 
     def add_segment(self, segment: str) -> None:
-        """Add a new segment to the program."""
+        """
+        Pre-declare an empty segment, fixing its position in the rendered output.
+
+        Declaration is optional: writing to a new segment name (fact/when/forbid/
+        comment) creates it on first use, ordered by first write. Declaring an
+        already-existing segment is an error, because its position is already set
+        and the request can't be honored.
+        """
         # Normalize segment name to lowercase for case-insensitive handling
         normalized_segment = segment.lower()
         if normalized_segment in self._segments:
