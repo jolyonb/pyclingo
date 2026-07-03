@@ -66,14 +66,12 @@ class Predicate(BasicTerm):
         Note that Python strings become quoted ASP string constants; for an unquoted
         symbolic constant argument like person(john), pass Symbol("john").
         """
-        # Validate the predicate name
         if not name or not name[0].islower():
             raise ValueError(f"Predicate name must start with a lowercase letter: {name}")
 
         if not all(c.isalnum() or c == "_" for c in name):
             raise ValueError(f"Predicate name can only contain letters, digits, and underscores: {name}")
 
-        # Create field specifications for make_dataclass
         field_specs = [(field_name, "pyclingo.types.PREDICATE_RAW_INPUT_TYPE") for field_name in fields]
 
         # Create the new class with the provided name as the class name.
@@ -90,7 +88,6 @@ class Predicate(BasicTerm):
 
         assert issubclass(new_class, Predicate)
 
-        # Set class-level attributes
         new_class._namespace = namespace
         new_class._show = show
 
@@ -132,29 +129,13 @@ class Predicate(BasicTerm):
         return [self[f.name] for f in self.argument_fields()]
 
     def __getitem__(self, key: str) -> Any:
-        """
-        Access field values using dictionary-like syntax.
-
-        Args:
-            key: The name of the field to access
-
-        Returns:
-            The value of the field
-
-        Raises:
-            KeyError: If the field doesn't exist
-        """
+        """Access field values by name; raises KeyError for unknown fields."""
         if key not in self.field_names():
             raise KeyError(f"Predicate has no field named '{key}'")
         return getattr(self, key)
 
     def items(self) -> list[tuple[str, PREDICATE_FIELD_TYPE]]:
-        """
-        Return a list of (field_name, field_value) tuples for all argument fields.
-
-        Returns:
-            List of (name, value) tuples
-        """
+        """Return (field_name, field_value) tuples for all argument fields."""
         return [(f.name, self[f.name]) for f in self.argument_fields()]
 
     @classmethod
@@ -177,26 +158,10 @@ class Predicate(BasicTerm):
 
     @property
     def is_grounded(self) -> bool:
-        """
-        Determines if the predicate is fully grounded.
-
-        A predicate is grounded if all its arguments are grounded.
-
-        Returns:
-            bool: True if the predicate is grounded, False otherwise.
-        """
+        """A predicate is grounded if all its arguments are grounded."""
         return all(arg.is_grounded for arg in self.arguments)
 
     def render(self, context: RenderingContext = RenderingContext.DEFAULT) -> str:
-        """
-        Renders the predicate as a string in Clingo syntax.
-
-        Args:
-            context: The context in which the Term is being rendered.
-
-        Returns:
-            str: The string representation of the predicate.
-        """
         if not self.argument_fields():
             return self.get_name()
 
@@ -208,43 +173,21 @@ class Predicate(BasicTerm):
         return f"{self.get_name()}({args_str})"
 
     def validate_in_context(self, is_in_head: bool) -> None:
-        """
-        Validates this predicate for use in a specific position.
-
-        Args:
-            is_in_head: True if validating for head position, False for body position.
-        """
-        # Predicates can appear in both heads and bodies
+        """Predicates are valid in both heads and bodies."""
         pass
 
     def collect_predicates(self) -> set[PREDICATE_CLASS_TYPE]:
-        """
-        Collects all predicate classes used in this predicate.
-
-        Returns the class of this predicate plus any predicates used as arguments.
-
-        Returns:
-            set[type[Predicate]]: A set of Predicate classes used in this predicate.
-        """
-        # Add this predicate's class to the set
+        """Returns this predicate's class plus any predicate classes used as arguments."""
         predicates: set[PREDICATE_CLASS_TYPE] = {type(self)}
 
-        # Collect predicates from all arguments
         for arg in self.arguments:
             predicates.update(arg.collect_predicates())
 
         return predicates
 
     def collect_defined_constants(self) -> set[str]:
-        """
-        Collects all defined constant names used in this predicate.
-
-        Returns:
-            set[str]: A set of defined constant names used in this predicate.
-        """
         constants = set()
 
-        # Collect defined constants from all arguments
         for arg in self.arguments:
             constants.update(arg.collect_defined_constants())
 
@@ -309,15 +252,8 @@ class Predicate(BasicTerm):
         return DefaultNegation(self)
 
     def collect_variables(self) -> set[str]:
-        """
-        Collects all variables used in this predicate's arguments.
-
-        Returns:
-            set[str]: A set of variables used in this predicate.
-        """
         variables = set()
 
-        # Collect variables from all arguments
         for arg in self.arguments:
             variables.update(arg.collect_variables())
 
@@ -342,21 +278,11 @@ class Predicate(BasicTerm):
         return f"{self.get_name()}({args})"
 
     def __str__(self) -> str:
-        """
-        The predicate rendered as ASP text.
-
-        Returns:
-            A string in the format: name(value1, value2)
-        """
+        """The predicate rendered as ASP text, e.g. name(value1, value2)."""
         return self.render()
 
     def __repr__(self) -> str:
-        """
-        Developer-friendly string representation of the predicate.
-
-        Returns:
-            A string that could be used to recreate this predicate
-        """
+        """A Python-syntax representation that could recreate this predicate."""
         if not self.argument_fields():
             return f"{self.__class__.__name__}()"
 

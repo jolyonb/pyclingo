@@ -13,6 +13,9 @@ class ComparisonMixin(ABC):
     """
     Mixin class that provides comparison operator methods.
 
+    The operators (==, !=, <, <=, >, >=) build Comparison terms rather than
+    evaluating anything.
+
     This should only be applied to Term subclasses that represent values
     that can be meaningfully compared. This includes:
     * Value
@@ -26,7 +29,6 @@ class ComparisonMixin(ABC):
     __hash__ = object.__hash__
 
     def __lt__(self, other: Any) -> Comparison:
-        """Creates a Comparison representing self < other."""
         from pyclingo.aggregates import Aggregate
         from pyclingo.expression import Comparison, Expression
         from pyclingo.operators import ComparisonOperator
@@ -38,7 +40,6 @@ class ComparisonMixin(ABC):
         return Comparison(self, ComparisonOperator.LESS_THAN, other)
 
     def __le__(self, other: Any) -> Comparison:
-        """Creates a Comparison representing self <= other."""
         from pyclingo.aggregates import Aggregate
         from pyclingo.expression import Comparison, Expression
         from pyclingo.operators import ComparisonOperator
@@ -50,7 +51,6 @@ class ComparisonMixin(ABC):
         return Comparison(self, ComparisonOperator.LESS_EQUAL, other)
 
     def __gt__(self, other: Any) -> Comparison:
-        """Creates a Comparison representing self > other."""
         from pyclingo.aggregates import Aggregate
         from pyclingo.expression import Comparison, Expression
         from pyclingo.operators import ComparisonOperator
@@ -62,7 +62,6 @@ class ComparisonMixin(ABC):
         return Comparison(self, ComparisonOperator.GREATER_THAN, other)
 
     def __ge__(self, other: Any) -> Comparison:
-        """Creates a Comparison representing self >= other."""
         from pyclingo.aggregates import Aggregate
         from pyclingo.expression import Comparison, Expression
         from pyclingo.operators import ComparisonOperator
@@ -74,7 +73,6 @@ class ComparisonMixin(ABC):
         return Comparison(self, ComparisonOperator.GREATER_EQUAL, other)
 
     def __eq__(self, other: Any) -> Comparison:  # type: ignore[override]
-        """Creates a Comparison representing self == other."""
         from pyclingo.aggregates import Aggregate
         from pyclingo.expression import Comparison, Expression
         from pyclingo.operators import ComparisonOperator
@@ -86,7 +84,6 @@ class ComparisonMixin(ABC):
         return Comparison(self, ComparisonOperator.EQUAL, other)
 
     def __ne__(self, other: Any) -> Comparison:  # type: ignore[override]
-        """Creates a Comparison representing self != other."""
         from pyclingo.aggregates import Aggregate
         from pyclingo.expression import Comparison, Expression
         from pyclingo.operators import ComparisonOperator

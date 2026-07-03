@@ -33,11 +33,7 @@ class ConditionalLiteral(Term):
         Args:
             head: The term that must be satisfied for all matching instances
             condition: The condition(s) that define when the head is required
-
-        Raises:
-            TypeError: If the arguments are not of the correct types
         """
-        # Validate head type
         if not isinstance(head, (Predicate, Comparison, NegatedLiteral)):
             raise TypeError("The head of a conditional literal must be a predicate, comparison, or negated term")
 
@@ -49,7 +45,6 @@ class ConditionalLiteral(Term):
         else:
             self._condition = list(condition)
 
-        # Validate all conditions are valid terms
         for cond in self._condition:
             if not isinstance(cond, (Predicate, Comparison, NegatedLiteral)):
                 raise TypeError("Conditions in a conditional literal must be predicates, comparisons, or negated terms")
@@ -61,99 +56,50 @@ class ConditionalLiteral(Term):
 
     @property
     def condition(self) -> list[CONDITIONAL_TERM_TYPE]:
-        """Gets the conditions of the conditional literal."""
-        return self._condition.copy()  # Return a copy to prevent modification
+        """Gets the conditions of the conditional literal (a defensive copy)."""
+        return self._condition.copy()
 
     @property
     def is_grounded(self) -> bool:
-        """
-        A conditional literal is grounded if both the head and all conditions are grounded.
-
-        Returns:
-            bool: True if everything is grounded, False otherwise.
-        """
+        """A conditional literal is grounded if the head and all conditions are grounded."""
         return self.head.is_grounded and all(cond.is_grounded for cond in self.condition)
 
     def render(self, context: RenderingContext = RenderingContext.DEFAULT) -> str:
-        """
-        Renders the conditional literal as a string in Clingo syntax.
-
-        Args:
-            context: The context in which the Term is being rendered.
-
-        Returns:
-            str: The string representation of the conditional literal.
-        """
         head_str = self.head.render()
         condition_str = ", ".join(cond.render() for cond in self.condition)
 
         return f"{head_str} : {condition_str}"
 
     def validate_in_context(self, is_in_head: bool) -> None:
-        """
-        Validates this conditional literal for use in a specific context.
-
-        Conditional literals are valid in rule bodies but not in rule heads
-        (since you're not supporting disjunction).
-
-        Args:
-            is_in_head: True if validating for head position, False for body position.
-
-        Raises:
-            ValueError: When trying to use a conditional literal in a rule head.
-        """
+        """Conditional literals are body-only (disjunctive heads are unsupported): raises in heads."""
         if is_in_head:
             raise ValueError("Conditional literals cannot be used in rule heads")
 
     def collect_predicates(self) -> set[PREDICATE_CLASS_TYPE]:
-        """
-        Collects all predicate classes used in this conditional literal.
-
-        Returns:
-            set[type[Predicate]]: A set of Predicate classes used.
-        """
         predicates = set()
 
-        # Collect from the head
         predicates.update(self.head.collect_predicates())
 
-        # Collect from all conditions
         for cond in self.condition:
             predicates.update(cond.collect_predicates())
 
         return predicates
 
     def collect_defined_constants(self) -> set[str]:
-        """
-        Collects all defined constant names used in this conditional literal.
-
-        Returns:
-            set[str]: A set of defined constant names used.
-        """
         constants = set()
 
-        # Collect from key
         constants.update(self.head.collect_defined_constants())
 
-        # Collect from all locks
         for cond in self.condition:
             constants.update(cond.collect_defined_constants())
 
         return constants
 
     def collect_variables(self) -> set[str]:
-        """
-        Collects all variables used in this conditional literal.
-
-        Returns:
-            set[str]: A set of variables used.
-        """
         variables = set()
 
-        # Collect from key
         variables.update(self.head.collect_variables())
 
-        # Collect from all locks
         for cond in self.condition:
             variables.update(cond.collect_variables())
 
@@ -172,12 +118,7 @@ def key_for_each_lock(
 
     Args:
         key: The term that must be satisfied (the "key")
-             - Must be a predicate, comparison, or negated term
-        lock: The condition defining when the key is required (the "lock")
-             - Must be a predicate, comparison, negated term, or list of these
-
-    Returns:
-        A conditional literal representing this relationship
+        lock: The condition(s) defining when the key is required (the "lock")
 
     Note:
         - Every "lock" must have a matching "key"

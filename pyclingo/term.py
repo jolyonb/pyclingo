@@ -31,32 +31,21 @@ class Term(ABC):
         """
         Renders the term as a string in Clingo syntax.
 
-        Context is used to tell the term the context in which it is being rendered.
-        Terms are responsible for wrapping themselves in parentheses as needed.
-
-        Args:
-            context: The context in which the Term is being rendered.
-
-        Returns:
-            str: The string representation of the term in Clingo syntax.
+        Context tells the term where it is being rendered; terms are responsible
+        for wrapping themselves in parentheses as needed.
         """
         pass
 
     @property
     @abstractmethod
     def is_grounded(self) -> bool:
-        """
-        Determines if the term is fully grounded (contains no variables).
-
-        Returns:
-            bool: True if the term is grounded, False otherwise.
-        """
+        """Determines if the term is fully grounded (contains no variables)."""
         pass
 
     @abstractmethod
     def validate_in_context(self, is_in_head: bool) -> None:
         """
-        Validates this term for use in a specific position (head or body).
+        Validates this term for use in a specific position, raising if invalid.
 
         Args:
             is_in_head: True if validating for head position, False for body position.
@@ -65,32 +54,17 @@ class Term(ABC):
 
     @abstractmethod
     def collect_predicates(self) -> set[PREDICATE_CLASS_TYPE]:
-        """
-        Collects all predicate classes used in this term.
-
-        Returns:
-            set[type[predicate]]: A set of Predicate classes (not instances) used within this term.
-        """
+        """Collects all Predicate classes (not instances) used in this term."""
         pass
 
     @abstractmethod
     def collect_defined_constants(self) -> set[str]:
-        """
-        Collects all defined constant names used in this term.
-
-        Returns:
-            set[str]: A set of defined constant names used within this term.
-        """
+        """Collects all defined constant names used in this term."""
         pass
 
     @abstractmethod
     def collect_variables(self) -> set[str]:
-        """
-        Collects all variables used in this term.
-
-        Returns:
-            set[str]: A set of variables used within this term.
-        """
+        """Collects the names of all variables used in this term."""
         pass
 
 

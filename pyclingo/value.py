@@ -18,7 +18,8 @@ class Value(BasicTerm, ComparisonMixin, ABC):
     Abstract base class for values that can be used as arguments in ASP programs.
 
     Values include variables and constants, representing the most basic
-    elements in an ASP program.
+    elements in an ASP program. Arithmetic operators on values build
+    Expression terms; comparison operators build Comparison terms.
 
     Concrete Value subclasses are cached: constructing the same value twice returns the
     same object, e.g. Variable("X") is Variable("X"). Values are immutable, so sharing
@@ -56,136 +57,55 @@ class Value(BasicTerm, ComparisonMixin, ABC):
         is_right_operand: bool = False,
     ) -> str:
         """
-        Renders the term as a string in Clingo syntax.
+        Renders the value as a string in Clingo syntax.
 
-        Args:
-            context: The context in which the Term is being rendered.
-            Other arguments are ignored, but present to assist with rendering of expressions.
-
-        Returns:
-            str: The string representation of the value.
+        The arguments beyond context are ignored by values; they exist so that
+        Expression can pass rendering state (parent operator and operand side)
+        uniformly to all of its operands when deciding parenthesization.
         """
         pass
 
     def __add__(self, other: int | VALUE_EXPRESSION_TYPE) -> Expression:
-        """
-        Creates an Expression representing self + other.
-
-        Args:
-            other: The right-hand operand (integer or Term).
-
-        Returns:
-            Expression: A new Expression representing the addition.
-        """
         from pyclingo.expression import Expression
 
         return Expression(self, Operation.ADD, other)
 
     def __radd__(self, other: int | VALUE_EXPRESSION_TYPE) -> Expression:
-        """
-        Creates an Expression representing other + self.
-
-        Args:
-            other: The left-hand operand (integer or Term).
-
-        Returns:
-            Expression: A new Expression representing the addition.
-        """
         from pyclingo.expression import Expression
 
         return Expression(other, Operation.ADD, self)
 
     def __sub__(self, other: int | VALUE_EXPRESSION_TYPE) -> Expression:
-        """
-        Creates an Expression representing self - other.
-
-        Args:
-            other: The right-hand operand (integer or Term).
-
-        Returns:
-            Expression: A new Expression representing the subtraction.
-        """
         from pyclingo.expression import Expression
 
         return Expression(self, Operation.SUBTRACT, other)
 
     def __rsub__(self, other: int | VALUE_EXPRESSION_TYPE) -> Expression:
-        """
-        Creates an Expression representing other - self.
-
-        Args:
-            other: The left-hand operand (integer or Term).
-
-        Returns:
-            Expression: A new Expression representing the subtraction.
-        """
         from pyclingo.expression import Expression
 
         return Expression(other, Operation.SUBTRACT, self)
 
     def __mul__(self, other: int | VALUE_EXPRESSION_TYPE) -> Expression:
-        """
-        Creates an Expression representing self * other.
-
-        Args:
-            other: The right-hand operand (integer or Term).
-
-        Returns:
-            Expression: A new Expression representing the multiplication.
-        """
         from pyclingo.expression import Expression
 
         return Expression(self, Operation.MULTIPLY, other)
 
     def __rmul__(self, other: int | VALUE_EXPRESSION_TYPE) -> Expression:
-        """
-        Creates an Expression representing other * self.
-
-        Args:
-            other: The left-hand operand (integer or Term).
-
-        Returns:
-            Expression: A new Expression representing the multiplication.
-        """
         from pyclingo.expression import Expression
 
         return Expression(other, Operation.MULTIPLY, self)
 
     def __neg__(self) -> Expression:
-        """
-        Creates an Expression representing -self.
-
-        Returns:
-            Expression: A new Expression representing the negation.
-        """
         from pyclingo.expression import Expression
 
         return Expression(None, Operation.UNARY_MINUS, self)
 
     def __floordiv__(self, other: int | VALUE_EXPRESSION_TYPE) -> Expression:
-        """
-        Creates an Expression representing self // other.
-
-        Args:
-            other: The right-hand operand (integer or Term).
-
-        Returns:
-            Expression: A new Expression representing the integer division.
-        """
         from pyclingo.expression import Expression
 
         return Expression(self, Operation.INTEGER_DIVIDE, other)
 
     def __rfloordiv__(self, other: int | VALUE_EXPRESSION_TYPE) -> Expression:
-        """
-        Creates an Expression representing other // self.
-
-        Args:
-            other: The left-hand operand (integer or Term).
-
-        Returns:
-            Expression: A new Expression representing the integer division.
-        """
         from pyclingo.expression import Expression
 
         return Expression(other, Operation.INTEGER_DIVIDE, self)
@@ -196,20 +116,11 @@ class Variable(Value):
     Represents a variable in an ASP program.
 
     Variables in ASP start with an uppercase letter or can be an underscore '_'
-    for anonymous variables. Variables may sometimes also refer to a predicate.
+    for anonymous variables. A variable can bind to any term: a number (4), a
+    string ("john"), a symbol (john), or a compound term (cell(1, 2)).
     """
 
     def __init__(self, name: str):
-        """
-        Initialize a variable with a name.
-
-        Args:
-            name: The name of the variable. Must either be '_' for an anonymous
-                 variable or start with an uppercase letter.
-
-        Raises:
-            ValueError: If the name doesn't start with an uppercase letter and isn't '_'.
-        """
         if not name or (name != "_" and not name[0].isupper()):
             raise ValueError(f"Variable name must start with an uppercase letter or be '_': {name}")
         if not all(c.isalnum() or c == "_" for c in name):
@@ -218,22 +129,11 @@ class Variable(Value):
 
     @property
     def name(self) -> str:
-        """
-        Gets the name of the variable.
-
-        Returns:
-            str: The name of the variable.
-        """
         return self._name
 
     @property
     def is_anonymous(self) -> bool:
-        """
-        Determines if this is an anonymous variable ('_').
-
-        Returns:
-            bool: True if this is an anonymous variable, False otherwise.
-        """
+        """True if this is the anonymous variable '_'."""
         return self._name == "_"
 
     def render(
@@ -242,83 +142,30 @@ class Variable(Value):
         parent_op: Operation | None = None,
         is_right_operand: bool = False,
     ) -> str:
-        """
-        Renders the term as a string in Clingo syntax.
-
-        Args:
-            context: The context in which the Term is being rendered.
-
-        Returns:
-            str: The string representation of the variable.
-        """
         return self._name
 
     @property
     def is_grounded(self) -> bool:
-        """
-        Variables are never grounded by definition.
-
-        Returns:
-            bool: Always False for variables.
-        """
+        """Variables are never grounded."""
         return False
 
     def validate_in_context(self, is_in_head: bool) -> None:
-        """
-        Variables themselves cannot directly appear in rule heads or bodies,
-        but only as part of predicates or other terms.
-
-        Args:
-            is_in_head: True if validating for head position, False for body position.
-
-        Raises:
-            ValueError: When trying to validate a standalone variable in a rule.
-        """
+        """Variables can only appear as arguments, never standalone: always raises."""
         raise ValueError("Variables can only be used as arguments to predicates or other terms")
 
     def collect_predicates(self) -> set[PREDICATE_CLASS_TYPE]:
-        """
-        Variables don't directly reference predicates.
-
-        Returns:
-            set[type[Predicate]]: An empty set.
-        """
         return set()
 
     def collect_defined_constants(self) -> set[str]:
-        """
-        Variables don't directly reference defined constants.
-
-        Returns:
-            set[str]: An empty set.
-        """
         return set()
 
     def __repr__(self) -> str:
-        """
-        Generate a developer-friendly string representation.
-
-        Returns:
-            str: A readable representation showing the variable name
-        """
         return f"Variable({self._name!r})"
 
     def __str__(self) -> str:
-        """
-        Returns the string representation of this Variable.
-
-        Returns:
-            str: A readable representation showing the variable name
-        """
         return self.name
 
     def collect_variables(self) -> set[str]:
-        """
-        Returns this variable in a set.
-
-        Returns:
-            set[str]: A set containing this variable.
-        """
         return {self.name}
 
     def in_(self, pool_or_range: Union[Pool, list, tuple, range]) -> Comparison:
@@ -370,53 +217,21 @@ class ConstantBase(Value, ABC):
 
     @property
     def is_grounded(self) -> bool:
-        """
-        Constants are always grounded by definition.
-
-        Returns:
-            bool: Always True for constants.
-        """
+        """Constants are always grounded."""
         return True
 
     def validate_in_context(self, is_in_head: bool) -> None:
-        """
-        Constants themselves typically cannot directly appear in rule heads or bodies,
-        but only as part of predicates or other terms.
-
-        Args:
-            is_in_head: True if validating for head position, False for body position.
-
-        Raises:
-            ValueError: When trying to validate a standalone constant in a rule.
-        """
+        """Constants can only appear as arguments, never standalone: always raises."""
         raise ValueError("Constants can only be used as arguments to predicates or other terms")
 
     def collect_predicates(self) -> set[PREDICATE_CLASS_TYPE]:
-        """
-        Constants don't directly reference predicates.
-
-        Returns:
-            set[type[predicate]]: An empty set.
-        """
         return set()
 
     def collect_defined_constants(self) -> set[str]:
-        """
-        Default implementation for collecting defined constants.
-        Subclasses should override this if they represent defined constants.
-
-        Returns:
-            set[str]: An empty set by default.
-        """
+        """Empty by default; DefinedConstant overrides to report its name."""
         return set()
 
     def collect_variables(self) -> set[str]:
-        """
-        Constants don't contain variables.
-
-        Returns:
-            set[str]: An empty set.
-        """
         return set()
 
 
@@ -429,15 +244,6 @@ class Number(ConstantBase):
     """
 
     def __init__(self, value: int):
-        """
-        Initialize a numeric constant with an integer value.
-
-        Args:
-            value: The integer value of the constant.
-
-        Raises:
-            TypeError: If the value is not an integer.
-        """
         # bool subclasses int, and a boolean is never a valid ASP term
         if isinstance(value, bool) or not isinstance(value, int):
             raise TypeError(f"Number value must be an integer, got {type(value).__name__}")
@@ -445,12 +251,6 @@ class Number(ConstantBase):
 
     @property
     def value(self) -> int:
-        """
-        Gets the integer value of the constant.
-
-        Returns:
-            int: The value of the constant.
-        """
         return self._value
 
     def render(
@@ -459,15 +259,6 @@ class Number(ConstantBase):
         parent_op: Operation | None = None,
         is_right_operand: bool = False,
     ) -> str:
-        """
-        Renders the term as a string in Clingo syntax.
-
-        Args:
-            context: The context in which the Term is being rendered.
-
-        Returns:
-            str: The string representation of the constant.
-        """
         return str(self.value)
 
     def __repr__(self) -> str:
@@ -485,15 +276,7 @@ class String(ConstantBase):
     """
 
     def __init__(self, value: str):
-        """
-        Initialize a string constant with a string value.
-
-        Args:
-            value: The string value of the constant.
-
-        Raises:
-            TypeError: If the value is not a string.
-        """
+        """The value must not contain quotation marks: there is no escaping support."""
         if not isinstance(value, str):
             raise TypeError(f"String constant value must be a string, got {type(value).__name__}")
 
@@ -504,12 +287,6 @@ class String(ConstantBase):
 
     @property
     def value(self) -> str:
-        """
-        Gets the string value of the constant.
-
-        Returns:
-            str: The value of the constant.
-        """
         return self._value
 
     def render(
@@ -518,15 +295,6 @@ class String(ConstantBase):
         parent_op: Operation | None = None,
         is_right_operand: bool = False,
     ) -> str:
-        """
-        Renders the term as a string in Clingo syntax.
-
-        Args:
-            context: The context in which the Term is being rendered.
-
-        Returns:
-            str: The string representation of the constant.
-        """
         return f'"{self.value}"'
 
     def __repr__(self) -> str:
@@ -547,16 +315,7 @@ class DefinedConstant(ConstantBase):
     """
 
     def __init__(self, value: str):
-        """
-        Initialize a defined constant with its name.
-
-        Args:
-            value: The name of the constant. Must start with a lowercase letter
-                  and can contain letters, digits, and underscores.
-
-        Raises:
-            ValueError: If the value doesn't start with a lowercase letter or contains invalid characters.
-        """
+        """value is the constant's name: lowercase first letter, then letters, digits, and underscores."""
         if not value or not value[0].islower():
             raise ValueError(f"Defined constant must start with a lowercase letter: {value}")
 
@@ -567,12 +326,7 @@ class DefinedConstant(ConstantBase):
 
     @property
     def value(self) -> str:
-        """
-        Gets the name of the defined constant.
-
-        Returns:
-            str: The name of the constant.
-        """
+        """The constant's name."""
         return self._value
 
     def render(
@@ -581,24 +335,10 @@ class DefinedConstant(ConstantBase):
         parent_op: Operation | None = None,
         is_right_operand: bool = False,
     ) -> str:
-        """
-        Renders the term as a string in Clingo syntax.
-
-        Args:
-            context: The context in which the Term is being rendered.
-
-        Returns:
-            str: The string representation of the symbolic constant.
-        """
         return self.value
 
     def collect_defined_constants(self) -> set[str]:
-        """
-        Collects the defined constant name represented by this object.
-
-        Returns:
-            set[str]: A set containing this defined constant's name.
-        """
+        """Reports this constant's own name."""
         return {self.value}
 
     def __repr__(self) -> str:
@@ -618,16 +358,7 @@ class Symbol(ConstantBase):
     """
 
     def __init__(self, value: str):
-        """
-        Initialize a symbol.
-
-        Args:
-            value: The symbol name. Must start with a lowercase letter and can
-                   contain letters, digits, and underscores.
-
-        Raises:
-            ValueError: If the name doesn't fit clingo's identifier syntax.
-        """
+        """value is the symbol's name: lowercase first letter, then letters, digits, and underscores."""
         if not value or not value[0].islower():
             raise ValueError(f"Symbol must start with a lowercase letter: {value}")
 
@@ -647,15 +378,6 @@ class Symbol(ConstantBase):
         parent_op: Operation | None = None,
         is_right_operand: bool = False,
     ) -> str:
-        """
-        Renders the term as a string in Clingo syntax.
-
-        Args:
-            context: The context in which the Term is being rendered.
-
-        Returns:
-            str: The symbol, unquoted.
-        """
         return self._value
 
     def __repr__(self) -> str:
@@ -680,11 +402,7 @@ def create_variables(*names: str) -> Variable | tuple[Variable, ...]:  # type: i
     """
     Create one or more ASP variables with the given names.
 
-    Args:
-        *names: Variable names
-
-    Returns:
-        A single Variable if one name is provided, otherwise a tuple of Variables
+    Returns a single Variable if one name is provided, otherwise a tuple of Variables.
     """
     if not names:
         raise ValueError("At least one variable name must be provided")

@@ -14,32 +14,15 @@ class ProgramElement(ABC):
 
     @abstractmethod
     def render(self) -> str:
-        """
-        Render this element as an ASP string.
-
-        Returns:
-            str: The rendered ASP code for this element.
-        """
+        """Render this element as an ASP string."""
         pass
 
     def collect_predicates(self) -> set[PREDICATE_CLASS_TYPE]:
-        """
-        Collects all predicate classes used in this program element.
-        Default implementation returns an empty set.
-
-        Returns:
-            set[type[Predicate]]: A set of Predicate classes used in this element.
-        """
+        """Collects all predicate classes used in this element; the base implementation returns an empty set."""
         return set()
 
     def collect_defined_constants(self) -> set[str]:
-        """
-        Collects all defined constant names used in this program element.
-        Default implementation returns an empty set.
-
-        Returns:
-            set[str]: A set of defined constant names used in this element.
-        """
+        """Collects all defined constant names used in this element; the base implementation returns an empty set."""
         return set()
 
 
@@ -47,25 +30,12 @@ class Comment(ProgramElement):
     """Represents a comment in an ASP program."""
 
     def __init__(self, text: str):
-        """
-        Initialize a comment with text.
-
-        Args:
-            text: The comment text (can be multi-line).
-        """
+        """text may be multi-line."""
         assert isinstance(text, str)
         self.text = text
 
     def render(self) -> str:
-        """
-        Render the comment as ASP syntax.
-
-        Uses single-line comments (%) for single-line text,
-        and multi-line comments (%* *%) for multi-line text.
-
-        Returns:
-            str: The comment in ASP syntax.
-        """
+        """Single-line text renders as a % comment; multi-line text as a %* *% block."""
         return f"%*\n{self.text}\n*%" if "\n" in self.text else f"% {self.text}"
 
 
@@ -73,12 +43,6 @@ class BlankLine(ProgramElement):
     """Represents a blank line in an ASP program for formatting."""
 
     def render(self) -> str:
-        """
-        Render a blank line.
-
-        Returns:
-            str: An empty string.
-        """
         return ""
 
 
@@ -103,7 +67,6 @@ class Rule(ProgramElement):
         if head is None and body is None:
             raise ValueError("Cannot have a rule with empty head and body!")
 
-        # Validate head
         if head is not None:
             head.validate_in_context(is_in_head=True)
         self.head = head
@@ -112,19 +75,12 @@ class Rule(ProgramElement):
         body_terms = []
         if body is not None:
             body_terms = [body] if isinstance(body, Term) else list(body)
-            # Validate each body term
             for term in body_terms:
                 term.validate_in_context(is_in_head=False)
 
         self.body = body_terms
 
     def render(self) -> str:
-        """
-        Render as complete ASP rule.
-
-        Returns:
-            str: The rendered ASP rule.
-        """
         result = ""
 
         if self.head is not None:
@@ -139,58 +95,35 @@ class Rule(ProgramElement):
         return result
 
     def collect_predicates(self) -> set[PREDICATE_CLASS_TYPE]:
-        """
-        Collects all predicate classes used in this rule.
-
-        Returns:
-            set[type[Predicate]]: A set of predicate classes used in this rule.
-        """
         predicates = set()
 
-        # Collect from head if it exists
         if self.head is not None:
             predicates.update(self.head.collect_predicates())
 
-        # Collect from all body terms
         for term in self.body:
             predicates.update(term.collect_predicates())
 
         return predicates
 
     def collect_defined_constants(self) -> set[str]:
-        """
-        Collects all defined constant names used in this rule.
-
-        Returns:
-            set[str]: A set of defined constant names used in this rule.
-        """
         constants = set()
 
-        # Collect from head if it exists
         if self.head is not None:
             constants.update(self.head.collect_defined_constants())
 
-        # Collect from all body terms
         for term in self.body:
             constants.update(term.collect_defined_constants())
 
         return constants
 
     def collect_variables(self) -> tuple[set[str], set[str]]:
-        """
-        Collects all variables used in this rule.
-
-        Returns:
-            tuple[set[Variable], set[Variable]]: Sets of variables used in the head and body.
-        """
+        """Returns (head_vars, body_vars) as separate sets of variable names."""
         head_vars = set()
         body_vars = set()
 
-        # Collect from head if it exists
         if self.head is not None:
             head_vars.update(self.head.collect_variables())
 
-        # Collect from all body terms
         for term in self.body:
             body_vars.update(term.collect_variables())
 

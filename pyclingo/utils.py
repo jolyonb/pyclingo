@@ -6,15 +6,9 @@ from pyclingo.term import Term
 
 def collect_variables(*terms: Term | Sequence[Term] | None) -> set[str]:
     """
-    Given a list of terms, collect all variables used in them.
+    Collect all variable names used in the given terms.
 
-    Accepts terms of the following types:
-    * Term
-    * List[Term]
-    * None
-
-    Returns:
-        set[str]: Set of variable names
+    Accepts a mix of Terms, lists of Terms, and Nones (skipped).
     """
     used_variables: set[str] = set()
 

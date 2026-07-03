@@ -38,24 +38,12 @@ class Expression(Term, ComparisonMixin):
         operator: Operation,
         second_term: EXPRESSION_FIELD_TYPE,
     ):
-        """
-        Initialize an expression.
-
-        Args:
-            first_term: The left-hand operand. None for unary operations.
-            operator: The operator.
-            second_term: The right-hand operand.
-
-        Raises:
-            ValueError: If the operator is invalid or incompatible with operands.
-            TypeError: If the operands are of invalid types.
-        """
+        """first_term is None for unary operations; int operands are coerced to Number."""
         if first_term is not None and not isinstance(first_term, (int, Value, Expression)):
             raise TypeError(f"first_term must be a Value or Expression, got {type(first_term).__name__}")
         if not isinstance(second_term, (int, Value, Expression)):
             raise TypeError(f"second_term must be a Value or Expression, got {type(second_term).__name__}")
 
-        # Validate the expression structure
         if first_term is None and operator not in UNARY_OPERATIONS:
             raise ValueError(f"Unsupported unary operator: {operator}")
         elif first_term is not None and operator not in BINARY_OPERATIONS:
@@ -68,18 +56,7 @@ class Expression(Term, ComparisonMixin):
 
     @staticmethod
     def _convert_if_needed(value: EXPRESSION_FIELD_TYPE) -> VALUE_EXPRESSION_TYPE:
-        """
-        Converts Python literals to appropriate ASP Value objects.
-
-        Args:
-            value: A value that may need conversion.
-
-        Returns:
-            A Value or Expression object.
-
-        Raises:
-            TypeError: If the value cannot be converted to a valid ASP term.
-        """
+        """Coerces Python ints to Number; Values and Expressions pass through."""
         if isinstance(value, (Value, Expression)):
             return value
 
@@ -92,32 +69,24 @@ class Expression(Term, ComparisonMixin):
 
     @property
     def first_term(self) -> VALUE_EXPRESSION_TYPE | None:
-        """Gets the first (left) term of the expression."""
+        """The left term; None for unary operations."""
         return self._first_term
 
     @property
     def operator(self) -> Operation:
-        """Gets the operator of the expression."""
         return self._operator
 
     @property
     def second_term(self) -> VALUE_EXPRESSION_TYPE:
-        """Gets the second (right) term of the expression."""
         return self._second_term
 
     @property
     def is_unary(self) -> bool:
-        """Determines if this is a unary operation."""
         return self._operator in UNARY_OPERATIONS
 
     @property
     def is_grounded(self) -> bool:
-        """
-        An expression is grounded if all its operands are grounded.
-
-        Returns:
-            bool: True if all operands are grounded, False otherwise.
-        """
+        """An expression is grounded if all its operands are grounded."""
         if self.is_unary:
             return self.second_term.is_grounded
         assert self.first_term is not None
@@ -134,12 +103,6 @@ class Expression(Term, ComparisonMixin):
 
         Each expression renders itself with knowledge of how it sits with respect to its parents.
         Expressions should never look at how their children are situated.
-
-        Args:
-            context: The context in which the Term is being rendered.
-
-        Returns:
-            str: The string representation of the expression.
         """
         # Handle unary operators first
         if self.operator == Operation.ABS:
@@ -191,107 +154,63 @@ class Expression(Term, ComparisonMixin):
         return f"({expr})" if needs_parentheses else expr
 
     def validate_in_context(self, is_in_head: bool) -> None:
-        """
-        Validates this expression for use in a specific context.
-
-        Expressions are typically used in comparisons or assignments,
-        not directly in rule heads or bodies.
-
-        Args:
-            is_in_head: True if validating for head position, False for body position.
-
-        Raises:
-            ValueError: When trying to use an expression directly in a rule.
-        """
+        """Expressions cannot appear standalone in rule heads or bodies: always raises."""
         raise ValueError("Expressions can only be used as parts of comparisons, assignments, or as predicate arguments")
 
     # Arithmetic operator methods
     def __add__(self, other: EXPRESSION_FIELD_TYPE) -> Expression:
-        """Creates an Expression representing self + other."""
         return Expression(self, Operation.ADD, other)
 
     def __radd__(self, other: EXPRESSION_FIELD_TYPE) -> Expression:
-        """Creates an Expression representing other + self."""
         return Expression(other, Operation.ADD, self)
 
     def __sub__(self, other: EXPRESSION_FIELD_TYPE) -> Expression:
-        """Creates an Expression representing self - other."""
         return Expression(self, Operation.SUBTRACT, other)
 
     def __rsub__(self, other: EXPRESSION_FIELD_TYPE) -> Expression:
-        """Creates an Expression representing other - self."""
         return Expression(other, Operation.SUBTRACT, self)
 
     def __mul__(self, other: EXPRESSION_FIELD_TYPE) -> Expression:
-        """Creates an Expression representing self * other."""
         return Expression(self, Operation.MULTIPLY, other)
 
     def __rmul__(self, other: EXPRESSION_FIELD_TYPE) -> Expression:
-        """Creates an Expression representing other * self."""
         return Expression(other, Operation.MULTIPLY, self)
 
     def __neg__(self) -> Expression:
-        """Creates an Expression representing -self."""
         return Expression(None, Operation.UNARY_MINUS, self)
 
     def __floordiv__(self, other: EXPRESSION_FIELD_TYPE) -> Expression:
-        """Creates an Expression representing self // other."""
         return Expression(self, Operation.INTEGER_DIVIDE, other)
 
     def __rfloordiv__(self, other: EXPRESSION_FIELD_TYPE) -> Expression:
-        """Creates an Expression representing other // self."""
         return Expression(other, Operation.INTEGER_DIVIDE, self)
 
     def collect_predicates(self) -> set[PREDICATE_CLASS_TYPE]:
-        """
-        Collects all predicate classes used in this expression.
-
-        Returns:
-            set[type[Predicate]]: A set of Predicate classes used in this expression.
-        """
         predicates = set()
 
-        # Collect from first term if it exists (not the case for unary operations)
         if self.first_term is not None:
             predicates.update(self.first_term.collect_predicates())
 
-        # Collect from second term
         predicates.update(self.second_term.collect_predicates())
 
         return predicates
 
     def collect_defined_constants(self) -> set[str]:
-        """
-        Collects all defined constant names used in this expression.
-
-        Returns:
-            set[str]: A set of defined constant names used in this expression.
-        """
         constants = set()
 
-        # Collect from first term if it exists (not the case for unary operations)
         if self.first_term is not None:
             constants.update(self.first_term.collect_defined_constants())
 
-        # Collect from second term
         constants.update(self.second_term.collect_defined_constants())
 
         return constants
 
     def collect_variables(self) -> set[str]:
-        """
-        Collects all variables used in this expression.
-
-        Returns:
-            set[str]: A set of variables used in this expression.
-        """
         variables = set()
 
-        # Collect from first term if it exists (not the case for unary operations)
         if self.first_term is not None:
             variables.update(self.first_term.collect_variables())
 
-        # Collect from second term
         variables.update(self.second_term.collect_variables())
 
         return variables
@@ -315,16 +234,9 @@ class Comparison(Term):
         right_term: Union[int, str, Term],
     ):
         """
-        Initialize a comparison.
+        int and str operands are coerced to Number and String.
 
-        Args:
-            left_term: The left-hand term.
-            operator: The comparison operator.
-            right_term: The right-hand term.
-
-        Raises:
-            ValueError: If the terms cannot be compared with the given operator.
-            TypeError: If the terms are of invalid types.
+        A Pool may only appear on the right, compared by equality against a variable.
         """
         from pyclingo.aggregates import Aggregate
 
@@ -363,17 +275,14 @@ class Comparison(Term):
 
     @property
     def left_term(self) -> COMPARISON_TERM_TYPE:
-        """Gets the left term of the comparison."""
         return self._left_term
 
     @property
     def operator(self) -> ComparisonOperator:
-        """Gets the operator of the comparison."""
         return self._operator
 
     @property
     def right_term(self) -> COMPARISON_TERM_TYPE | Pool:
-        """Gets the right term of the comparison."""
         return self._right_term
 
     def __bool__(self) -> bool:
@@ -392,24 +301,10 @@ class Comparison(Term):
 
     @property
     def is_grounded(self) -> bool:
-        """
-        A comparison is grounded if both its terms are grounded.
-
-        Returns:
-            bool: True if both terms are grounded, False otherwise.
-        """
+        """A comparison is grounded if both its terms are grounded."""
         return self.left_term.is_grounded and self.right_term.is_grounded
 
     def render(self, context: RenderingContext = RenderingContext.DEFAULT) -> str:
-        """
-        Renders the comparison as a string in Clingo syntax.
-
-        Args:
-            context: The context in which the Term is being rendered.
-
-        Returns:
-            str: The string representation of the comparison.
-        """
         left_str = self.left_term.render()
         right_str = self.right_term.render()
 
@@ -419,61 +314,35 @@ class Comparison(Term):
 
     def validate_in_context(self, is_in_head: bool) -> None:
         """
-        Validates this comparison for use in a specific context.
-
         Comparisons are valid in both rule bodies and rule heads: a comparison head
         like `C1 = C2 :- body` means the body forces the equality to hold.
-
-        Args:
-            is_in_head: True if validating for head position, False for body position.
         """
         pass
 
     @property
     def is_assignment(self) -> bool:
-        """Whether this function represents a variable assignment"""
+        """Whether this comparison assigns a variable: Variable = value."""
         return self.operator == ComparisonOperator.EQUAL and isinstance(self.left_term, Variable)
 
     def collect_predicates(self) -> set[PREDICATE_CLASS_TYPE]:
-        """
-        Collects all predicate classes used in this comparison.
-
-        Returns:
-            set[type[Predicate]]: A set of Predicate classes used in this comparison.
-        """
         predicates = set()
 
-        # Collect from left and right terms
         predicates.update(self.left_term.collect_predicates())
         predicates.update(self.right_term.collect_predicates())
 
         return predicates
 
     def collect_defined_constants(self) -> set[str]:
-        """
-        Collects all defined constant names used in this comparison.
-
-        Returns:
-            set[str]: A set of defined constant names used in this comparison.
-        """
         constants = set()
 
-        # Collect from left and right terms
         constants.update(self.left_term.collect_defined_constants())
         constants.update(self.right_term.collect_defined_constants())
 
         return constants
 
     def collect_variables(self) -> set[str]:
-        """
-        Collects all variables used in this comparison.
-
-        Returns:
-            set[str]: A set of variables used in this comparison.
-        """
         variables = set()
 
-        # Collect from left and right terms
         variables.update(self.left_term.collect_variables())
         variables.update(self.right_term.collect_variables())
 
@@ -481,13 +350,5 @@ class Comparison(Term):
 
 
 def Abs(term: EXPRESSION_FIELD_TYPE) -> Expression:
-    """
-    Helper function to use absolute value functions.
-
-    Args:
-        term: The term to take the absolute value of.
-
-    Returns:
-        Expression: An expression representing the absolute value of the term.
-    """
+    """Builds an absolute-value expression, |term|."""
     return Expression(None, Operation.ABS, term)

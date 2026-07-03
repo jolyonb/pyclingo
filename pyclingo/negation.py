@@ -20,59 +20,25 @@ class NegatedLiteral(Term, ABC):
     """
 
     def __init__(self, term: Term):
-        """
-        Initialize a negated literal with a term to negate.
-
-        Args:
-            term: The term to negate.
-        """
         self._term = term
 
     @property
     def term(self) -> Term:
-        """
-        Gets the term being negated.
-
-        Returns:
-            Term: The negated term.
-        """
+        """The term being negated."""
         return self._term
 
     @property
     def is_grounded(self) -> bool:
-        """
-        A negated literal is grounded if its term is grounded.
-
-        Returns:
-            bool: True if the term is grounded, False otherwise.
-        """
+        """A negated literal is grounded if its term is grounded."""
         return self._term.is_grounded
 
     def collect_predicates(self) -> set[PREDICATE_CLASS_TYPE]:
-        """
-        Collects all predicate classes used in the negated term.
-
-        Returns:
-            set[type[Predicate]]: A set of Predicate classes used in this term.
-        """
         return self._term.collect_predicates()
 
     def collect_defined_constants(self) -> set[str]:
-        """
-        Collects all defined constant names used in the negated term.
-
-        Returns:
-            set[str]: A set of defined constant names used in this term.
-        """
         return self._term.collect_defined_constants()
 
     def collect_variables(self) -> set[str]:
-        """
-        Collects all variables used in the negated term.
-
-        Returns:
-            set[str]: A set of variables used in this term.
-        """
         return self._term.collect_variables()
 
 
@@ -86,24 +52,12 @@ class DefaultNegation(NegatedLiteral):
 
     def __init__(self, term: Union[Predicate, Comparison, NegatedLiteral]):
         """
-        Initialize a default negation with a term to negate.
-
-        This constructor handles simplification for nested negations.
-        For cases like 'not not not p', it simplifies them appropriately:
-        - Odd number of negations → equivalent to 'not p'
-        - Even number of negations → equivalent to 'not not p'
-
-        Args:
-            term: The term to negate.
-
-        Raises:
-            TypeError: If the term is not a valid type for default negation.
+        Initialize a default negation, simplifying nested negations:
+        an odd number of negations is equivalent to 'not p', an even number to 'not not p'.
         """
-        # Validate term type
         if not isinstance(term, (Predicate, Comparison, NegatedLiteral)):
             raise TypeError("Default negation can only be applied to predicates, comparisons, or already negated terms")
 
-        # Handle nested default negations
         if isinstance(term, DefaultNegation):
             inner_term = term.term
             if isinstance(inner_term, DefaultNegation):
@@ -117,34 +71,14 @@ class DefaultNegation(NegatedLiteral):
             # Normal case: not X
             actual_term = term
 
-        # Initialize with the appropriate term
         super().__init__(actual_term)
 
     def render(self, context: RenderingContext = RenderingContext.DEFAULT) -> str:
-        """
-        Renders the default negation as a string in Clingo syntax.
-
-        Args:
-            context: The context in which the Term is being rendered.
-
-        Returns:
-            str: The string representation of the default negation.
-        """
         term_str = self._term.render(context=RenderingContext.NEGATION)
         return f"not {term_str}"
 
     def validate_in_context(self, is_in_head: bool) -> None:
-        """
-        Validates this default negation for use in a specific position.
-
-        Default negation is only allowed in rule bodies, not in rule heads.
-
-        Args:
-            is_in_head: True if validating for head position, False for body position.
-
-        Raises:
-            ValueError: If trying to use default negation in a rule head.
-        """
+        """Default negation is body-only: raises in heads."""
         if is_in_head:
             raise ValueError("Default negation (not) cannot be used in rule heads")
 
@@ -158,50 +92,21 @@ class ClassicalNegation(NegatedLiteral):
     """
 
     def __init__(self, term: Union[Predicate, "ClassicalNegation"]):
-        """
-        Initialize a classical negation with a term to negate.
-
-        This constructor handles simplification for double classical negation:
-        -(-p) is simplified to p.
-
-        Args:
-            term: The predicate or classical negation to negate.
-
-        Raises:
-            TypeError: If the term is not a Predicate or ClassicalNegation.
-        """
+        """Initialize a classical negation, simplifying double negation: -(-p) becomes p."""
         if not isinstance(term, (Predicate, ClassicalNegation)):
             raise TypeError("Classical negation can only be applied to predicates or classical negations")
 
         # Check if we're negating a negation: -(-p) -> simplify to p
         actual_term = term.term if isinstance(term, ClassicalNegation) else term
 
-        # Initialize with the appropriate term
         super().__init__(actual_term)
 
     def render(self, context: RenderingContext = RenderingContext.DEFAULT) -> str:
-        """
-        Renders the classical negation as a string in Clingo syntax.
-
-        Args:
-            context: The context in which the Term is being rendered.
-
-        Returns:
-            str: The string representation of the classical negation.
-        """
         term_str = self._term.render()
         return f"-{term_str}"
 
     def validate_in_context(self, is_in_head: bool) -> None:
-        """
-        Validates this classical negation for use in a specific position.
-
-        Classical negation can be used in both rule heads and bodies.
-
-        Args:
-            is_in_head: True if validating for head position, False for body position.
-        """
-        # Classical negation can appear in both heads and bodies
+        """Classical negation is valid in heads and bodies."""
         pass
 
 

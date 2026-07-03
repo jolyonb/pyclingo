@@ -23,16 +23,8 @@ class Pool(BasicTerm, ABC):
 
     def validate_in_context(self, is_in_head: bool) -> None:
         """
-        Validates this pool for use in a specific position.
-
-        A bare pool is not valid as a rule head or body element; pools belong
+        Bare pools are never valid rule elements: always raises. Pools belong
         inside predicates (p(1..5)) or on the right of comparisons (X = 1..5).
-
-        Args:
-            is_in_head: True if validating for head position, False for body position.
-
-        Raises:
-            ValueError: Always — a standalone pool is a clingo syntax error.
         """
         raise ValueError("Pools can only be used as arguments to predicates or in comparisons")
 
@@ -47,14 +39,9 @@ class RangePool(Pool):
 
     def __init__(self, start: int | ConstantBase | Expression, end: int | ConstantBase | Expression):
         """
-        Initialize a range pool with start and end values.
+        Initialize a range pool with start and end values (both inclusive).
 
-        Args:
-            start: The starting value of the range (inclusive).
-            end: The ending value of the range (inclusive).
-
-        Raises:
-            TypeError: If start or end is not a ConstantBase.
+        Raises if either bound is of the wrong type or an ungrounded Expression.
         """
         from pyclingo.expression import Expression
 
@@ -79,79 +66,36 @@ class RangePool(Pool):
 
     @property
     def start(self) -> ConstantBase | Expression:
-        """
-        Gets the starting value of the range.
-
-        Returns:
-            ConstantBase: The starting value.
-        """
+        """The starting value of the range (inclusive)."""
         return self._start
 
     @property
     def end(self) -> ConstantBase | Expression:
-        """
-        Gets the ending value of the range.
-
-        Returns:
-            ConstantBase: The ending value.
-        """
+        """The ending value of the range (inclusive)."""
         return self._end
 
     @property
     def is_grounded(self) -> bool:
-        """
-        Ranges are always grounded as they're constructed from constants.
-        Since we validate that start and end are ConstantBase objects,
-        which are always grounded, this always returns True.
-
-        Returns:
-            bool: Always True for range pools.
-        """
+        """Always True: bounds are validated to be constants or grounded expressions."""
         return True
 
     def render(self, context: RenderingContext = RenderingContext.DEFAULT) -> str:
-        """
-        Renders the term as a string in Clingo syntax.
-
-        Args:
-            context: The context in which the Term is being rendered.
-
-        Returns:
-            str: The string representation of the range, e.g., "1..5".
-        """
         return f"{self.start.render()}..{self.end.render()}"
 
     def collect_predicates(self) -> set[PREDICATE_CLASS_TYPE]:
-        """
-        Range pools don't contain predicates.
-
-        Returns:
-            set[type[Predicate]]: An empty set.
-        """
+        """Range pools cannot contain predicates."""
         return set()
 
     def collect_defined_constants(self) -> set[str]:
-        """
-        Collects all defined constant names used in this range pool.
-
-        Returns:
-            set[str]: A set of defined constant names from start and end values.
-        """
         constants = set()
 
-        # Collect from start and end values
         constants.update(self.start.collect_defined_constants())
         constants.update(self.end.collect_defined_constants())
 
         return constants
 
     def collect_variables(self) -> set[str]:
-        """
-        Range pools don't contain variables.
-
-        Returns:
-            set[str]: An empty set.
-        """
+        """Range pools cannot contain variables."""
         return set()
 
 
@@ -164,14 +108,10 @@ class ExplicitPool(Pool):
 
     def __init__(self, elements: Sequence[int | str | ConstantBase | Predicate]):
         """
-        Initialize an explicit pool with a sequence of elements.
+        Initialize an explicit pool from a non-empty sequence of elements;
+        ints and strs are coerced to Number and String.
 
-        Args:
-            elements: A sequence of ConstantBase objects or grounded Predicates.
-
-        Raises:
-            TypeError: If any element is not a ConstantBase or grounded Predicate.
-            ValueError: If a Predicate element is not grounded.
+        Raises if any element is of an unsupported type or an ungrounded Predicate.
         """
         if not elements:
             raise ValueError("ExplicitPool cannot be empty")
@@ -196,47 +136,20 @@ class ExplicitPool(Pool):
 
     @property
     def elements(self) -> list[ConstantBase | Predicate]:
-        """
-        Gets the elements of the pool.
-
-        Returns:
-            list[ConstantBase | Predicate]: The list of elements.
-        """
-        return self._elements.copy()  # Return a copy to prevent direct modification
+        """The elements of the pool (a defensive copy)."""
+        return self._elements.copy()
 
     @property
     def is_grounded(self) -> bool:
-        """
-        Explicit pools are always grounded if constructed properly.
-
-        Since we validate that all elements are either ConstantBase objects
-        (which are always grounded) or grounded Predicates, this always returns True.
-
-        Returns:
-            bool: Always True for explicit pools.
-        """
+        """Always True: elements are validated to be constants or grounded predicates."""
         return True
 
     def render(self, context: RenderingContext = RenderingContext.DEFAULT) -> str:
-        """
-        Renders the explicit pool as a string in Clingo syntax.
-
-        Args:
-            context: The context in which the Term is being rendered.
-
-        Returns:
-            str: The string representation of the pool, e.g., "1;3;5" or "(1;3;5)".
-        """
+        """Renders as e.g. "(1; 3; 5)"; parentheses are dropped as a lone predicate argument."""
         elements_str = "; ".join(element.render() for element in self._elements)
         return elements_str if context == RenderingContext.LONE_PREDICATE_ARGUMENT else f"({elements_str})"
 
     def collect_predicates(self) -> set[PREDICATE_CLASS_TYPE]:
-        """
-        Collects all predicate classes used in this explicit pool.
-
-        Returns:
-            set[type[Predicate]]: A set of Predicate classes used in this pool.
-        """
         predicates = set()
 
         for element in self.elements:
@@ -245,12 +158,6 @@ class ExplicitPool(Pool):
         return predicates
 
     def collect_defined_constants(self) -> set[str]:
-        """
-        Collects all defined constant names used in this explicit pool.
-
-        Returns:
-            set[str]: A set of defined constant names used in this pool.
-        """
         constants = set()
 
         for element in self.elements:
@@ -259,12 +166,6 @@ class ExplicitPool(Pool):
         return constants
 
     def collect_variables(self) -> set[str]:
-        """
-        Collects all variables used in this explicit pool.
-
-        Returns:
-            set[str]: A set of variables used in this pool.
-        """
         variables = set()
 
         for element in self.elements:
@@ -298,7 +199,6 @@ def pool(elements: Union[range, Sequence[int | str | ConstantBase | Predicate], 
     """
     pool_elements: Sequence[ConstantBase | Predicate]
 
-    # Handle case where input is already a Pool
     if isinstance(elements, Pool):
         return elements
 
@@ -310,11 +210,9 @@ def pool(elements: Union[range, Sequence[int | str | ConstantBase | Predicate], 
         raise ValueError("Cannot create an empty pool from empty range")
 
     elif isinstance(elements, (list, tuple)):
-        # Check for empty sequence
         if not elements:
             raise ValueError("Cannot create an empty pool")
 
-        # Convert all elements to appropriate types
         pool_elements = []
         for element in elements:
             if isinstance(element, int):

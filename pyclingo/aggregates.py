@@ -32,10 +32,8 @@ class Aggregate(Term, ComparisonMixin, ABC):
     """
     Abstract base class for aggregates in ASP programs.
 
-    Aggregates calculate values over sets of elements, such as counting, summing,
-    finding minimum/maximum values, etc. They are used in expressions like:
-    #count{X : p(X)} = 3
-    #sum{W,X : p(X,W)} > 10
+    Aggregates calculate values over sets of elements, used in expressions like
+    #count{X : p(X)} = 3 or #sum{W,X : p(X,W)} > 10.
     """
 
     # Set by subclasses to specify which aggregate function to use
@@ -47,20 +45,14 @@ class Aggregate(Term, ComparisonMixin, ABC):
         condition: Union[AGGREGATE_CONDITION_TYPE, list[AGGREGATE_CONDITION_TYPE], None] = None,
     ):
         """
-        Initialize an aggregate with an element and optional conditions.
+        Create an aggregate with an initial element; see add() for further elements.
 
         Args:
             element: The value, predicate, or tuple to be aggregated
             condition: Condition(s) determining when the element is included
                       If None, it's an unconditional element
-
-        Raises:
-            TypeError: If element or condition is not of the expected type
         """
-        # Initialize internal state
         self._elements: list[tuple[tuple[AGGREGATE_ELEMENT_TYPE, ...], list[AGGREGATE_CONDITION_TYPE]]] = []
-
-        # Add the initial element
         self.add(element, condition)
 
     def add(
@@ -69,33 +61,27 @@ class Aggregate(Term, ComparisonMixin, ABC):
         condition: Union[AGGREGATE_CONDITION_TYPE, list[AGGREGATE_CONDITION_TYPE], None] = None,
     ) -> Self:
         """
-        Add another element to the aggregate.
+        Add an element with optional condition(s); returns self for chaining.
 
         Args:
             element: The value, predicate, or tuple to be aggregated
             condition: Condition(s) determining when the element is included
                       If None, it's an unconditional element
 
-        Returns:
-            self: For method chaining
-
         Example:
-            # Create a count aggregate with multiple elements
-            count = Count(X).add(Y, p(Y)).add((Z, W), [q(Z), r(W)])
-            # This produces: #count{X; Y : p(Y); Z,W : q(Z), r(W)}
-
-        Raises:
-            TypeError: If element or condition is not of the expected type
+            >>> from pyclingo import create_variables
+            >>> X, Y, Z, W = create_variables("X", "Y", "Z", "W")
+            >>> p, q, r = (Predicate.define(name, ["x"]) for name in "pqr")
+            >>> Count(X).add(Y, p(x=Y)).add((Z, W), [q(x=Z), r(x=W)]).render()
+            '#count{X; Y : p(Y); Z, W : q(Z), r(W)}'
         """
         from pyclingo.expression import Comparison
 
-        # Process and validate elements
         element_tuple = element if isinstance(element, tuple) else (element,)
         for item in element_tuple:
             if not isinstance(item, (Value, Predicate)):
                 raise TypeError(f"Aggregate element items must be Values or Predicates, got {type(item).__name__}")
 
-        # Process and validate conditions
         if condition is None:
             conditions = []
         elif not isinstance(condition, list):
@@ -116,13 +102,8 @@ class Aggregate(Term, ComparisonMixin, ABC):
     def elements(
         self,
     ) -> list[tuple[tuple[AGGREGATE_ELEMENT_TYPE, ...], list[AGGREGATE_CONDITION_TYPE]]]:
-        """
-        Get the list of element-condition pairs in this aggregate.
-
-        Returns:
-            List of tuples, each containing a tuple of elements and a list of conditions
-        """
-        return self._elements.copy()  # Return a copy to prevent direct modification
+        """The element-condition pairs in this aggregate (a defensive copy)."""
+        return self._elements.copy()
 
     @property
     def is_grounded(self) -> bool:
@@ -135,17 +116,12 @@ class Aggregate(Term, ComparisonMixin, ABC):
         will still report False because X is ungrounded. This approach ensures
         consistency with how other Term classes handle groundedness.
         We may later add a separate property to check that no global variables are used if needed.
-
-        Returns:
-            bool: True if everything is grounded, False otherwise.
         """
         for element_tuple, conditions in self._elements:
-            # Check if all elements in the tuple are grounded
             for element in element_tuple:
                 if not element.is_grounded:
                     return False
 
-            # Check if all conditions are grounded
             for condition in conditions:
                 if not condition.is_grounded:
                     return False
@@ -153,108 +129,57 @@ class Aggregate(Term, ComparisonMixin, ABC):
         return True
 
     def render(self, context: RenderingContext = RenderingContext.DEFAULT) -> str:
-        """
-        Renders the aggregate as a string in Clingo syntax.
-
-        Args:
-            context: The context in which the Term is being rendered.
-
-        Returns:
-            str: The string representation of the aggregate in Clingo syntax.
-        """
-        # Render the elements with their conditions
         elements_str = []
 
         for element_tuple, conditions in self._elements:
             element_str = ", ".join(elem.render() for elem in element_tuple)
 
-            # Add conditions if present
             if conditions:
                 conditions_str = ", ".join(cond.render() for cond in conditions)
                 elements_str.append(f"{element_str} : {conditions_str}")
             else:
                 elements_str.append(element_str)
 
-        # Combine everything into the final aggregate syntax
         return f"{self.AGGREGATE_TYPE.value}{{{'; '.join(elements_str)}}}"
 
     def validate_in_context(self, is_in_head: bool) -> None:
-        """
-        Validates this aggregate for use in a specific context.
-
-        Aggregates can only be used as part of comparisons in rule bodies
-        or in specific structured contexts. They cannot be directly used
-        as rule heads or rule bodies on their own.
-
-        Args:
-            is_in_head: True if validating for head position, False for body position.
-
-        Raises:
-            ValueError: When trying to use an aggregate directly in a rule.
-        """
+        """Aggregates are only valid inside comparisons: always raises."""
         raise ValueError(
             "Aggregates must be used in comparisons (e.g., #count{...} > 0) "
             "and cannot appear directly in rule heads or bodies"
         )
 
     def collect_predicates(self) -> set[PREDICATE_CLASS_TYPE]:
-        """
-        Collects all predicate classes used in this aggregate.
-
-        Returns:
-            set[type[Predicate]]: A set of Predicate classes used in this aggregate.
-        """
         predicates = set()
 
-        # Collect from all elements and their conditions
         for element_tuple, conditions in self._elements:
-            # Collect from elements
             for element in element_tuple:
                 predicates.update(element.collect_predicates())
 
-            # Collect from conditions
             for condition in conditions:
                 predicates.update(condition.collect_predicates())
 
         return predicates
 
     def collect_defined_constants(self) -> set[str]:
-        """
-        Collects all defined constant names used in this aggregate.
-
-        Returns:
-            set[str]: A set of defined constant names used in this aggregate.
-        """
         constants = set()
 
-        # Collect from all elements and their conditions
         for element_tuple, conditions in self._elements:
-            # Collect from elements
             for element in element_tuple:
                 constants.update(element.collect_defined_constants())
 
-            # Collect from conditions
             for condition in conditions:
                 constants.update(condition.collect_defined_constants())
 
         return constants
 
     def collect_variables(self) -> set[str]:
-        """
-        Collects all variables used in this aggregate.
-
-        Returns:
-            set[str]: A set of variables used in this aggregate.
-        """
         variables = set()
 
-        # Collect from all elements and their conditions
         for element_tuple, conditions in self._elements:
-            # Collect from elements
             for element in element_tuple:
                 variables.update(element.collect_variables())
 
-            # Collect from conditions
             for condition in conditions:
                 variables.update(condition.collect_variables())
 
@@ -262,27 +187,16 @@ class Aggregate(Term, ComparisonMixin, ABC):
 
 
 class Count(Aggregate):
-    """
-    Represents a #count aggregate in ASP programs.
-
-    Count aggregates compute the number of distinct tuples that match the conditions.
-
-    Example:
-        #count{X : p(X)} = 3
-    """
+    """#count: the number of distinct matching tuples, e.g. #count{X : p(X)} = 3."""
 
     AGGREGATE_TYPE = AggregateType.COUNT
 
 
 class Sum(Aggregate):
     """
-    Represents a #sum aggregate in ASP programs.
+    #sum: the sum of weights over distinct matching tuples, e.g. #sum{W,X : p(X,W)} > 10.
 
-    Sum aggregates compute the sum of weights across all distinct tuples
-    that match the conditions. The first element in each tuple is used as the weight.
-
-    Example:
-        #sum{W,X : p(X,W)} > 10
+    The first element in each tuple is the weight.
     """
 
     AGGREGATE_TYPE = AggregateType.SUM
@@ -290,14 +204,9 @@ class Sum(Aggregate):
 
 class SumPlus(Aggregate):
     """
-    Represents a #sum+ aggregate in ASP programs.
+    #sum+: like Sum, but negative weights are treated as zero.
 
-    SumPlus aggregates compute the sum of positive weights across all distinct tuples
-    that match the conditions. The first element in each tuple is used as the weight.
-    Negative weights are treated as zero.
-
-    Example:
-        #sum+{W,X : p(X,W)} > 10
+    The first element in each tuple is the weight.
     """
 
     AGGREGATE_TYPE = AggregateType.SUM_PLUS
@@ -305,13 +214,9 @@ class SumPlus(Aggregate):
 
 class Min(Aggregate):
     """
-    Represents a #min aggregate in ASP programs.
+    #min: the minimum value over distinct matching tuples, e.g. #min{W,X : p(X,W)} < 5.
 
-    Min aggregates compute the minimum value across all distinct tuples
-    that match the conditions. The first element in each tuple is used as the value.
-
-    Example:
-        #min{W,X : p(X,W)} < 5
+    The first element in each tuple is the value.
     """
 
     AGGREGATE_TYPE = AggregateType.MIN
@@ -319,13 +224,9 @@ class Min(Aggregate):
 
 class Max(Aggregate):
     """
-    Represents a #max aggregate in ASP programs.
+    #max: the maximum value over distinct matching tuples, e.g. #max{W,X : p(X,W)} < 100.
 
-    Max aggregates compute the maximum value across all distinct tuples
-    that match the conditions. The first element in each tuple is used as the value.
-
-    Example:
-        #max{W,X : p(X,W)} < 100
+    The first element in each tuple is the value.
     """
 
     AGGREGATE_TYPE = AggregateType.MAX
