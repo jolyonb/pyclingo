@@ -9,10 +9,9 @@ import clingo
 
 from pyclingo.clingo_handler import ClingoMessageHandler, LogLevel
 from pyclingo.conditional_literal import ConditionalLiteral
+from pyclingo.core import ConstantBase, DefinedConstant, Number, String, Symbol, Term
 from pyclingo.predicate import Predicate
 from pyclingo.program_elements import BlankLine, Comment, ProgramElement, Rule
-from pyclingo.term import Term
-from pyclingo.value import ConstantBase, DefinedConstant, Number, String, Symbol
 
 
 class ASPProgram:

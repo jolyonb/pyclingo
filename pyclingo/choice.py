@@ -2,11 +2,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Self, Union
 
-from pyclingo.expression import Comparison
-from pyclingo.negation import ClassicalNegation, NegatedLiteral
-from pyclingo.predicate import Predicate
-from pyclingo.term import RenderingContext, Term
-from pyclingo.value import Number, String, Value, Variable
+from pyclingo.core import Comparison, Number, RenderingContext, String, Term, Value, Variable
+from pyclingo.predicate import ClassicalNegation, NegatedLiteral, Predicate
 
 if TYPE_CHECKING:
     from pyclingo.types import PREDICATE_CLASS_TYPE

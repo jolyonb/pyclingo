@@ -4,10 +4,8 @@ from typing import TYPE_CHECKING, Type, Union
 
 if TYPE_CHECKING:
     from pyclingo.aggregates import Aggregate
-    from pyclingo.expression import Expression
-    from pyclingo.pool import Pool
+    from pyclingo.core import DefinedConstant, Expression, Number, Pool, Value, Variable
     from pyclingo.predicate import Predicate
-    from pyclingo.value import DefinedConstant, Number, Value, Variable
 
     PREDICATE_RAW_INPUT_TYPE = Union[int, str, Value, Predicate, Expression, Pool]
     PREDICATE_FIELD_TYPE = Union[Value, Predicate, Expression, Pool]

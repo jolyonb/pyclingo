@@ -1,7 +1,6 @@
 from typing import Sequence
 
-from pyclingo import Variable
-from pyclingo.term import Term
+from pyclingo.core import Term, Variable
 
 
 def collect_variables(*terms: Term | Sequence[Term] | None) -> set[str]:

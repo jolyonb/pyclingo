@@ -1,5 +1,4 @@
-from pyclingo.negation import ClassicalNegation, DefaultNegation
-from pyclingo.predicate import Predicate
+from pyclingo.predicate import ClassicalNegation, DefaultNegation, Predicate
 
 
 def test_predicate_classical_negation_operator() -> None:

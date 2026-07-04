@@ -11,7 +11,7 @@ The DSL overloads == on Values/Expressions/Aggregates to build ASP Comparison te
 import pytest
 
 from pyclingo import Predicate, Variable
-from pyclingo.value import DefinedConstant, Number, String
+from pyclingo.core import DefinedConstant, Number, String
 
 
 class TestComparisonBool:

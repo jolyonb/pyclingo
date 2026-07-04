@@ -7,26 +7,27 @@ PyClingo is a Python library for building clingo ASP (Answer Set Programming) pr
 The library is built around a rich hierarchy of term types that represent different ASP constructs:
 
 - `Term` (abstract base class)
-  - `BasicTerm` (abstract, can be direct predicate arguments)
-    - `Value` (abstract, for basic values)
+  - `ComparableTerm` (abstract: usable in comparisons; provides `==`, `!=`, `<`, `<=`, `>`, `>=`)
+    - `Value` (abstract, for basic values — also a `BasicTerm`)
       - `Variable` (e.g., `X`, `Y`)
       - `ConstantBase` (abstract)
         - `Number` (numeric constants, e.g., `42`)
         - `String` (string literals, e.g., `"hello"`)
         - `Symbol` (plain symbolic terms, e.g., the `n` in `direction(n)`)
         - `DefinedConstant` (#const-defined constants, e.g., `max_size`)
+    - `Expression` (arithmetic expressions, e.g., `X+Y*2`)
+    - `Aggregate` (abstract)
+      - `Count`, `Sum`, `SumPlus`, `Min`, `Max`
+  - `BasicTerm` (abstract, can be direct predicate arguments: `Value`, `Predicate`, `Pool`)
     - `Predicate` (e.g., `person(john, 42)`)
     - `Pool` (abstract)
       - `RangePool` (e.g., `1..5`)
       - `ExplicitPool` (e.g., `(1;3;5)`)
-  - `Expression` (arithmetic expressions, e.g., `X+Y*2`)
   - `Comparison` (comparisons, e.g., `X < Y`)
   - `NegatedLiteral` (abstract)
     - `DefaultNegation` (default negation, e.g., `not p(X)`)
     - `ClassicalNegation` (classical negation, e.g., `-p(X)`)
   - `ConditionalLiteral` (e.g., `p(X) : q(X)`)
-  - `Aggregate` (abstract)
-    - `Count`, `Sum`, `SumPlus`, `Min`, `Max`
   - `Choice` (e.g., `{ p(X) : q(X) }`)
 
 ## Core Concepts

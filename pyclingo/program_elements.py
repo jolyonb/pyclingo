@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
-from pyclingo.term import Term
+from pyclingo.core import Term
 
 if TYPE_CHECKING:
     from pyclingo.types import PREDICATE_CLASS_TYPE

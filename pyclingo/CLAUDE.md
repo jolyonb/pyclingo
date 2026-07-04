@@ -10,32 +10,42 @@ The library is built around a rich hierarchy of term types representing differen
 
 ```
 Term (abstract base class)
-├── BasicTerm (abstract, can be direct predicate arguments)
-│   ├── Value (abstract, for basic values)
+├── ComparableTerm (abstract: usable in comparisons; provides ==, !=, <, <=, >, >=)
+│   ├── Value (abstract, for basic values — also a BasicTerm)
 │   │   ├── Variable (e.g., X, Y)
 │   │   └── ConstantBase (abstract)
 │   │       ├── Number (numeric constants, e.g., 42)
 │   │       ├── String (string literals, e.g., "hello")
 │   │       ├── Symbol (plain symbolic terms, e.g., the n in direction(n))
 │   │       └── DefinedConstant (#const-defined constants, e.g., max_size)
+│   ├── Expression (arithmetic expressions, e.g., X+Y*2)
+│   └── Aggregate (abstract)
+│       └── Count, Sum, SumPlus, Min, Max
+├── BasicTerm (abstract, can be direct predicate arguments: Value, Predicate, Pool)
 │   ├── Predicate (e.g., person(john, 42))
 │   └── Pool (abstract)
 │       ├── RangePool (e.g., 1..5)
 │       └── ExplicitPool (e.g., (1;3;5))
-├── Expression (arithmetic expressions, e.g., X+Y*2)
 ├── Comparison (comparisons, e.g., X < Y)
 ├── NegatedLiteral (abstract)
 │   ├── DefaultNegation (default negation, e.g., not p(X))
 │   └── ClassicalNegation (classical negation, e.g., -p(X))
 ├── ConditionalLiteral (e.g., p(X) : q(X))
-├── Aggregate (abstract)
-│   ├── Count, Sum, SumPlus, Min, Max
 └── Choice (e.g., { p(X) : q(X) })
 ```
 
+## Module Layout
+
+The mutually-recursive operator cluster (terms, values, pools, expressions,
+comparisons) lives in a single module, `core.py` — construction and isinstance
+checks need real classes, so this cluster cannot be split across modules without
+deferred imports. Everything else imports downward from core; the import graph
+is a DAG, enforced by tests/pyclingo/test_architecture.py (which also bans
+function-level intra-package imports).
+
 ## Key Modules
 
-### 1. Values (`value.py`)
+### 1. Values (`core.py`)
 Fundamental data types for ASP programs:
 - **Variable**: ASP variables (must start with uppercase or be '_')
 - **Number**: Numeric integer constants
@@ -61,7 +71,7 @@ Key methods:
 - `get_arity()`: Returns number of arguments
 - `collect_predicates()`: Gathers all predicate classes used
 
-### 3. Expressions (`expression.py`)
+### 3. Expressions and Comparisons (`core.py`)
 Arithmetic and comparison operations:
 - **Expression**: Mathematical expressions with proper precedence
 - **Comparison**: Relational and equality comparisons
@@ -93,7 +103,7 @@ Aggregate functions for ASP:
 
 All support multiple elements and conditions via `add()` method.
 
-#### Negation (`negation.py`)
+#### Negation (`predicate.py`)
 Two types of negation:
 - **DefaultNegation**: `not p(X)` (negation as failure)
 - **ClassicalNegation**: `-p(X)` (explicit falsity)
@@ -105,7 +115,7 @@ Conditional structures: `p(X) : q(X)`
 - Used in aggregates and choice rules
 - Helper function `key_for_each_lock()` for intuitive construction
 
-### 5. Collections (`pool.py`)
+### 5. Collections (`core.py`)
 Collections of terms for ASP expansion:
 - **RangePool**: Continuous ranges like `1..5`
 - **ExplicitPool**: Explicit sets like `(1;3;5)`
@@ -143,10 +153,10 @@ Operator definitions and precedence rules:
 - Comparison operators
 - Support for parentheses optimization in expressions
 
-#### Comparison Mixin (`comparison_mixin.py`)
-Provides comparison operators for Value, Expression, and Aggregate classes:
-- Python operator overloading for comparisons
-- Automatic Comparison object creation
+#### ComparableTerm (`core.py`)
+Abstract base for Value, Expression, and Aggregate — the terms that may appear
+in comparisons. Provides the comparison operators (which build Comparison terms)
+and serves as the isinstance marker for comparison operands.
 
 #### Error Handling (`clingo_handler.py`)
 Comprehensive error message processing:

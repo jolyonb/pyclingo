@@ -5,8 +5,8 @@ Tests for Symbol: plain symbolic constant terms like the n in direction(n).
 import pytest
 
 from pyclingo import ASPProgram, ExplicitPool, Symbol
+from pyclingo.core import String
 from pyclingo.predicate import Predicate
-from pyclingo.value import String
 
 
 def test_renders_unquoted() -> None:

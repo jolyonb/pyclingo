@@ -4,14 +4,10 @@ from abc import ABC
 from enum import StrEnum
 from typing import TYPE_CHECKING, ClassVar, Self, Union
 
-from pyclingo.comparison_mixin import ComparisonMixin
-from pyclingo.negation import NegatedLiteral
-from pyclingo.predicate import Predicate
-from pyclingo.term import RenderingContext, Term
-from pyclingo.value import Value
+from pyclingo.core import ComparableTerm, Comparison, RenderingContext, Value
+from pyclingo.predicate import NegatedLiteral, Predicate
 
 if TYPE_CHECKING:
-    from pyclingo.expression import Comparison
     from pyclingo.types import PREDICATE_CLASS_TYPE
 
     AGGREGATE_ELEMENT_TYPE = Union[Value, Predicate]
@@ -28,7 +24,7 @@ class AggregateType(StrEnum):
     MAX = "#max"
 
 
-class Aggregate(Term, ComparisonMixin, ABC):
+class Aggregate(ComparableTerm, ABC):
     """
     Abstract base class for aggregates in ASP programs.
 
@@ -75,8 +71,6 @@ class Aggregate(Term, ComparisonMixin, ABC):
             >>> Count(X).add(Y, p(x=Y)).add((Z, W), [q(x=Z), r(x=W)]).render()
             '#count{X; Y : p(Y); Z, W : q(Z), r(W)}'
         """
-        from pyclingo.expression import Comparison
-
         element_tuple = element if isinstance(element, tuple) else (element,)
         for item in element_tuple:
             if not isinstance(item, (Value, Predicate)):

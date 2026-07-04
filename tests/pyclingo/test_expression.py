@@ -1,5 +1,4 @@
-from pyclingo.expression import Abs
-from pyclingo.value import Number, Variable
+from pyclingo.core import Abs, Number, Variable
 
 
 def test_basic_expression_rendering() -> None:
