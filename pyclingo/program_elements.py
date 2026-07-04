@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Sequence
 
 from pyclingo.core import Term
 
@@ -37,6 +37,31 @@ class Comment(ProgramElement):
     def render(self) -> str:
         """Single-line text renders as a % comment; multi-line text as a %* *% block."""
         return f"%*\n{self.text}\n*%" if "\n" in self.text else f"% {self.text}"
+
+
+class RawASP(ProgramElement):
+    """
+    A verbatim block of ASP text: the escape hatch for constructs pyclingo
+    does not support.
+
+    Raw text is invisible to the program's tree walkers, so declare any
+    predicates the block produces via the predicates argument — that is what
+    makes #show directives cover them and lets solutions round-trip into
+    typed instances. Undeclared atoms appearing in a model fail solving with
+    "Unknown predicate type". Defined constants used in raw text are likewise
+    not seen by define_constant validation; clingo reports those itself.
+    """
+
+    def __init__(self, text: str, predicates: Sequence[PREDICATE_CLASS_TYPE] = ()):
+        assert isinstance(text, str)
+        self.text = text
+        self.predicates = tuple(predicates)
+
+    def render(self) -> str:
+        return self.text
+
+    def collect_predicates(self) -> set[PREDICATE_CLASS_TYPE]:
+        return set(self.predicates)
 
 
 class BlankLine(ProgramElement):

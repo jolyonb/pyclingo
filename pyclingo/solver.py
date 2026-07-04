@@ -11,7 +11,7 @@ from pyclingo.clingo_handler import ClingoMessageHandler, LogLevel
 from pyclingo.conditional_literal import ConditionalLiteral
 from pyclingo.core import ConstantBase, DefinedConstant, Number, String, Symbol, Term
 from pyclingo.predicate import Predicate
-from pyclingo.program_elements import BlankLine, Comment, ProgramElement, Rule
+from pyclingo.program_elements import BlankLine, Comment, ProgramElement, RawASP, Rule
 
 
 class ASPProgram:
@@ -75,6 +75,18 @@ class ASPProgram:
         assert all(isinstance(condition, Term) for condition in conditions)
         segment_key = (segment or self.default_segment).lower()
         self._segments[segment_key].append(Rule(body=list(conditions)))
+
+    def raw_asp(self, text: str, segment: str | None = None, predicates: Sequence[type[Predicate]] = ()) -> None:
+        """
+        Add a verbatim block of ASP text: the escape hatch for constructs
+        pyclingo does not model.
+
+        Declare any predicates the block produces via predicates so that show
+        directives cover them and solutions round-trip into typed instances.
+        """
+        assert isinstance(text, str)
+        segment_key = (segment or self.default_segment).lower()
+        self._segments[segment_key].append(RawASP(text, predicates))
 
     def comment(self, text: str, segment: str | None = None) -> None:
         """Add a comment to the program."""
