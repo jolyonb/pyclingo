@@ -3,11 +3,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Union
 
 from pyclingo.core import Comparison, RenderingContext, Term
-from pyclingo.predicate import DefaultNegation, Predicate
+from pyclingo.predicate import PREDICATE_CLASS_TYPE, DefaultNegation, Predicate
 
 if TYPE_CHECKING:
-    from pyclingo.types import PREDICATE_CLASS_TYPE
-
     # Type for terms that can be used in a conditional literal
     CONDITIONAL_TERM_TYPE = Union[Predicate, Comparison, DefaultNegation]
 

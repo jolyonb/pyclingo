@@ -4,10 +4,10 @@ Architecture tests guarding the module DAG.
 Every runtime intra-package import in pyclingo/ must occur at module level
 (deferred imports inside function bodies are banned, as they hide circular
 dependencies), and the module-level import graph must be acyclic.
-TYPE_CHECKING-guarded imports are ignored: they do not exist at runtime.
-TODO: a planned follow-up dissolves types.py into runtime aliases and drops
-`from __future__ import annotations`; TYPE_CHECKING blocks should mostly
-disappear then, and this exclusion can likely be removed with them.
+TYPE_CHECKING-guarded imports are ignored: they do not exist at runtime, and
+they are the sanctioned mechanism for annotation-only upward references (e.g.
+core's collect_predicates return type names Predicate, which core cannot
+import at runtime).
 """
 
 import ast

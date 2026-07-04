@@ -3,11 +3,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Self, Union
 
 from pyclingo.core import Comparison, Number, RenderingContext, String, Term, Value, Variable
-from pyclingo.predicate import DefaultNegation, Predicate
+from pyclingo.predicate import PREDICATE_CLASS_TYPE, DefaultNegation, Predicate
 
 if TYPE_CHECKING:
-    from pyclingo.types import PREDICATE_CLASS_TYPE
-
     CHOICE_ELEMENT_TYPE = Predicate
     CHOICE_CONDITION_TYPE = Union[Predicate, DefaultNegation, Comparison]
     CARDINALITY_TYPE = Union[int, Value]

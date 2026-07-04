@@ -22,11 +22,9 @@ from pyclingo.operators import (
 )
 
 if TYPE_CHECKING:
-    from pyclingo.types import (
-        EXPRESSION_FIELD_TYPE,
-        PREDICATE_CLASS_TYPE,
-        VALUE_EXPRESSION_TYPE,
-    )
+    # The one annotation-only upward reference in the package: collect_predicates
+    # returns predicate classes, but core cannot import predicate at runtime
+    from pyclingo.predicate import PREDICATE_CLASS_TYPE
 
 
 class RenderingContext(Enum):
@@ -1046,6 +1044,11 @@ def Abs(term: EXPRESSION_FIELD_TYPE) -> Expression:
     """Builds an absolute-value expression, |term|."""
     return Expression(None, Operation.ABS, term)
 
+
+# Runtime type aliases for the operator cluster
+EXPRESSION_FIELD_TYPE = Union[Value, Expression, int]
+VALUE_EXPRESSION_TYPE = Union[Value, Expression]
+NUMBER_LIKE = Union[int, Number, DefinedConstant, Variable]
 
 ANY = Variable("_")
 

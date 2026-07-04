@@ -5,11 +5,9 @@ from enum import StrEnum
 from typing import TYPE_CHECKING, ClassVar, Self, Union
 
 from pyclingo.core import ComparableTerm, Comparison, RenderingContext, Value
-from pyclingo.predicate import DefaultNegation, Predicate
+from pyclingo.predicate import PREDICATE_CLASS_TYPE, DefaultNegation, Predicate
 
 if TYPE_CHECKING:
-    from pyclingo.types import PREDICATE_CLASS_TYPE
-
     AGGREGATE_ELEMENT_TYPE = Union[Value, Predicate]
     AGGREGATE_CONDITION_TYPE = Union[Predicate, DefaultNegation, Comparison]
 

@@ -161,12 +161,6 @@ Comprehensive error message processing:
 - Source code highlighting for errors
 - Configurable stopping thresholds
 
-#### Types (`types.py`)
-Type aliases for better code clarity and type checking:
-- Input type unions for predicates and expressions
-- Field type definitions
-- Conditional and choice type specifications
-
 #### Utilities (`utils.py`)
 Helper functions:
 - `collect_variables()`: Gather variables from terms

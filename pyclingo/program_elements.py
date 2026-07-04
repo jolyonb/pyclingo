@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 from pyclingo.core import Term
 
 if TYPE_CHECKING:
-    from pyclingo.types import PREDICATE_CLASS_TYPE
+    from pyclingo.predicate import PREDICATE_CLASS_TYPE
 
 
 class ProgramElement(ABC):

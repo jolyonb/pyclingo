@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import Field, dataclass, fields, make_dataclass
-from typing import TYPE_CHECKING, Any, ClassVar, Type, Union
+from typing import Any, ClassVar, Type, Union
 
 from pyclingo.core import (
     BasicTerm,
@@ -15,12 +15,10 @@ from pyclingo.core import (
     Value,
 )
 
-if TYPE_CHECKING:
-    from pyclingo.types import (
-        PREDICATE_CLASS_TYPE,
-        PREDICATE_FIELD_TYPE,
-        PREDICATE_RAW_INPUT_TYPE,
-    )
+# Runtime type aliases
+PREDICATE_RAW_INPUT_TYPE = Union[int, str, Value, "Predicate", Expression, Pool]
+PREDICATE_FIELD_TYPE = Union[Value, "Predicate", Expression, Pool]
+PREDICATE_CLASS_TYPE = Type["Predicate"]
 
 
 @dataclass(frozen=True, eq=False)
