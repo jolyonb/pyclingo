@@ -1,15 +1,4 @@
-from pyclingo.predicate import ClassicalNegation, DefaultNegation, Predicate
-
-
-def test_predicate_classical_negation_operator() -> None:
-    """Test the - operator creates ClassicalNegation."""
-    Person = Predicate.define("person", ["name"])
-    person = Person(name="john")
-
-    neg_person = -person
-
-    assert isinstance(neg_person, ClassicalNegation)
-    assert neg_person.term == person
+from pyclingo.predicate import DefaultNegation, Predicate
 
 
 def test_predicate_default_negation_operator() -> None:

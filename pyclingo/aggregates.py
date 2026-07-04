@@ -5,13 +5,13 @@ from enum import StrEnum
 from typing import TYPE_CHECKING, ClassVar, Self, Union
 
 from pyclingo.core import ComparableTerm, Comparison, RenderingContext, Value
-from pyclingo.predicate import NegatedLiteral, Predicate
+from pyclingo.predicate import DefaultNegation, Predicate
 
 if TYPE_CHECKING:
     from pyclingo.types import PREDICATE_CLASS_TYPE
 
     AGGREGATE_ELEMENT_TYPE = Union[Value, Predicate]
-    AGGREGATE_CONDITION_TYPE = Union[Predicate, NegatedLiteral, Comparison]
+    AGGREGATE_CONDITION_TYPE = Union[Predicate, DefaultNegation, Comparison]
 
 
 class AggregateType(StrEnum):
@@ -83,9 +83,10 @@ class Aggregate(ComparableTerm, ABC):
         else:
             conditions = condition
         for cond in conditions:
-            if not isinstance(cond, (Predicate, NegatedLiteral, Comparison)):
+            if not isinstance(cond, (Predicate, DefaultNegation, Comparison)):
                 raise TypeError(
-                    f"Aggregate condition must be a Predicate, NegatedLiteral, or Comparison, got {type(cond).__name__}"
+                    f"Aggregate condition must be a Predicate, DefaultNegation, or Comparison, "
+                    f"got {type(cond).__name__}"
                 )
 
         self._elements.append((element_tuple, conditions))

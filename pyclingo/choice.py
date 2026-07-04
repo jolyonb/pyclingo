@@ -3,13 +3,13 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Self, Union
 
 from pyclingo.core import Comparison, Number, RenderingContext, String, Term, Value, Variable
-from pyclingo.predicate import ClassicalNegation, NegatedLiteral, Predicate
+from pyclingo.predicate import DefaultNegation, Predicate
 
 if TYPE_CHECKING:
     from pyclingo.types import PREDICATE_CLASS_TYPE
 
-    CHOICE_ELEMENT_TYPE = Union[Predicate, ClassicalNegation]
-    CHOICE_CONDITION_TYPE = Union[Predicate, NegatedLiteral, Comparison]
+    CHOICE_ELEMENT_TYPE = Predicate
+    CHOICE_CONDITION_TYPE = Union[Predicate, DefaultNegation, Comparison]
     CARDINALITY_TYPE = Union[int, Value]
 
 
@@ -35,7 +35,7 @@ class Choice(Term):
         Create a choice rule with an initial element; see add() for further elements.
 
         Args:
-            element: The predicate, classically negated predicate, or value that can be chosen
+            element: The predicate that can be chosen
             condition: Condition(s) determining when the element is considered
                       If None, it's an unconditional choice
         """
@@ -54,7 +54,7 @@ class Choice(Term):
         Add another element with optional condition(s); returns self for chaining.
 
         Args:
-            element: The predicate, classically negated predicate, or value that can be chosen
+            element: The predicate that can be chosen
             condition: Condition(s) determining when the element is considered
                       If None, it's an unconditional choice
 
@@ -65,27 +65,25 @@ class Choice(Term):
             >>> Choice(p(x=X)).add(q(x=X), r(x=X)).add(s(x=X), [t(x=X), u(x=X)]).render()
             '{ p(X); q(X) : r(X); s(X) : t(X), u(X) }'
         """
-        if not isinstance(element, (Predicate, ClassicalNegation)):
-            raise TypeError(
-                f"Choice element must be a Predicate, ClassicalNegation, or Value, got {type(element).__name__}"
-            )
+        if not isinstance(element, Predicate):
+            raise TypeError(f"Choice element must be a Predicate, got {type(element).__name__}")
 
         # Process and validate condition - coerce to list for easier processing
         if condition is None:
             conditions = []
         elif isinstance(condition, list):
             for cond in condition:
-                if not isinstance(cond, (Predicate, NegatedLiteral, Comparison)):
+                if not isinstance(cond, (Predicate, DefaultNegation, Comparison)):
                     raise TypeError(
-                        f"Choice condition must be a Predicate, NegatedLiteral, or Comparison, "
+                        f"Choice condition must be a Predicate, DefaultNegation, or Comparison, "
                         f"got {type(cond).__name__}"
                     )
             conditions = condition
-        elif isinstance(condition, (Predicate, NegatedLiteral, Comparison)):
+        elif isinstance(condition, (Predicate, DefaultNegation, Comparison)):
             conditions = [condition]
         else:
             raise TypeError(
-                f"Choice condition must be a Predicate, NegatedLiteral, Comparison, "
+                f"Choice condition must be a Predicate, DefaultNegation, Comparison, "
                 f"or a list of these, got {type(condition).__name__}"
             )
 

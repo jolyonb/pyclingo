@@ -3,13 +3,13 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Union
 
 from pyclingo.core import Comparison, RenderingContext, Term
-from pyclingo.predicate import NegatedLiteral, Predicate
+from pyclingo.predicate import DefaultNegation, Predicate
 
 if TYPE_CHECKING:
     from pyclingo.types import PREDICATE_CLASS_TYPE
 
     # Type for terms that can be used in a conditional literal
-    CONDITIONAL_TERM_TYPE = Union[Predicate, Comparison, NegatedLiteral]
+    CONDITIONAL_TERM_TYPE = Union[Predicate, Comparison, DefaultNegation]
 
 
 class ConditionalLiteral(Term):
@@ -32,7 +32,7 @@ class ConditionalLiteral(Term):
             head: The term that must be satisfied for all matching instances
             condition: The condition(s) that define when the head is required
         """
-        if not isinstance(head, (Predicate, Comparison, NegatedLiteral)):
+        if not isinstance(head, (Predicate, Comparison, DefaultNegation)):
             raise TypeError("The head of a conditional literal must be a predicate, comparison, or negated term")
 
         self._head = head
@@ -44,7 +44,7 @@ class ConditionalLiteral(Term):
             self._condition = list(condition)
 
         for cond in self._condition:
-            if not isinstance(cond, (Predicate, Comparison, NegatedLiteral)):
+            if not isinstance(cond, (Predicate, Comparison, DefaultNegation)):
                 raise TypeError("Conditions in a conditional literal must be predicates, comparisons, or negated terms")
 
     @property

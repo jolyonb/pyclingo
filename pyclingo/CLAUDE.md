@@ -27,9 +27,7 @@ Term (abstract base class)
 │       ├── RangePool (e.g., 1..5)
 │       └── ExplicitPool (e.g., (1;3;5))
 ├── Comparison (comparisons, e.g., X < Y)
-├── NegatedLiteral (abstract)
-│   ├── DefaultNegation (default negation, e.g., not p(X))
-│   └── ClassicalNegation (classical negation, e.g., -p(X))
+├── DefaultNegation (default negation, e.g., not p(X))
 ├── ConditionalLiteral (e.g., p(X) : q(X))
 └── Choice (e.g., { p(X) : q(X) })
 ```
@@ -64,7 +62,6 @@ Core building blocks for ASP facts and rules:
 - Dynamic predicate creation via `Predicate.define()`
 - Support for namespacing
 - Show directive management
-- Classical negation support via `-predicate` syntax
 
 Key methods:
 - `get_name()`: Returns predicate name with namespace
@@ -104,11 +101,10 @@ Aggregate functions for ASP:
 All support multiple elements and conditions via `add()` method.
 
 #### Negation (`predicate.py`)
-Two types of negation:
-- **DefaultNegation**: `not p(X)` (negation as failure)
-- **ClassicalNegation**: `-p(X)` (explicit falsity)
-- Helper function `Not()` for default negation
+- **DefaultNegation**: `not p(X)` (negation as failure), via `Not()` or `~predicate`
 - Automatic simplification of nested negations
+- Classical negation (`-p`) is deliberately unsupported: model explicit falsity
+  as a complementary predicate
 
 #### Conditional Literals (`conditional_literal.py`)
 Conditional structures: `p(X) : q(X)`

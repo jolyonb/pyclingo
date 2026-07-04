@@ -24,9 +24,7 @@ The library is built around a rich hierarchy of term types that represent differ
       - `RangePool` (e.g., `1..5`)
       - `ExplicitPool` (e.g., `(1;3;5)`)
   - `Comparison` (comparisons, e.g., `X < Y`)
-  - `NegatedLiteral` (abstract)
-    - `DefaultNegation` (default negation, e.g., `not p(X)`)
-    - `ClassicalNegation` (classical negation, e.g., `-p(X)`)
+  - `DefaultNegation` (default negation, e.g., `not p(X)`)
   - `ConditionalLiteral` (e.g., `p(X) : q(X)`)
   - `Choice` (e.g., `{ p(X) : q(X) }`)
 
