@@ -76,9 +76,13 @@ Arithmetic and comparison operations:
 - Automatic parentheses handling for complex expressions
 - Type conversion for Python literals
 
-Operators supported:
-- Arithmetic: `+`, `-`, `*`, `//` (integer division), `-` (unary), `|x|` (absolute)
+Operators supported (Python operator -> rendered ASP):
+- Arithmetic: `+`, `-`, `*`, `//` (renders `/`), `%` (renders `\`), `**`, `-` (unary), `|x|` via Abs()
+- Bitwise: `&`, `|` (renders `?`), `^`, `~` (complement; on predicates `~` is default negation instead)
 - Comparison: `==`, `!=`, `<`, `<=`, `>`, `>=`
+- Power and bitwise renderings are deliberately over-parenthesized; classic
+  arithmetic keeps minimal parentheses. Pinned against clingo evaluation in
+  tests/pyclingo/test_arithmetic.py.
 
 ### 4. Logic Constructs
 

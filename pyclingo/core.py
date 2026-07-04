@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Self, Sequence, Union, cast, ov
 
 from pyclingo.operators import (
     BINARY_OPERATIONS,
+    EXPLICIT_PARENS_OPERATIONS,
     NONCOMMUTATIVE_OPERATIONS,
     PRECEDENCE,
     UNARY_OPERATIONS,
@@ -223,6 +224,40 @@ class Value(BasicTerm, ComparableTerm, ABC):
 
     def __rfloordiv__(self, other: int | VALUE_EXPRESSION_TYPE) -> Expression:
         return Expression(other, Operation.INTEGER_DIVIDE, self)
+
+    def __mod__(self, other: int | VALUE_EXPRESSION_TYPE) -> Expression:
+        return Expression(self, Operation.MODULO, other)
+
+    def __rmod__(self, other: int | VALUE_EXPRESSION_TYPE) -> Expression:
+        return Expression(other, Operation.MODULO, self)
+
+    def __pow__(self, other: int | VALUE_EXPRESSION_TYPE) -> Expression:
+        return Expression(self, Operation.POWER, other)
+
+    def __rpow__(self, other: int | VALUE_EXPRESSION_TYPE) -> Expression:
+        return Expression(other, Operation.POWER, self)
+
+    def __and__(self, other: int | VALUE_EXPRESSION_TYPE) -> Expression:
+        return Expression(self, Operation.BITAND, other)
+
+    def __rand__(self, other: int | VALUE_EXPRESSION_TYPE) -> Expression:
+        return Expression(other, Operation.BITAND, self)
+
+    def __or__(self, other: int | VALUE_EXPRESSION_TYPE) -> Expression:
+        return Expression(self, Operation.BITOR, other)
+
+    def __ror__(self, other: int | VALUE_EXPRESSION_TYPE) -> Expression:
+        return Expression(other, Operation.BITOR, self)
+
+    def __xor__(self, other: int | VALUE_EXPRESSION_TYPE) -> Expression:
+        return Expression(self, Operation.BITXOR, other)
+
+    def __rxor__(self, other: int | VALUE_EXPRESSION_TYPE) -> Expression:
+        return Expression(other, Operation.BITXOR, self)
+
+    def __invert__(self) -> Expression:
+        """Bitwise complement (~X); distinct from ~predicate, which is default negation."""
+        return Expression(None, Operation.COMPLEMENT, self)
 
 
 class Variable(Value):
@@ -800,9 +835,10 @@ class Expression(ComparableTerm):
             # No parentheses ever needed; absolute value has its own delimiters
             return f"|{self.second_term.render(RenderingContext.DEFAULT)}|"
 
-        if self.operator == Operation.UNARY_MINUS:
+        if self.operator in (Operation.UNARY_MINUS, Operation.COMPLEMENT):
+            prefix = "-" if self.operator == Operation.UNARY_MINUS else "~"
             second_str = self.second_term.render(RenderingContext.DEFAULT, self.operator, False)
-            expr = f"-{second_str}"
+            expr = f"{prefix}{second_str}"
             # Need parentheses when it's inside another operation (abs never passes the operation through)
             needs_outer_parentheses = parent_op is not None
             return f"({expr})" if needs_outer_parentheses else expr
@@ -816,7 +852,15 @@ class Expression(ComparableTerm):
 
         # Determine if parentheses are needed
         needs_parentheses = False
-        if parent_op is not None:
+        if parent_op is not None and (
+            self.operator in EXPLICIT_PARENS_OPERATIONS or parent_op in EXPLICIT_PARENS_OPERATIONS
+        ):
+            # Power and the bitwise operators are deliberately over-parenthesized:
+            # any mix with a different operator gets explicit parentheses, and power
+            # gets them even against itself so its right-associativity is spelled
+            # out. Readers never need gringo's precedence table to parse our output.
+            needs_parentheses = self.operator != parent_op or self.operator == Operation.POWER
+        elif parent_op is not None:
             current_precedence = PRECEDENCE[self.operator]
             parent_precedence = PRECEDENCE[parent_op]
 
@@ -834,11 +878,9 @@ class Expression(ComparableTerm):
                     # e.g., a - (b - c)
                     needs_parentheses = is_right_operand
 
-                # Special case: Integer division within multiplication
-                # This is to handle the case where (X * Y) // Z is different from X * (Y // Z)
-                if self.operator == Operation.INTEGER_DIVIDE and parent_op == Operation.MULTIPLY:
-                    # Add parentheses when we're the right side of multiplication
-                    # For cases like X * (Y // Z)
+                # Special case: division or modulo within multiplication
+                # (X * Y) / Z differs from X * (Y / Z), and likewise for modulo
+                if self.operator in (Operation.INTEGER_DIVIDE, Operation.MODULO) and parent_op == Operation.MULTIPLY:
                     needs_parentheses = is_right_operand
 
         # Apply parentheses if needed
@@ -875,6 +917,40 @@ class Expression(ComparableTerm):
 
     def __rfloordiv__(self, other: EXPRESSION_FIELD_TYPE) -> Expression:
         return Expression(other, Operation.INTEGER_DIVIDE, self)
+
+    def __mod__(self, other: EXPRESSION_FIELD_TYPE) -> Expression:
+        return Expression(self, Operation.MODULO, other)
+
+    def __rmod__(self, other: EXPRESSION_FIELD_TYPE) -> Expression:
+        return Expression(other, Operation.MODULO, self)
+
+    def __pow__(self, other: EXPRESSION_FIELD_TYPE) -> Expression:
+        return Expression(self, Operation.POWER, other)
+
+    def __rpow__(self, other: EXPRESSION_FIELD_TYPE) -> Expression:
+        return Expression(other, Operation.POWER, self)
+
+    def __and__(self, other: EXPRESSION_FIELD_TYPE) -> Expression:
+        return Expression(self, Operation.BITAND, other)
+
+    def __rand__(self, other: EXPRESSION_FIELD_TYPE) -> Expression:
+        return Expression(other, Operation.BITAND, self)
+
+    def __or__(self, other: EXPRESSION_FIELD_TYPE) -> Expression:
+        return Expression(self, Operation.BITOR, other)
+
+    def __ror__(self, other: EXPRESSION_FIELD_TYPE) -> Expression:
+        return Expression(other, Operation.BITOR, self)
+
+    def __xor__(self, other: EXPRESSION_FIELD_TYPE) -> Expression:
+        return Expression(self, Operation.BITXOR, other)
+
+    def __rxor__(self, other: EXPRESSION_FIELD_TYPE) -> Expression:
+        return Expression(other, Operation.BITXOR, self)
+
+    def __invert__(self) -> Expression:
+        """Bitwise complement (~X); distinct from ~predicate, which is default negation."""
+        return Expression(None, Operation.COMPLEMENT, self)
 
     def collect_predicates(self) -> set[PREDICATE_CLASS_TYPE]:
         predicates = set()
