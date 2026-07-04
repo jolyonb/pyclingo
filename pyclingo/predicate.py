@@ -335,7 +335,7 @@ class DefaultNegation(Term):
             raise ValueError("Default negation (not) cannot be used in rule heads")
 
 
-def Not(term: Union[Predicate, Comparison, "DefaultNegation"]) -> DefaultNegation:
+def Not(term: Union[Predicate, Comparison, DefaultNegation]) -> DefaultNegation:
     """
     Helper function to create default negation.
 
