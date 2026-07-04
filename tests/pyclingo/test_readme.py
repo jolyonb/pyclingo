@@ -1,20 +1,26 @@
 """
-Executes every python code block in pyclingo/README.md.
+Executes every python code block in pyclingo's markdown docs.
 
-Blocks are concatenated in order and run in one shared namespace — they build on
-each other, and this test is what keeps them cumulative and runnable.
+Per document, blocks are concatenated in order and run in one shared
+namespace — they build on each other, and this test is what keeps them
+cumulative and runnable.
 """
 
 import re
 from pathlib import Path
 
-README = Path(__file__).parent.parent.parent / "pyclingo" / "README.md"
+import pytest
+
+DOCS_DIR = Path(__file__).parent.parent.parent / "pyclingo"
+DOCUMENTS = ["README.md", "MATH.md"]
 
 
-def test_readme_code_blocks_execute() -> None:
-    text = README.read_text()
+@pytest.mark.parametrize("doc", DOCUMENTS)
+def test_doc_code_blocks_execute(doc: str) -> None:
+    path = DOCS_DIR / doc
+    text = path.read_text()
     blocks = re.findall(r"```python\n(.*?)```", text, flags=re.DOTALL)
-    assert blocks, "no python code blocks found in README"
+    assert blocks, f"no python code blocks found in {doc}"
 
     source = "\n".join(blocks)
-    exec(compile(source, str(README), "exec"), {})  # noqa: S102
+    exec(compile(source, str(path), "exec"), {})  # noqa: S102
