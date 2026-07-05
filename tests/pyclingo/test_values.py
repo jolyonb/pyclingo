@@ -4,7 +4,7 @@ Tests for the content rules of Number, String, and pools.
 
 import pytest
 
-from pyclingo.core import Number, RangePool, String, pool
+from pyclingo.core import Number, RangePool, String, Value, Variable, pool
 
 
 def test_number_range_matches_clingo() -> None:
@@ -39,3 +39,12 @@ def test_empty_pools_raise_everywhere() -> None:
         pool(range(2, 2, 2))
     with pytest.raises(ValueError, match="empty"):
         pool([])
+
+
+def test_cache_can_be_cleared() -> None:
+    before = Variable("CacheProbe")
+    assert Variable("CacheProbe") is before
+    Value.clear_cache()
+    after = Variable("CacheProbe")
+    assert after is not before  # identity resets across a clear
+    assert Variable("CacheProbe") is after  # caching resumes

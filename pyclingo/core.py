@@ -197,6 +197,17 @@ class Value(BasicTerm, ComparableTerm, ABC):
                 return cast(Self, cached)
         return super().__new__(cls)
 
+    @classmethod
+    def clear_cache(cls) -> None:
+        """
+        Empty the value cache (it grows monotonically across a process).
+
+        Values held from before the clear remain valid but are no longer the
+        same objects as newly constructed equal values, so avoid mixing them
+        in identity-keyed containers like sets across a clear.
+        """
+        Value._cache.clear()
+
     @abstractmethod
     def render(
         self,
