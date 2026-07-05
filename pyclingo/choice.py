@@ -77,7 +77,7 @@ class Choice(Term):
         if condition is None:
             conditions = []
         elif isinstance(condition, list):
-            conditions = condition
+            conditions = list(condition)  # copy: the caller's list must not alias rule internals
         else:
             conditions = [condition]
         for cond in conditions:
@@ -242,6 +242,12 @@ class Choice(Term):
                 elements_str.append(element_str)
 
         return f"{prefix}{{ {'; '.join(elements_str)} }}{suffix}"
+
+    def __str__(self) -> str:
+        return self.render()
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}({self.render()!r})"
 
     def validate_in_context(self, is_in_head: bool) -> None:
         """Choice rules are head-only: raises in bodies."""

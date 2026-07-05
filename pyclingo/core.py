@@ -6,10 +6,10 @@ Comparison), so they are merged into one module to avoid deferred imports.
 Everything else in the package imports downward from here.
 """
 
-from abc import ABC, abstractmethod
+from abc import ABC, ABCMeta, abstractmethod
 from collections.abc import Sequence
 from enum import Enum
-from typing import TYPE_CHECKING, Any, ClassVar, Self, cast, overload
+from typing import TYPE_CHECKING, Any, ClassVar, cast, overload
 
 from pyclingo.operators import (
     BINARY_OPERATIONS,
@@ -40,8 +40,6 @@ class RenderingContext(Enum):
 
     DEFAULT = "default"
     LONE_PREDICATE_ARGUMENT = "lone_predicate_argument"
-    NEGATION = "negation"
-    IN_EXPRESSION = "in_expression"
 
 
 class Term(ABC):
@@ -170,7 +168,33 @@ class Negatable(Term, ABC):
         return DefaultNegation(self)
 
 
-class Value(BasicTerm, ComparableTerm, ABC):
+class _ValueMeta(ABCMeta):
+    """
+    Caches Value instances: constructing the same value twice returns the same
+    object. Construction runs before the cache is written, so a value whose
+    validation raises is never cached. All concrete Value subclasses take
+    exactly one constructor argument; other shapes fall through so __init__
+    can raise its own error, and the cache key includes the argument's type so
+    equal-but-distinct-type arguments never share an instance.
+    """
+
+    def __call__[T](cls: type[T], *args: Any, **kwargs: Any) -> T:
+        if len(args) + len(kwargs) == 1:
+            value = args[0] if args else next(iter(kwargs.values()))
+            key = (cls, type(value), value)
+            try:
+                cached = Value._cache.get(key)
+            except TypeError:
+                # Unhashable constructor argument; let __init__ reject it with a clear error
+                return super().__call__(*args, **kwargs)  # type: ignore[misc, no-any-return]
+            if cached is None:
+                cached = super().__call__(*args, **kwargs)  # type: ignore[misc]
+                Value._cache[key] = cached
+            return cast(T, cached)
+        return super().__call__(*args, **kwargs)  # type: ignore[misc, no-any-return]
+
+
+class Value(BasicTerm, ComparableTerm, ABC, metaclass=_ValueMeta):
     """
     Abstract base class for values: variables and constants, the most basic
     elements in an ASP program.
@@ -188,26 +212,6 @@ class Value(BasicTerm, ComparableTerm, ABC):
     """
 
     _cache: ClassVar[dict[tuple[type, type, Any], Value]] = {}
-
-    def __new__(cls, *args: Any, **kwargs: Any) -> Self:
-        # All concrete Value subclasses take exactly one constructor argument; anything
-        # else falls through so __init__ can raise its own error. The cache key includes
-        # the argument's type so that equal-but-distinct-type arguments never share an
-        # instance.
-        if len(args) + len(kwargs) == 1:
-            value = args[0] if args else next(iter(kwargs.values()))
-            key = (cls, type(value), value)
-            try:
-                cached = Value._cache.get(key)
-            except TypeError:
-                # Unhashable constructor argument; let __init__ reject it with a clear error
-                pass
-            else:
-                if cached is None:
-                    cached = super().__new__(cls)
-                    Value._cache[key] = cached
-                return cast(Self, cached)
-        return super().__new__(cls)
 
     @classmethod
     def clear_cache(cls) -> None:
@@ -588,6 +592,9 @@ class RangePool(Pool):
             if isinstance(bound, Expression) and not bound.is_grounded:
                 raise ValueError(f"Expression in range {label} must be grounded")
 
+        if isinstance(start, Number) and isinstance(end, Number) and start.value > end.value:
+            raise ValueError(f"Range {start.value}..{end.value} is empty (start exceeds end)")
+
         self._start: ConstantBase | Expression = start
         self._end: ConstantBase | Expression = end
 
@@ -853,8 +860,8 @@ class Expression(ComparableTerm):
 
         # Must be a binary operation
         assert self.first_term is not None
-        first_str = self.first_term.render(RenderingContext.IN_EXPRESSION, self.operator, False)
-        second_str = self.second_term.render(RenderingContext.IN_EXPRESSION, self.operator, True)
+        first_str = self.first_term.render(RenderingContext.DEFAULT, self.operator, False)
+        second_str = self.second_term.render(RenderingContext.DEFAULT, self.operator, True)
 
         expr = f"{first_str} {self.operator.value} {second_str}"
 
@@ -960,6 +967,12 @@ class Expression(ComparableTerm):
         """Bitwise complement (~X); distinct from ~predicate, which is default negation."""
         return Expression(None, Operation.COMPLEMENT, self)
 
+    def __str__(self) -> str:
+        return self.render()
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}({self.render()!r})"
+
     def collect_predicates(self) -> set[PREDICATE_CLASS_TYPE]:
         predicates = set()
 
@@ -1042,6 +1055,12 @@ class Comparison(Negatable):
             raise TypeError(f"Comparison operator must be a ComparisonOperator, got {type(operator).__name__}")
         self._operator = operator
 
+        if isinstance(self._left_term, AggregateBase) and isinstance(self._right_term, AggregateBase):
+            raise ValueError(
+                "A comparison cannot have aggregates on both sides (clingo syntax error); "
+                "bind one aggregate to a variable in a separate rule"
+            )
+
         if isinstance(right_term, Pool) and operator != ComparisonOperator.EQUAL:
             raise ValueError("A pool can only be compared using equality")
 
@@ -1083,9 +1102,9 @@ class Comparison(Negatable):
         left_str = self.left_term.render()
         right_str = self.right_term.render()
 
-        expr = f"{left_str} {self.operator.value} {right_str}"
-
-        return f"({expr})" if context == RenderingContext.NEGATION else expr
+        # Never parenthesized: clingo REJECTS "not (X < 3)" — a comparison
+        # after not must be bare, and no other position needs parens either
+        return f"{left_str} {self.operator.value} {right_str}"
 
     def validate_in_context(self, is_in_head: bool) -> None:
         """
@@ -1099,6 +1118,12 @@ class Comparison(Negatable):
                 "Comparisons involving aggregates cannot be rule heads; "
                 "compute the aggregate in a body condition instead"
             )
+
+    def __str__(self) -> str:
+        return self.render()
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}({self.render()!r})"
 
     @property
     def is_assignment(self) -> bool:
@@ -1174,8 +1199,13 @@ class DefaultNegation(Negatable):
         return self._term.collect_variables()
 
     def render(self, context: RenderingContext = RenderingContext.DEFAULT) -> str:
-        term_str = self._term.render(context=RenderingContext.NEGATION)
-        return f"not {term_str}"
+        return f"not {self._term.render()}"
+
+    def __str__(self) -> str:
+        return self.render()
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}({self.render()!r})"
 
     def validate_in_context(self, is_in_head: bool) -> None:
         """Default negation is body-only: raises in heads."""

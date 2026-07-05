@@ -2,9 +2,8 @@
 Tests for Rule rendering.
 """
 
-from pyclingo import ASPProgram, Predicate, Variable
+from pyclingo import ASPProgram, ConditionalLiteral, Predicate, Variable
 from pyclingo.clingo_handler import LogLevel
-from pyclingo.conditional_literal import ConditionalLiteral
 
 
 def test_body_literal_after_conditional_literal_stays_separate() -> None:

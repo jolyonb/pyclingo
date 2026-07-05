@@ -61,6 +61,12 @@ class ConditionalLiteral(Term):
 
         return f"{head_str} : {condition_str}"
 
+    def __str__(self) -> str:
+        return self.render()
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}({self.render()!r})"
+
     def validate_in_context(self, is_in_head: bool) -> None:
         """Conditional literals are body-only (disjunctive heads are unsupported): raises in heads."""
         if is_in_head:

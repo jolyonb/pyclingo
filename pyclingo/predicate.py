@@ -1,3 +1,4 @@
+import keyword
 import re
 import types
 from dataclasses import Field, dataclass, fields
@@ -29,16 +30,25 @@ def _validate_schema(name: str, namespace: str, field_names: list[str]) -> None:
     if not all(c.isalnum() or c == "_" for c in name):
         raise ValueError(f"Predicate name can only contain letters, digits, and underscores: {name}")
 
+    if name == "not":
+        raise ValueError("'not' is reserved in ASP and cannot be a predicate name")
+
     if namespace and (not namespace[0].islower() or not all(c.isalnum() or c == "_" for c in namespace)):
         raise ValueError(
             f"Namespace must start with a lowercase letter and contain only letters, "
             f"digits, and underscores: {namespace}"
         )
 
+    if len(set(field_names)) != len(field_names):
+        duplicates = sorted({f for f in field_names if field_names.count(f) > 1})
+        raise ValueError(f"Duplicate field name(s): {', '.join(duplicates)}")
+
     reserved = _RESERVED_FIELD_NAMES
     for field_name in field_names:
-        if not field_name.isidentifier() or field_name.startswith("_"):
-            raise ValueError(f"Field name must be a valid identifier not starting with an underscore: {field_name!r}")
+        if not field_name.isidentifier() or field_name.startswith("_") or keyword.iskeyword(field_name):
+            raise ValueError(
+                f"Field name must be a valid non-keyword identifier not starting with an underscore: {field_name!r}"
+            )
         if field_name in reserved:
             raise ValueError(f"Field name {field_name!r} would shadow a Predicate attribute")
 
@@ -136,6 +146,10 @@ class Predicate(BasicTerm, Negatable):
         atom argument like person(john), define john as a nullary predicate:
         Predicate.define("john", [], show=False)().
         """
+
+        # Validate the raw list here: the annotations dict would silently
+        # collapse duplicates before __init_subclass__ could see them
+        _validate_schema(name, namespace, field_names)
 
         def set_annotations(class_namespace: dict[str, Any]) -> None:
             class_namespace["__annotations__"] = dict.fromkeys(field_names, "PredicateField")

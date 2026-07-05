@@ -48,3 +48,15 @@ def test_cache_can_be_cleared() -> None:
     after = Variable("CacheProbe")
     assert after is not before  # identity resets across a clear
     assert Variable("CacheProbe") is after  # caching resumes
+
+
+def test_failed_construction_does_not_poison_the_cache() -> None:
+    before = len(Value._cache)
+    with pytest.raises(ValueError):
+        Variable("lowercase_bad")
+    assert len(Value._cache) == before
+
+
+def test_inverted_range_rejected() -> None:
+    with pytest.raises(ValueError, match="empty"):
+        RangePool(5, 1)

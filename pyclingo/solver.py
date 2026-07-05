@@ -23,16 +23,13 @@ class ASPProgram:
     the program.
     """
 
-    header: str | None = None
-    default_segment: str = "Rules"
-
     def __init__(self, header: str | None = None, default_segment: str = "Rules") -> None:
         """Initialize an empty ASP program."""
         self._segments: defaultdict[str, list[ProgramElement]] = defaultdict(list)
         self._defined_constants: dict[str, int | str] = {}
         self._show_overrides: dict[type[Predicate], bool | ConditionalLiteral] = {}
-        self.header = header
-        self.default_segment = default_segment.lower()
+        self.header: str | None = header
+        self.default_segment: str = default_segment.lower()
 
     def add_segment(self, segment: str) -> None:
         """
@@ -147,6 +144,8 @@ class ASPProgram:
 
         if not isinstance(value, (int, str)):
             raise TypeError(f"Constant value must be an integer or string, got {type(value).__name__}")
+        if isinstance(value, str) and any(c in value for c in ('"', "\\", "\n", "\r")):
+            raise ValueError(f"Constant string value cannot contain quotes, backslashes, or newlines: {value!r}")
 
         self._defined_constants[name] = value
 
@@ -311,6 +310,8 @@ class ASPProgram:
         """
         if timeout < 0:
             raise ValueError(f"timeout must be non-negative, got {timeout}")
+        if models < 0:
+            raise ValueError(f"models must be non-negative (0 enumerates all), got {models}")
 
         tic = time.perf_counter()
 

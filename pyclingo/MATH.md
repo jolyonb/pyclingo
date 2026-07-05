@@ -39,7 +39,7 @@ deliberately over-parenthesized (power even against itself, making its
 associativity explicit).
 
 ```python
-from pyclingo.core import Number
+from pyclingo import Number
 
 a, b, c = Number(1), Number(2), Number(3)
 

@@ -26,3 +26,10 @@ def test_aggregates_rejected_in_conditions() -> None:
         Choice(P(x=X), condition=Count(Y, condition=P(x=Y)) > 0)
     with pytest.raises(ValueError, match="inside choice conditions"):
         Choice(P(x=X), condition=[P(x=X), Count(Y, condition=P(x=Y)) > 0])
+
+
+def test_aggregates_on_both_comparison_sides_rejected() -> None:
+    P = Predicate.define("p", ["x"])
+    X, Y = Variable("X"), Variable("Y")
+    with pytest.raises(ValueError, match="both sides"):
+        _ = Count(X, condition=P(x=X)) == Count(Y, condition=P(x=Y))

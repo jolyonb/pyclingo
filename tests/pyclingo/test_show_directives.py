@@ -2,8 +2,7 @@
 Tests for #show directive emission and visibility overrides.
 """
 
-from pyclingo import ASPProgram, Not, Predicate, Variable
-from pyclingo.conditional_literal import ConditionalLiteral
+from pyclingo import ASPProgram, ConditionalLiteral, Not, Predicate, Variable
 
 
 def test_hiding_everything_emits_bare_show() -> None:

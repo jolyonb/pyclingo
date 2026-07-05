@@ -50,3 +50,15 @@ def test_name_case_is_preserved() -> None:
     P = Predicate.define("myPred", ["x"])
     assert P(x=1).render() == "myPred(1)"
     assert P.get_name() == "myPred"
+
+
+def test_duplicate_field_names_rejected() -> None:
+    with pytest.raises(ValueError, match="Duplicate field name"):
+        Predicate.define("edge", ["a", "a"])
+
+
+def test_keyword_and_reserved_names_rejected() -> None:
+    with pytest.raises(ValueError, match="keyword"):
+        Predicate.define("k", ["class"])
+    with pytest.raises(ValueError, match="reserved"):
+        Predicate.define("not", ["a"])

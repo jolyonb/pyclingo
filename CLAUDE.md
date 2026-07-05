@@ -40,7 +40,7 @@ Low Level:    clingo       - ASP solver engine
 
 ## Main Interface
 
-### CLI Tool (`solver.py`)
+### CLI Tool (`solveit.py`)
 **Purpose**: Command-line interface that orchestrates the entire solving pipeline
 
 - **Configuration Loading**: Reads JSON puzzle files from `puzzles/` directory
@@ -65,9 +65,9 @@ python solveit.py fillomino --max-solutions 10 --timeout 30
 python solveit.py nurikabe --quiet --no-viz
 ```
 
-**Optimization Workflow**: Use `solver.py` repeatedly with different rule implementations to compare performance:
+**Optimization Workflow**: Use `solveit.py` repeatedly with different rule implementations to compare performance:
 1. Modify constraint logic in solver class
-2. Run `python solver.py puzzle --stats` to get timing/grounding metrics
+2. Run `python solveit.py puzzle --stats` to get timing/grounding metrics
 3. Compare statistics to identify optimal rule formulations
 4. Check generated `.pl` files to verify rule efficiency
 

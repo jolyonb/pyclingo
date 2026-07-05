@@ -127,7 +127,9 @@ class ClingoMessageHandler:
             if msg.column_start > 0:
                 # The column_start is 1-based, but we need 0-based for the string
                 pointer_pos = msg.column_start - 1
-                pointer = " " * pointer_pos + "^" * (msg.column_end - msg.column_start)
+                # Multi-line spans keep column_end from the later line, which can be
+                # smaller than column_start; always draw at least one caret
+                pointer = " " * pointer_pos + "^" * max(1, msg.column_end - msg.column_start)
                 output.append(f"       {pointer}")
 
         output.append("")

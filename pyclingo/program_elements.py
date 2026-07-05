@@ -33,6 +33,8 @@ class Comment(ProgramElement):
         """text may be multi-line."""
         if not isinstance(text, str):
             raise TypeError(f"Comment text must be a string, got {type(text).__name__}")
+        if "*%" in text:
+            raise ValueError("Comment text cannot contain '*%', which terminates ASP block comments")
         self.text = text
 
     def render(self) -> str:

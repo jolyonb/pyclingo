@@ -76,7 +76,7 @@ class Aggregate(AggregateBase, ABC):
         elif not isinstance(condition, list):
             conditions = [condition]
         else:
-            conditions = condition
+            conditions = list(condition)  # copy: the caller's list must not alias rule internals
         for cond in conditions:
             if not isinstance(cond, (Predicate, DefaultNegation, Comparison)):
                 raise TypeError(
@@ -138,6 +138,12 @@ class Aggregate(AggregateBase, ABC):
                 elements_str.append(element_str)
 
         return f"{self.AGGREGATE_TYPE.value}{{{'; '.join(elements_str)}}}"
+
+    def __str__(self) -> str:
+        return self.render()
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}({self.render()!r})"
 
     def validate_in_context(self, is_in_head: bool) -> None:
         """Aggregates are only valid inside comparisons: always raises."""
