@@ -16,7 +16,6 @@ Term (abstract base class)
 │   │   └── ConstantBase (abstract)
 │   │       ├── Number (numeric constants, e.g., 42)
 │   │       ├── String (string literals, e.g., "hello")
-│   │       ├── Symbol (plain symbolic terms, e.g., the n in direction(n))
 │   │       └── DefinedConstant (#const-defined constants, e.g., max_size)
 │   ├── Expression (arithmetic expressions, e.g., X+Y*2)
 │   └── Aggregate (abstract)
@@ -48,8 +47,10 @@ Fundamental data types for ASP programs:
 - **Variable**: ASP variables (must start with uppercase or be '_')
 - **Number**: Numeric integer constants
 - **String**: String literals with quotes
-- **Symbol**: Plain symbolic terms, unquoted (the n in direction(n))
 - **DefinedConstant**: #const-defined names that must be declared via define_constant()
+
+Bare atoms (the n in direction(n)) are zero-arity predicates — matching clingo's
+own data model, where a symbolic constant IS a function of arity zero.
 
 Key features:
 - Variables support arithmetic operations (create Expression objects)
@@ -173,7 +174,7 @@ Helper functions:
 ## Key Design Principles
 
 1. **Type Safety**: Extensive use of type hints and runtime validation
-2. **Immutability**: Most objects are frozen dataclasses or immutable
+2. **Immutability**: Values and Predicates are immutable (cached/frozen); Choice, Aggregate, and ConditionalLiteral are mutable builders — do not share one instance across rules and mutate it afterwards
 3. **Composability**: Rich operator overloading for natural expression building
 4. **Validation**: Context-aware validation for rule construction
 5. **Error Reporting**: Detailed error messages with source context

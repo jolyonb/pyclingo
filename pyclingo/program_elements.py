@@ -3,6 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Sequence
 
+from pyclingo.conditional_literal import ConditionalLiteral
 from pyclingo.core import Term
 
 if TYPE_CHECKING:
@@ -31,7 +32,8 @@ class Comment(ProgramElement):
 
     def __init__(self, text: str):
         """text may be multi-line."""
-        assert isinstance(text, str)
+        if not isinstance(text, str):
+            raise TypeError(f"Comment text must be a string, got {type(text).__name__}")
         self.text = text
 
     def render(self) -> str:
@@ -53,7 +55,8 @@ class RawASP(ProgramElement):
     """
 
     def __init__(self, text: str, predicates: Sequence[PREDICATE_CLASS_TYPE] = ()):
-        assert isinstance(text, str)
+        if not isinstance(text, str):
+            raise TypeError(f"RawASP text must be a string, got {type(text).__name__}")
         self.text = text
         self.predicates = tuple(predicates)
 
@@ -89,7 +92,8 @@ class Rule(ProgramElement):
         Raises:
             ValueError: If both head and body are None.
         """
-        if head is None and body is None:
+        if head is None and not body:
+            # [] slips a None-only check and would render a bare "." (clingo parse error)
             raise ValueError("Cannot have a rule with empty head and body!")
 
         if head is not None:
@@ -113,7 +117,15 @@ class Rule(ProgramElement):
 
         if self.body:
             result += " :- " if self.head is not None else ":- "
-            result += ", ".join(term.render() for term in self.body)
+            # A conditional literal's condition extends through commas, so the
+            # separator FOLLOWING a conditional literal must be a semicolon —
+            # otherwise the next body literal is absorbed into the condition
+            parts = []
+            for i, term in enumerate(self.body):
+                parts.append(term.render())
+                if i < len(self.body) - 1:
+                    parts.append("; " if isinstance(term, ConditionalLiteral) else ", ")
+            result += "".join(parts)
 
         result += "."
 
@@ -140,16 +152,3 @@ class Rule(ProgramElement):
             constants.update(term.collect_defined_constants())
 
         return constants
-
-    def collect_variables(self) -> tuple[set[str], set[str]]:
-        """Returns (head_vars, body_vars) as separate sets of variable names."""
-        head_vars = set()
-        body_vars = set()
-
-        if self.head is not None:
-            head_vars.update(self.head.collect_variables())
-
-        for term in self.body:
-            body_vars.update(term.collect_variables())
-
-        return head_vars, body_vars

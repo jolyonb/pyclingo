@@ -66,24 +66,25 @@ class Choice(Term):
         if not isinstance(element, Predicate):
             raise TypeError(f"Choice element must be a Predicate, got {type(element).__name__}")
 
-        # Process and validate condition - coerce to list for easier processing
+        # Coerce to list, then validate each condition uniformly
         if condition is None:
             conditions = []
         elif isinstance(condition, list):
-            for cond in condition:
-                if not isinstance(cond, (Predicate, DefaultNegation, Comparison)):
-                    raise TypeError(
-                        f"Choice condition must be a Predicate, DefaultNegation, or Comparison, "
-                        f"got {type(cond).__name__}"
-                    )
             conditions = condition
-        elif isinstance(condition, (Predicate, DefaultNegation, Comparison)):
-            conditions = [condition]
         else:
-            raise TypeError(
-                f"Choice condition must be a Predicate, DefaultNegation, Comparison, "
-                f"or a list of these, got {type(condition).__name__}"
-            )
+            conditions = [condition]
+        for cond in conditions:
+            if not isinstance(cond, (Predicate, DefaultNegation, Comparison)):
+                raise TypeError(
+                    f"Choice condition must be a Predicate, DefaultNegation, or Comparison, got {type(cond).__name__}"
+                )
+            if isinstance(cond, Comparison) and any(
+                getattr(type(term), "AGGREGATE_TYPE", None) is not None for term in (cond.left_term, cond.right_term)
+            ):
+                raise ValueError(
+                    "Aggregates cannot appear inside choice conditions (clingo syntax error); "
+                    "compute the aggregate in a separate rule"
+                )
 
         self._elements.append((element, conditions))
 
@@ -103,6 +104,12 @@ class Choice(Term):
             raise ValueError(f"{description} must be a non-negative integer, got {count}")
 
         return Number(count) if isinstance(count, int) else count
+
+    @staticmethod
+    def _check_cardinality_possible(minimum: Value | None, maximum: Value | None) -> None:
+        """Reject statically impossible bounds; renders fine but is silently UNSAT."""
+        if isinstance(minimum, Number) and isinstance(maximum, Number) and minimum.value > maximum.value:
+            raise ValueError(f"Choice cardinality is impossible: at_least({minimum.value}) > at_most({maximum.value})")
 
     def exactly(self, count: CARDINALITY_TYPE) -> Self:
         """
@@ -130,6 +137,7 @@ class Choice(Term):
 
         if self._min_cardinality is not None:
             raise ValueError("Minimum cardinality is already set")
+        self._check_cardinality_possible(minimum=count, maximum=self._max_cardinality)
 
         self._min_cardinality = count
 
@@ -145,6 +153,7 @@ class Choice(Term):
 
         if self._max_cardinality is not None:
             raise ValueError("Maximum cardinality is already set")
+        self._check_cardinality_possible(minimum=self._min_cardinality, maximum=count)
 
         self._max_cardinality = count
 

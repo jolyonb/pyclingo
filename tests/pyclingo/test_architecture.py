@@ -1,5 +1,5 @@
 """
-Architecture tests guarding the module DAG.
+Architecture tests guarding the module DAG and import hygiene.
 
 Every runtime intra-package import in pyclingo/ must occur at module level
 (deferred imports inside function bodies are banned, as they hide circular
@@ -8,12 +8,16 @@ TYPE_CHECKING-guarded imports are ignored: they do not exist at runtime, and
 they are the sanctioned mechanism for annotation-only upward references (e.g.
 core's collect_predicates return type names Predicate, which core cannot
 import at runtime).
+
+Test modules in tests/pyclingo are held to the same standard: all imports at
+module top, of any module, not just intra-package ones.
 """
 
 import ast
 from pathlib import Path
 
 PACKAGE_DIR = Path(__file__).resolve().parents[2] / "pyclingo"
+TESTS_DIR = Path(__file__).resolve().parent
 
 
 def _dep_of(node: ast.AST) -> str | None:
@@ -85,3 +89,19 @@ def test_module_level_import_graph_is_acyclic() -> None:
 
     for module in graph:
         visit(module, [])
+
+
+def test_no_function_level_imports_in_tests() -> None:
+    offenders: list[str] = []
+    for path in sorted(TESTS_DIR.glob("*.py")):
+
+        def scan(node: ast.AST, in_function: bool) -> None:
+            for child in ast.iter_child_nodes(node):
+                if _is_type_checking_block(child):
+                    continue
+                if in_function and isinstance(child, (ast.Import, ast.ImportFrom)):
+                    offenders.append(f"{path}:{child.lineno}")
+                scan(child, in_function or isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)))
+
+        scan(ast.parse(path.read_text(), filename=str(path)), in_function=False)
+    assert not offenders, "Function-level imports are banned in tests:\n" + "\n".join(offenders)

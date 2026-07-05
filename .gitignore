@@ -3,3 +3,6 @@
 *__pycache__/
 .claude/
 TODO.md
+AUDIT.md
+VALIDATION.md
+DESIGN_REVIEW.md

@@ -15,7 +15,7 @@ def collect_variables(*terms: Term | Sequence[Term] | None) -> set[str]:
         if term is None:
             continue
 
-        elif isinstance(term, list):
+        elif isinstance(term, (list, tuple)):
             for t in term:
                 used_variables.update(t.collect_variables())
 
@@ -23,7 +23,7 @@ def collect_variables(*terms: Term | Sequence[Term] | None) -> set[str]:
             used_variables.update(term.collect_variables())
 
         else:
-            raise ValueError(f"Bad term type: {term}")
+            raise TypeError(f"Expected a Term, a sequence of Terms, or None, got {type(term).__name__}")
 
     return used_variables
 

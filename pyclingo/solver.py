@@ -7,9 +7,10 @@ from typing import Any, Generator, Sequence
 
 import clingo
 
+from pyclingo.choice import Choice
 from pyclingo.clingo_handler import ClingoMessageHandler, LogLevel
 from pyclingo.conditional_literal import ConditionalLiteral
-from pyclingo.core import ConstantBase, DefinedConstant, Number, String, Symbol, Term
+from pyclingo.core import ConstantBase, DefinedConstant, Number, String, Term
 from pyclingo.predicate import Predicate
 from pyclingo.program_elements import BlankLine, Comment, ProgramElement, RawASP, Rule
 
@@ -55,24 +56,48 @@ class ASPProgram:
             raise ValueError(f"Segment '{segment}' already exists")
         self._segments[normalized_segment] = []
 
-    def fact(self, *predicates: Predicate, segment: str | None = None) -> None:
-        """Add one or more unconditional facts to the program."""
-        assert all(isinstance(predicate, Predicate) for predicate in predicates)
-        for predicate in predicates:
+    def fact(self, *facts: Predicate | Choice, segment: str | None = None) -> None:
+        """
+        Add unconditional statements to the program: grounded facts, or bare
+        choice rules like { a(1..3) } (whose element variables are local).
+        """
+        for statement in facts:
+            if not isinstance(statement, (Predicate, Choice)):
+                raise TypeError(
+                    f"fact() arguments must be Predicate or Choice instances, got {type(statement).__name__}"
+                )
+            if isinstance(statement, Predicate) and not statement.is_grounded:
+                variables = ", ".join(sorted(statement.collect_variables()))
+                raise ValueError(
+                    f"fact() requires grounded predicates, but {statement.render()} contains "
+                    f"variable(s) {variables}. Use when(conditions, let=...) to derive predicates."
+                )
+        for statement in facts:
             segment_key = (segment or self.default_segment).lower()
-            self._segments[segment_key].append(Rule(head=predicate))
+            self._segments[segment_key].append(Rule(head=statement))
 
     def when(self, conditions: Term | Sequence[Term], let: Term, segment: str | None = None) -> None:
         """Create a clingo rule which sets the let term when all conditions are satisfied."""
+        if isinstance(conditions, str):
+            raise TypeError("when() conditions must be Terms, not a string")
         condition_list = list(conditions) if isinstance(conditions, Sequence) else [conditions]
-        assert all(isinstance(condition, Term) for condition in condition_list)
-        assert isinstance(let, Term)
+        if not condition_list:
+            raise ValueError("when() requires at least one condition; use fact() for unconditional statements")
+        for condition in condition_list:
+            if not isinstance(condition, Term):
+                raise TypeError(f"when() conditions must be Terms, got {type(condition).__name__}")
+        if not isinstance(let, Term):
+            raise TypeError(f"when() let must be a Term, got {type(let).__name__}")
         segment_key = (segment or self.default_segment).lower()
         self._segments[segment_key].append(Rule(head=let, body=condition_list))
 
     def forbid(self, *conditions: Term, segment: str | None = None) -> None:
         """Creates a clingo constraint which forbids the specified combination of conditions."""
-        assert all(isinstance(condition, Term) for condition in conditions)
+        if not conditions:
+            raise ValueError("forbid() requires at least one condition")
+        for condition in conditions:
+            if not isinstance(condition, Term):
+                raise TypeError(f"forbid() conditions must be Terms, got {type(condition).__name__}")
         segment_key = (segment or self.default_segment).lower()
         self._segments[segment_key].append(Rule(body=list(conditions)))
 
@@ -84,7 +109,8 @@ class ASPProgram:
         Declare any predicates the block produces via predicates so that show
         directives cover them and solutions round-trip into typed instances.
         """
-        assert isinstance(text, str)
+        if not isinstance(text, str):
+            raise TypeError(f"raw_asp() text must be a string, got {type(text).__name__}")
         segment_key = (segment or self.default_segment).lower()
         self._segments[segment_key].append(RawASP(text, predicates))
 
@@ -110,7 +136,13 @@ class ASPProgram:
         Raises:
             ValueError: If the name is invalid or already defined.
         """
-        assert isinstance(name, str)
+        if not isinstance(name, str):
+            raise TypeError(f"Constant name must be a string, got {type(name).__name__}")
+        if isinstance(value, int) and not isinstance(value, bool) and not -(2**31) <= value < 2**31:
+            raise ValueError(
+                f"Constant value {value} is outside clingo's integer range "
+                f"[-2147483648, 2147483647]; clingo would silently wrap it"
+            )
         if not name or not name[0].islower():
             raise ValueError(f"Constant name must start with a lowercase letter: {name}")
 
@@ -146,14 +178,37 @@ class ASPProgram:
         self._show_overrides[predicate] = condition
 
     def _collect_predicates(self) -> set[type[Predicate]]:
-        """Collect all predicate classes used anywhere in the program."""
+        """Collect all predicate classes used anywhere in the program, show_when conditions included."""
         predicates = set()
 
         for segment_name, elements in self._segments.items():
             for element in elements:
                 predicates.update(element.collect_predicates())
 
+        for visibility in self._show_overrides.values():
+            if isinstance(visibility, ConditionalLiteral):
+                predicates.update(visibility.collect_predicates())
+
         return predicates
+
+    def _validate_names(self) -> None:
+        """
+        Raise on naming collisions that would corrupt solving:
+
+        - two distinct predicate classes sharing (name, arity): solutions could not
+          be reconstructed unambiguously
+        """
+        by_signature: dict[tuple[str, int], type[Predicate]] = {}
+        for pred in self._collect_predicates():
+            key = (pred.get_name(), pred.get_arity())
+            other = by_signature.get(key)
+            if other is not None and other is not pred:
+                raise ValueError(
+                    f"Predicate name collision: '{key[0]}/{key[1]}' is produced by two distinct "
+                    f"classes ({other.__name__} and {pred.__name__}); solutions cannot be "
+                    f"reconstructed unambiguously. Give one a namespace in Predicate.define()."
+                )
+            by_signature[key] = pred
 
     def render(self) -> str:
         """
@@ -165,6 +220,7 @@ class ASPProgram:
         4. #show directives (program overrides, then class defaults)
         """
         self._validate_constants()
+        self._validate_names()
 
         # 1. Header comments
         lines: list[str] = []
@@ -195,15 +251,20 @@ class ASPProgram:
                 lines.extend(("", f"% ===== {segment_name.title()} ====="))
             lines.extend(element.render() for element in elements)
 
-        # 4. #show directives: program overrides first, class defaults second
+        # 4. #show directives: program overrides first, class defaults second.
+        # The bare "#show." must be emitted whenever ANY predicate is hidden, even if
+        # nothing is shown — without it, clingo defaults to showing every atom.
         show_statements: set[str] = set()
+        any_hidden = False
         for pred in self._collect_predicates():
             visibility = self._show_overrides.get(pred, pred.shown_by_default())
             if visibility is True:
                 show_statements.add(f"#show {pred.get_name()}/{pred.get_arity()}.")
             elif isinstance(visibility, ConditionalLiteral):
                 show_statements.add(f"#show {visibility.render()}.")
-        if show_statements:
+            else:
+                any_hidden = True
+        if show_statements or any_hidden:
             lines.extend(("", "#show."))
             lines.extend(sorted(show_statements))
 
@@ -216,6 +277,10 @@ class ASPProgram:
         for segment_name, elements in self._segments.items():
             for element in elements:
                 constants.update(element.collect_defined_constants())
+
+        for visibility in self._show_overrides.values():
+            if isinstance(visibility, ConditionalLiteral):
+                constants.update(visibility.collect_defined_constants())
 
         return constants
 
@@ -240,7 +305,7 @@ class ASPProgram:
             stop_on_log_level: Log level at which to abort solving
 
         Yields:
-            For each solution, a dictionary mapping Predicate types to lists of Predicate instances
+            For each solution, a dictionary mapping predicate names to lists of Predicate instances
 
         Raises:
             RuntimeError: If a solve is already in progress on this program, if an error
@@ -258,6 +323,8 @@ class ASPProgram:
                 "A solve is already in progress on this program: "
                 "exhaust or close() the existing solve() generator first"
             )
+        if timeout < 0:
+            raise ValueError(f"timeout must be non-negative, got {timeout}")
 
         tic = time.perf_counter()
 
@@ -303,8 +370,9 @@ class ASPProgram:
                     f"(stop threshold: {stop_on_log_level.name})."
                 )
 
-        # Get a mapping of predicate names to their types for reconstruction
-        predicate_types = {pred.get_name(): pred for pred in self._collect_predicates()}
+        # Map (name, arity) to predicate class for solution reconstruction: arity
+        # matters because p/1 and p/2 are distinct predicates in ASP
+        predicate_types = {(pred.get_name(), pred.get_arity()): pred for pred in self._collect_predicates()}
 
         # Claim the program and reset solve state before handing over to the lazy iterator
         self._solving = True
@@ -322,7 +390,7 @@ class ASPProgram:
     def _solve_iterator(
         self,
         control: clingo.Control,
-        predicate_types: dict[str, type[Predicate]],
+        predicate_types: dict[tuple[str, int], type[Predicate]],
         deadline: float | None,
         tic: float,
     ) -> Generator[dict[str, list[Predicate]], None, None]:
@@ -375,7 +443,7 @@ class ASPProgram:
                 self._clingo_statistics["total_time"] = time.perf_counter() - tic
 
     def _convert_symbol_to_predicate(
-        self, symbol: clingo.Symbol, predicate_types: dict[str, type[Predicate]]
+        self, symbol: clingo.Symbol, predicate_types: dict[tuple[str, int], type[Predicate]]
     ) -> Predicate:
         """
         Convert a clingo model symbol back into a typed Predicate instance, recursively.
@@ -384,18 +452,13 @@ class ASPProgram:
             ValueError: If the symbol's name/arity doesn't match any known predicate.
         """
         pred_name = symbol.name
+        key = (pred_name, len(symbol.arguments))
 
-        if pred_name not in predicate_types:
-            raise ValueError(f"Unknown predicate type: {pred_name}")
+        if key not in predicate_types:
+            raise ValueError(f"Unknown predicate type: {pred_name}/{len(symbol.arguments)}")
 
-        pred_class = predicate_types[pred_name]
+        pred_class = predicate_types[key]
         field_names = [f.name for f in pred_class.argument_fields()]
-
-        if len(symbol.arguments) != len(field_names):
-            raise ValueError(
-                f"Arity mismatch for predicate {pred_name}: "
-                f"got {len(symbol.arguments)} arguments, expected {len(field_names)}"
-            )
 
         kwargs: dict[str, ConstantBase | Predicate] = {}
         for i, (arg, field_name) in enumerate(zip(symbol.arguments, field_names)):
@@ -404,20 +467,15 @@ class ASPProgram:
             elif arg.type == clingo.SymbolType.String:
                 kwargs[field_name] = String(arg.string)
             elif arg.type == clingo.SymbolType.Function:
-                if not arg.arguments and arg.name not in predicate_types:
-                    # A zero-arity function that isn't a known predicate is a plain
-                    # symbolic constant, e.g. the n in direction(n)
-                    kwargs[field_name] = Symbol(arg.name)
-                else:
-                    # Recursively convert nested predicates
-                    kwargs[field_name] = self._convert_symbol_to_predicate(arg, predicate_types)
+                # Recursively convert nested predicates; bare atoms are nullary predicates
+                kwargs[field_name] = self._convert_symbol_to_predicate(arg, predicate_types)
             else:
                 raise ValueError(f"Unsupported symbol type in argument {i} of {pred_name}: {arg.type}")
 
         return pred_class(**kwargs)
 
     def _convert_model_to_predicates(
-        self, model: clingo.Model, predicate_types: dict[str, type[Predicate]]
+        self, model: clingo.Model, predicate_types: dict[tuple[str, int], type[Predicate]]
     ) -> dict[str, list[Predicate]]:
         """Convert a clingo model into {predicate_name: [Predicate instances]}."""
         result = defaultdict(list)

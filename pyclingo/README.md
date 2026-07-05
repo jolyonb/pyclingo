@@ -13,7 +13,6 @@ The library is built around a rich hierarchy of term types that represent differ
       - `ConstantBase` (abstract)
         - `Number` (numeric constants, e.g., `42`)
         - `String` (string literals, e.g., `"hello"`)
-        - `Symbol` (plain symbolic terms, e.g., the `n` in `direction(n)`)
         - `DefinedConstant` (#const-defined constants, e.g., `max_size`)
     - `Expression` (arithmetic expressions, e.g., `X+Y*2`)
     - `Aggregate` (abstract)
@@ -34,13 +33,14 @@ The library is built around a rich hierarchy of term types that represent differ
 
 Values represent basic elements in an ASP program. Plain Python literals coerce
 automatically wherever terms are expected — an int becomes an ASP number, a str
-becomes a quoted ASP string. The two values you construct by hand:
+becomes a quoted ASP string. Variables you construct by hand, and bare atoms
+(the `n` in `direction(n)`) are zero-arity predicates:
 
 ```python
-from pyclingo import Symbol, Variable
+from pyclingo import Predicate, Variable
 
 X = Variable("X")  # an ASP variable
-n = Symbol("n")    # an unquoted symbolic term: n, as distinct from the string "n"
+n = Predicate.define("n", [], show=False)()  # a bare atom: n, distinct from the string "n"
 ```
 
 ### Predicates

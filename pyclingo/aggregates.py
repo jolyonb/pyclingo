@@ -86,6 +86,13 @@ class Aggregate(ComparableTerm, ABC):
                     f"Aggregate condition must be a Predicate, DefaultNegation, or Comparison, "
                     f"got {type(cond).__name__}"
                 )
+            if isinstance(cond, Comparison) and any(
+                isinstance(term, Aggregate) for term in (cond.left_term, cond.right_term)
+            ):
+                raise ValueError(
+                    "Aggregates cannot be nested inside aggregate conditions (clingo syntax "
+                    "error); compute the inner aggregate in a separate rule"
+                )
 
         self._elements.append((element_tuple, conditions))
 

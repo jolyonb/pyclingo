@@ -41,6 +41,7 @@ class Predicate(BasicTerm):
 
     # Class-level attributes
     _namespace: ClassVar[str] = ""
+    _predicate_name: ClassVar[str]  # set for every subclass by __init_subclass__ or define()
     # Default visibility, fixed at define() time. Per-program overrides live in
     # ASPProgram (show/hide/show_when); nothing may mutate this after creation.
     _show: ClassVar[bool] = True
@@ -48,6 +49,12 @@ class Predicate(BasicTerm):
     def __init__(self, *args: PREDICATE_RAW_INPUT_TYPE, **kwargs: PREDICATE_RAW_INPUT_TYPE) -> None:
         # This empty init is just to satisfy the type checker for arbitrary arguments
         super().__init__(*args, **kwargs)
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        super().__init_subclass__(**kwargs)
+        # Hand-written subclasses derive their ASP name from the class name,
+        # lowercased; define() overrides this with the exact name it was given
+        cls._predicate_name = cls.__name__.lower()
 
     @classmethod
     def define(cls, name: str, fields: list[str], namespace: str = "", show: bool = True) -> Type[Predicate]:
@@ -69,14 +76,30 @@ class Predicate(BasicTerm):
             >>> john.render()
             'person("john", 30)'
 
-        Note that Python strings become quoted ASP string constants; for an unquoted
-        symbolic constant argument like person(john), pass Symbol("john").
+        Note that Python strings become quoted ASP string constants. For an unquoted
+        atom argument like person(john), define john as a nullary predicate:
+        Predicate.define("john", [], show=False)().
         """
         if not name or not name[0].islower():
             raise ValueError(f"Predicate name must start with a lowercase letter: {name}")
 
         if not all(c.isalnum() or c == "_" for c in name):
             raise ValueError(f"Predicate name can only contain letters, digits, and underscores: {name}")
+
+        if namespace and (not namespace[0].islower() or not all(c.isalnum() or c == "_" for c in namespace)):
+            raise ValueError(
+                f"Namespace must start with a lowercase letter and contain only letters, "
+                f"digits, and underscores: {namespace}"
+            )
+
+        reserved = {attr for attr in dir(Predicate) if not attr.startswith("__")}
+        for field_name in fields:
+            if not field_name.isidentifier() or field_name.startswith("_"):
+                raise ValueError(
+                    f"Field name must be a valid identifier not starting with an underscore: {field_name!r}"
+                )
+            if field_name in reserved:
+                raise ValueError(f"Field name {field_name!r} would shadow a Predicate attribute")
 
         field_specs = [(field_name, "PREDICATE_RAW_INPUT_TYPE") for field_name in fields]
 
@@ -94,6 +117,7 @@ class Predicate(BasicTerm):
 
         assert issubclass(new_class, Predicate)
 
+        new_class._predicate_name = name
         new_class._namespace = namespace
         new_class._show = show
 
@@ -143,8 +167,8 @@ class Predicate(BasicTerm):
 
     @classmethod
     def get_name(cls) -> str:
-        """Get the name of this predicate with namespace if any."""
-        predicate_name = cls.__name__.lower()
+        """Get the name of this predicate with namespace if any. Case is preserved."""
+        predicate_name = cls._predicate_name
         if cls._namespace:
             predicate_name = f"{cls._namespace}_{predicate_name}"
         return predicate_name

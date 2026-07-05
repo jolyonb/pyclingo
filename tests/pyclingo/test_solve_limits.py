@@ -4,7 +4,9 @@ Tests for model-count limits and wall-clock timeouts in ASPProgram.solve().
 
 import time
 
-from pyclingo import ASPProgram, Choice, RangePool
+import pytest
+
+from pyclingo import ASPProgram, Choice, RangePool, Variable
 from pyclingo.predicate import Predicate
 
 
@@ -12,7 +14,7 @@ def make_choice_program(n: int) -> ASPProgram:
     """A program with 2^n models: an unconstrained choice over a(1..n)."""
     program = ASPProgram()
     A = Predicate.define("a", ["value"])
-    program.when(conditions=[], let=Choice(A(value=RangePool(1, n))))
+    program.fact(Choice(A(value=RangePool(1, n))))
     return program
 
 
@@ -70,8 +72,6 @@ def test_early_close_finalizes_bookkeeping() -> None:
 
 
 def test_second_solve_while_active_raises() -> None:
-    import pytest
-
     program = make_choice_program(2)
     running = program.solve()
     with pytest.raises(RuntimeError, match="already in progress"):
@@ -82,11 +82,6 @@ def test_second_solve_while_active_raises() -> None:
 
 
 def test_setup_errors_raise_at_call_time() -> None:
-    import pytest
-
-    from pyclingo import ASPProgram, Variable
-    from pyclingo.predicate import Predicate
-
     program = ASPProgram()
     P = Predicate.define("p", ["x"])
     Q = Predicate.define("q", ["x"])
@@ -96,3 +91,9 @@ def test_setup_errors_raise_at_call_time() -> None:
     # The grounding error surfaces at the solve() call, not at first iteration
     with pytest.raises(RuntimeError):
         program.solve()
+
+
+def test_negative_timeout_rejected() -> None:
+    program = make_choice_program(2)
+    with pytest.raises(ValueError, match="non-negative"):
+        program.solve(timeout=-5)

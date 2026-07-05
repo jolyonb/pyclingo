@@ -54,7 +54,8 @@ class ClingoMessageHandler:
 
     def on_message(self, code: clingo.MessageCode, message: str) -> None:
         """Callback for Clingo messages."""
-        if location_match := re.match(r"<(.+?)>:(\d+):(\d+)-(\d+):\s*(.+?):\s*(.+)", message):
+        # Location spans may be single-line (L:C-C) or multi-line (L:C-L:C)
+        if location_match := re.match(r"<(.+?)>:(\d+):(\d+)-(?:\d+:)?(\d+):\s*(.+?):\s*(.+)", message):
             level = location_match[5]
             parsed_msg = ClingoMessage(
                 filename=location_match[1],

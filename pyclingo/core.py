@@ -107,38 +107,39 @@ class ComparableTerm(Term, ABC):
     (e.g. Predicate, Choice) cannot be compared directly; bind them to a Variable.
     """
 
-    # Defining __eq__ sets __hash__ to None; restore identity hashing. This is safe because
-    # containers compare stored hash values before calling __eq__, so the ASP-building
-    # __eq__ below is never invoked between distinct objects.
+    # Defining __eq__ sets __hash__ to None; restore identity hashing. Hash-based
+    # containers (sets, dicts) work because they compare stored hash values before
+    # calling __eq__. LIST/TUPLE membership does call __eq__ and therefore raises via
+    # Comparison.__bool__ — loud, but a real restriction: use sets for containment.
     __hash__ = object.__hash__
 
     def __lt__(self, other: Any) -> Comparison:
-        if not isinstance(other, (ComparableTerm, int)):
+        if not isinstance(other, (ComparableTerm, int, str)):
             raise ValueError(f"Cannot compare {type(self).__name__} with {type(other).__name__}")
         return Comparison(self, ComparisonOperator.LESS_THAN, other)
 
     def __le__(self, other: Any) -> Comparison:
-        if not isinstance(other, (ComparableTerm, int)):
+        if not isinstance(other, (ComparableTerm, int, str)):
             raise ValueError(f"Cannot compare {type(self).__name__} with {type(other).__name__}")
         return Comparison(self, ComparisonOperator.LESS_EQUAL, other)
 
     def __gt__(self, other: Any) -> Comparison:
-        if not isinstance(other, (ComparableTerm, int)):
+        if not isinstance(other, (ComparableTerm, int, str)):
             raise ValueError(f"Cannot compare {type(self).__name__} with {type(other).__name__}")
         return Comparison(self, ComparisonOperator.GREATER_THAN, other)
 
     def __ge__(self, other: Any) -> Comparison:
-        if not isinstance(other, (ComparableTerm, int)):
+        if not isinstance(other, (ComparableTerm, int, str)):
             raise ValueError(f"Cannot compare {type(self).__name__} with {type(other).__name__}")
         return Comparison(self, ComparisonOperator.GREATER_EQUAL, other)
 
     def __eq__(self, other: Any) -> Comparison:  # type: ignore[override]
-        if not isinstance(other, (ComparableTerm, int)):
+        if not isinstance(other, (ComparableTerm, int, str)):
             raise ValueError(f"Cannot compare {type(self).__name__} with {type(other).__name__}")
         return Comparison(self, ComparisonOperator.EQUAL, other)
 
     def __ne__(self, other: Any) -> Comparison:  # type: ignore[override]
-        if not isinstance(other, (ComparableTerm, int)):
+        if not isinstance(other, (ComparableTerm, int, str)):
             raise ValueError(f"Cannot compare {type(self).__name__} with {type(other).__name__}")
         return Comparison(self, ComparisonOperator.NOT_EQUAL, other)
 
@@ -266,7 +267,8 @@ class Variable(Value):
 
     Variables in ASP start with an uppercase letter or can be an underscore '_'
     for anonymous variables. A variable can bind to any term: a number (4), a
-    string ("john"), a symbol (john), or a compound term (cell(1, 2)).
+    string ("john"), or a compound term like cell(1, 2) — including nullary
+    atoms like n, which pyclingo models as zero-arity predicates.
     """
 
     def __init__(self, name: str):
@@ -392,6 +394,11 @@ class Number(ConstantBase):
         # bool subclasses int, and a boolean is never a valid ASP term
         if isinstance(value, bool) or not isinstance(value, int):
             raise TypeError(f"Number value must be an integer, got {type(value).__name__}")
+        if not -(2**31) <= value < 2**31:
+            raise ValueError(
+                f"Number value {value} is outside clingo's integer range "
+                f"[-2147483648, 2147483647]; clingo would silently wrap it"
+            )
         self._value = value
 
     @property
@@ -421,12 +428,17 @@ class String(ConstantBase):
     """
 
     def __init__(self, value: str):
-        """The value must not contain quotation marks: there is no escaping support."""
+        """No double quotes, backslashes, or newlines (no escaping support); single quotes are fine."""
         if not isinstance(value, str):
             raise TypeError(f"String constant value must be a string, got {type(value).__name__}")
 
-        if '"' in value or "'" in value:
-            raise ValueError(f"String constant cannot contain quotation marks: {value}")
+        if '"' in value:
+            raise ValueError(f"String constant cannot contain double quotes (no escaping support): {value}")
+        if "\\" in value or "\n" in value or "\r" in value:
+            raise ValueError(
+                f"String constant cannot contain backslashes or newlines "
+                f"(they break clingo's lexer; there is no escaping support): {value!r}"
+            )
 
         self._value = value
 
@@ -456,7 +468,7 @@ class DefinedConstant(ConstantBase):
 
     A defined constant is a name given a value via ASPProgram.define_constant(),
     rendered as a "#const name = value." statement; occurrences are substituted
-    at grounding. For a plain symbolic term needing no definition, use Symbol.
+    at grounding.
     """
 
     def __init__(self, value: str):
@@ -493,45 +505,6 @@ class DefinedConstant(ConstantBase):
         return str(self.value)
 
 
-class Symbol(ConstantBase):
-    """
-    Represents a plain symbolic constant term, e.g. the n in direction(n).
-
-    Unlike String, a Symbol renders unquoted — n and "n" are different
-    terms in clingo. Unlike DefinedConstant, a Symbol is not a #const definition
-    and needs no registration with the program; it is just a term.
-    """
-
-    def __init__(self, value: str):
-        """value is the symbol's name: lowercase first letter, then letters, digits, and underscores."""
-        if not value or not value[0].islower():
-            raise ValueError(f"Symbol must start with a lowercase letter: {value}")
-
-        if not all(c.isalnum() or c == "_" for c in value):
-            raise ValueError(f"Symbol can only contain letters, digits, and underscores: {value}")
-
-        self._value = value
-
-    @property
-    def value(self) -> str:
-        """Gets the name of the symbol."""
-        return self._value
-
-    def render(
-        self,
-        context: RenderingContext = RenderingContext.DEFAULT,
-        parent_op: Operation | None = None,
-        is_right_operand: bool = False,
-    ) -> str:
-        return self._value
-
-    def __repr__(self) -> str:
-        return f"Symbol({self._value!r})"
-
-    def __str__(self) -> str:
-        return self._value
-
-
 class Pool(BasicTerm, ABC):
     """
     Abstract base class for pools in ASP programs.
@@ -553,8 +526,8 @@ class RangePool(Pool):
     """
     Represents a range pool in ASP programs, like 1..5.
 
-    Range pools can only contain consecutive integer values or
-    symbolic constants that evaluate to a range.
+    Bounds must be integer-valued: ints, Numbers, #const-defined constants,
+    or grounded integer Expressions.
     """
 
     def __init__(self, start: int | ConstantBase | Expression, end: int | ConstantBase | Expression):
@@ -569,15 +542,14 @@ class RangePool(Pool):
         if isinstance(end, int):
             end = Number(end)
 
-        if not isinstance(start, (ConstantBase, Expression)):
-            raise TypeError(f"Range start must be an int, ConstantBase or Expression, got {type(start).__name__}")
-        if isinstance(start, Expression) and not start.is_grounded:
-            raise ValueError("Expression in range start must be grounded")
-
-        if not isinstance(end, (ConstantBase, Expression)):
-            raise TypeError(f"Range end must be an int, ConstantBase or Expression, got {type(end).__name__}")
-        if isinstance(end, Expression) and not end.is_grounded:
-            raise ValueError("Expression in range end must be grounded")
+        for label, bound in (("start", start), ("end", end)):
+            if not isinstance(bound, (Number, DefinedConstant, Expression)):
+                raise TypeError(
+                    f"Range {label} must be an int, Number, DefinedConstant, or grounded "
+                    f"Expression, got {type(bound).__name__}"
+                )
+            if isinstance(bound, Expression) and not bound.is_grounded:
+                raise ValueError(f"Expression in range {label} must be grounded")
 
         self._start: ConstantBase | Expression = start
         self._end: ConstantBase | Expression = end
@@ -621,7 +593,7 @@ class ExplicitPool(Pool):
     """
     Represents an explicit pool in ASP programs, like (1;2;3) or (a;b;c).
 
-    Explicit pools can contain grounded basic terms (constants, symbols, predicates).
+    Explicit pools can contain grounded basic terms (constants and predicates).
     """
 
     def __init__(self, elements: Sequence[int | str | BasicTerm]):
@@ -697,7 +669,7 @@ def pool(elements: Union[range, Sequence[int | str | BasicTerm], Pool]) -> Pool:
 
     Args:
         elements: A Pool object, range, or sequence of elements
-                 (integers, strings, or grounded basic terms: constants, symbols, predicates)
+                 (integers, strings, or grounded basic terms: constants and predicates)
 
     Returns:
         An appropriate Pool object (RangePool for continuous ranges, ExplicitPool otherwise)
@@ -720,11 +692,11 @@ def pool(elements: Union[range, Sequence[int | str | BasicTerm], Pool]) -> Pool:
         return elements
 
     elif isinstance(elements, range):
+        if len(elements) == 0:
+            raise ValueError("Cannot create an empty pool from an empty range")
         if elements.step == 1:
             return RangePool(Number(elements.start), Number(elements.stop - 1))
-        if pool_elements := [Number(x) for x in elements]:
-            return ExplicitPool(pool_elements)
-        raise ValueError("Cannot create an empty pool from empty range")
+        return ExplicitPool([Number(x) for x in elements])
 
     elif isinstance(elements, (list, tuple)):
         if not elements:
@@ -1083,8 +1055,17 @@ class Comparison(Term):
         """
         Comparisons are valid in both rule bodies and rule heads: a comparison head
         like `C1 = C2 :- body` means the body forces the equality to hold.
+        Comparisons involving aggregates are body-only: clingo rejects them in
+        heads with a misleading "unsafe variables" error, so raise honestly here.
         """
-        pass
+        # Duck-typed: Aggregate lives downstream of core, so detect by its marker attr
+        if is_in_head and any(
+            getattr(type(term), "AGGREGATE_TYPE", None) is not None for term in (self._left_term, self._right_term)
+        ):
+            raise ValueError(
+                "Comparisons involving aggregates cannot be rule heads; "
+                "compute the aggregate in a body condition instead"
+            )
 
     @property
     def is_assignment(self) -> bool:
