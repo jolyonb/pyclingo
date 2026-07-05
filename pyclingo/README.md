@@ -46,17 +46,27 @@ n = Predicate.define("n", [], show=False)()  # a bare atom: n, distinct from the
 
 ### Predicates
 
-Create predicates for your domain:
+Declare predicates as classes; fields are statically checked, so typos and
+missing arguments are type errors, and instances autocomplete:
 
 ```python
-from pyclingo import Predicate
+from pyclingo import Predicate, PredicateField
 
-# Define with class
-Person = Predicate.define("person", ["name", "age"])
+class Person(Predicate):
+    name: PredicateField
+    age: PredicateField
 
-# Create instances
 john = Person(name="john", age=30)
 mary = Person(name="mary", age=25)
+```
+
+The ASP name defaults to the class name, snake-cased (HasSymbol becomes
+has_symbol); class kwargs override it and set namespacing and visibility (`class Pipe(Predicate, name="pipe_seg",
+show=False)`). When the schema is only known at runtime, build the same thing
+dynamically:
+
+```python
+Edge = Predicate.define("edge", ["a", "b"])
 ```
 
 ### Rules

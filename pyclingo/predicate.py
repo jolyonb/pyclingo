@@ -1,5 +1,7 @@
-from dataclasses import Field, dataclass, fields, make_dataclass
-from typing import Any, ClassVar
+import re
+import types
+from dataclasses import Field, dataclass, fields
+from typing import Any, ClassVar, dataclass_transform
 
 from pyclingo.core import (
     BasicTerm,
@@ -13,18 +15,58 @@ from pyclingo.core import (
     Value,
 )
 
-# Type aliases
-type PREDICATE_RAW_INPUT_TYPE = int | str | Value | Predicate | Expression | Pool
+# Type aliases. PredicateField is any argument a predicate accepts, and doubles
+# as the field annotation for class-syntax predicates
+type PredicateField = int | str | Value | Predicate | Expression | Pool
 type PREDICATE_FIELD_TYPE = Value | Predicate | Expression | Pool
 type PREDICATE_CLASS_TYPE = type[Predicate]
 
 
+def _validate_schema(name: str, namespace: str, field_names: list[str]) -> None:
+    """Validate a predicate's ASP name, namespace, and field names, raising on any problem."""
+    if not name or not name[0].islower():
+        raise ValueError(f"Predicate name must start with a lowercase letter: {name}")
+
+    if not all(c.isalnum() or c == "_" for c in name):
+        raise ValueError(f"Predicate name can only contain letters, digits, and underscores: {name}")
+
+    if namespace and (not namespace[0].islower() or not all(c.isalnum() or c == "_" for c in namespace)):
+        raise ValueError(
+            f"Namespace must start with a lowercase letter and contain only letters, "
+            f"digits, and underscores: {namespace}"
+        )
+
+    reserved = _RESERVED_FIELD_NAMES
+    for field_name in field_names:
+        if not field_name.isidentifier() or field_name.startswith("_"):
+            raise ValueError(f"Field name must be a valid identifier not starting with an underscore: {field_name!r}")
+        if field_name in reserved:
+            raise ValueError(f"Field name {field_name!r} would shadow a Predicate attribute")
+
+
+# dataclass_transform tells type checkers that subclasses become dataclasses
+# (with these frozen/eq settings), so they synthesize a typed __init__ from each
+# subclass's annotated fields — typo'd or missing arguments are type errors.
+# The runtime counterpart is __init_subclass__, which actually applies
+# dataclass() to every subclass; the two must agree on the settings.
+@dataclass_transform(frozen_default=True, eq_default=False, field_specifiers=())
 @dataclass(frozen=True, eq=False)
 class Predicate(BasicTerm):
     """
     This is a base class that represents a predicate in an ASP program.
-    To define a predicate, subclass this class and add fields with names for each slot in the predicate,
-    and give the attributes type PREDICATE_RAW_INPUT_TYPE.
+
+    Define a predicate either as a class, whose annotated fields are checked
+    statically:
+
+        class Person(Predicate):
+            name: PredicateField
+            age: PredicateField
+
+    or dynamically via Predicate.define("person", ["name", "age"]) when the
+    schema is only known at runtime. Class kwargs set the ASP name (defaults
+    to the class name, snake-cased: HasSymbol -> has_symbol), namespace, and visibility:
+
+        class Person(Predicate, name="person", show=False): ...
 
     Predicates in ASP consist of a name and optional arguments.
     They can appear in rule heads and bodies, and can have Value
@@ -39,20 +81,37 @@ class Predicate(BasicTerm):
 
     # Class-level attributes
     _namespace: ClassVar[str] = ""
-    _predicate_name: ClassVar[str]  # set for every subclass by __init_subclass__ or define()
-    # Default visibility, fixed at define() time. Per-program overrides live in
+    _predicate_name: ClassVar[str]  # set for every subclass by __init_subclass__
+    # Default visibility, fixed at class creation. Per-program overrides live in
     # ASPProgram (show/hide/show_when); nothing may mutate this after creation.
     _show: ClassVar[bool] = True
 
-    def __init__(self, *args: PREDICATE_RAW_INPUT_TYPE, **kwargs: PREDICATE_RAW_INPUT_TYPE) -> None:
-        # This empty init is just to satisfy the type checker for arbitrary arguments
+    def __init__(self, *args: PredicateField, **kwargs: PredicateField) -> None:
+        # Satisfies the type checker for dynamically defined classes (type[Predicate]),
+        # whose fields checkers cannot know. Never runs for concrete subclasses:
+        # the dataclass transform generates their real __init__ (and dataclass()
+        # does not clobber an explicitly defined one, so this survives on the base).
         super().__init__(*args, **kwargs)
 
-    def __init_subclass__(cls, **kwargs: Any) -> None:
+    def __init_subclass__(cls, name: str | None = None, namespace: str = "", show: bool = True, **kwargs: Any) -> None:
+        """
+        Turn every subclass into a frozen predicate dataclass.
+
+        This is the single creation path: class-syntax subclasses and define()
+        both land here, so their instances behave identically. eq=False is
+        essential — a generated __eq__ would compare field tuples, whose
+        elements overload == to build always-truthy Comparisons; predicates
+        inherit their own __eq__/__hash__ instead.
+        """
         super().__init_subclass__(**kwargs)
-        # Hand-written subclasses derive their ASP name from the class name,
-        # lowercased; define() overrides this with the exact name it was given
-        cls._predicate_name = cls.__name__.lower()
+        # The default ASP name snake-cases the class name: HasSymbol -> has_symbol
+        cls._predicate_name = name if name is not None else re.sub(r"(?<!^)(?=[A-Z])", "_", cls.__name__).lower()
+        cls._namespace = namespace
+        cls._show = show
+        _validate_schema(cls._predicate_name, namespace, list(cls.__annotations__ or {}))
+        # dataclass() mutates cls in place (adding __init__ etc.) and returns it;
+        # no reassignment is needed
+        dataclass(frozen=True, eq=False)(cls)
 
     @classmethod
     def define(cls, name: str, field_names: list[str], namespace: str = "", show: bool = True) -> type[Predicate]:
@@ -78,48 +137,18 @@ class Predicate(BasicTerm):
         atom argument like person(john), define john as a nullary predicate:
         Predicate.define("john", [], show=False)().
         """
-        if not name or not name[0].islower():
-            raise ValueError(f"Predicate name must start with a lowercase letter: {name}")
 
-        if not all(c.isalnum() or c == "_" for c in name):
-            raise ValueError(f"Predicate name can only contain letters, digits, and underscores: {name}")
+        def set_annotations(class_namespace: dict[str, Any]) -> None:
+            class_namespace["__annotations__"] = dict.fromkeys(field_names, "PredicateField")
 
-        if namespace and (not namespace[0].islower() or not all(c.isalnum() or c == "_" for c in namespace)):
-            raise ValueError(
-                f"Namespace must start with a lowercase letter and contain only letters, "
-                f"digits, and underscores: {namespace}"
-            )
-
-        reserved = {attr for attr in dir(Predicate) if not attr.startswith("__")}
-        for field_name in field_names:
-            if not field_name.isidentifier() or field_name.startswith("_"):
-                raise ValueError(
-                    f"Field name must be a valid identifier not starting with an underscore: {field_name!r}"
-                )
-            if field_name in reserved:
-                raise ValueError(f"Field name {field_name!r} would shadow a Predicate attribute")
-
-        field_specs = [(field_name, "PREDICATE_RAW_INPUT_TYPE") for field_name in field_names]
-
-        # Create the new class with the provided name as the class name.
-        # eq=False is essential: the generated __eq__ would compare field tuples, whose
-        # elements have overloaded __eq__ returning always-truthy Comparisons — making
-        # every same-class instance compare equal. We inherit Predicate's __eq__/__hash__.
-        new_class = make_dataclass(  # type: ignore
-            cls_name=name,
-            fields=field_specs,
+        new_class = types.new_class(
+            name,
             bases=(cls,),
-            frozen=True,
-            eq=False,
+            kwds={"name": name, "namespace": namespace, "show": show},
+            exec_body=set_annotations,
         )
-
         assert issubclass(new_class, Predicate)
-
-        new_class._predicate_name = name
-        new_class._namespace = namespace
-        new_class._show = show
-
-        return new_class  # type: ignore
+        return new_class
 
     def __post_init__(self) -> None:
         """Validate all field values and convert literals to appropriate terms."""
@@ -291,6 +320,10 @@ class Predicate(BasicTerm):
 
         kwargs = ", ".join(f"{f.name}={self[f.name]!r}" for f in self.argument_fields())
         return f"{self.__class__.__name__}({kwargs})"
+
+
+# Field names that would shadow Predicate API; computed once Predicate exists
+_RESERVED_FIELD_NAMES = frozenset(attr for attr in dir(Predicate) if not attr.startswith("__"))
 
 
 class DefaultNegation(Term):
