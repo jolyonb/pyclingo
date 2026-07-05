@@ -6,21 +6,24 @@ license = { text = "MIT" }
 readme = "README.md"
 requires-python = ">=3.14"
 authors = [{ name = "Jolyon Bloomfield", email = "jkb84@cornell.edu" }]
+dependencies = ["clingo>=5.8.0,<6"]
 
-[tool.poetry.dependencies]
-python = "^3.14"
-clingo = "^5.8.0"
-
-[tool.poetry.group.dev.dependencies]
-mypy = "^1.15.0"
-pre-commit = "^4.2.0"
-pyright = "^1.1.400"
-ruff = "^0.13"
-pytest = "^8.3.5"
+[dependency-groups]
+dev = [
+    "mypy>=2.1",
+    "pre-commit>=4.6",
+    "pyright>=1.1.411",
+    "ruff>=0.15",
+    "pytest>=9.1",
+    "ty>=0.0.56",
+]
 
 [build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+requires = ["uv_build>=0.11,<0.13"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-root = ""
 
 [tool.mypy]
 python_version = "3.14"

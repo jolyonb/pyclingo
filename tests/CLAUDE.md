@@ -78,7 +78,7 @@ The project uses pre-commit hooks to maintain high code quality. Every commit au
 1. **ruff (linter)**: Fast Python linting with auto-fix (`--fix`)
 2. **ruff (formatter)**: Consistent code formatting
 3. **mypy**: Static type checking for type safety
-4. **pyright**: Additional static type checking (pinned to v1.1.400)
+4. **pyright**: Additional static type checking
 5. **pytest**: Runs full test suite (`tests/` directory)
 6. **config validation**: Ensures pre-commit setup stays valid
 

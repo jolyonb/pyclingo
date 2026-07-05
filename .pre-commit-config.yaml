@@ -5,7 +5,7 @@ repos:
       - id: ruff
         name: ruff (linter)
         description: "Run 'ruff' for extremely fast Python linting"
-        entry: ruff check
+        entry: uv run ruff check
         language: system
         types: [python]
         args: [--fix]
@@ -14,7 +14,7 @@ repos:
       - id: ruff-format
         name: ruff (formatter)
         description: "Run 'ruff format' for extremely fast Python formatting"
-        entry: ruff format
+        entry: uv run ruff format
         language: system
         types: [python]
 
@@ -22,7 +22,7 @@ repos:
       - id: mypy
         name: mypy
         description: "Run 'mypy' to get static type checking"
-        entry: mypy
+        entry: uv run mypy
         language: system
         types: [python]
 
@@ -30,7 +30,7 @@ repos:
       - id: pyright
         name: pyright
         description: "Run 'pyright' to get static type checking"
-        entry: pyright
+        entry: uv run pyright
         language: system
         types: [python]
 
@@ -38,7 +38,7 @@ repos:
       - id: pytest
         name: pytest
         description: "Run 'pytest' to run unit tests"
-        entry: pytest
+        entry: uv run pytest
         language: system
         pass_filenames: false
         args: ["-xvs", "tests/", "pyclingo/"]
@@ -48,6 +48,6 @@ repos:
     hooks:
       - id: validate-manifest
         name: validate pre-commit config
-        entry: pre-commit validate-config
+        entry: uv run pre-commit validate-config
         language: system
         pass_filenames: false

@@ -26,6 +26,12 @@ if TYPE_CHECKING:
     from pyclingo.predicate import PREDICATE_CLASS_TYPE
 
 
+# Type aliases for the operator cluster
+type EXPRESSION_FIELD_TYPE = Value | Expression | int
+type VALUE_EXPRESSION_TYPE = Value | Expression
+type NUMBER_LIKE = int | Number | DefinedConstant | Variable
+
+
 class RenderingContext(Enum):
     """
     Enum for defining rendering contexts where predicates may need to know to surround themselves in parentheses.
@@ -1105,11 +1111,6 @@ def Abs(term: EXPRESSION_FIELD_TYPE) -> Expression:
     """Builds an absolute-value expression, |term|."""
     return Expression(None, Operation.ABS, term)
 
-
-# Type aliases for the operator cluster
-type EXPRESSION_FIELD_TYPE = Value | Expression | int
-type VALUE_EXPRESSION_TYPE = Value | Expression
-type NUMBER_LIKE = int | Number | DefinedConstant | Variable
 
 ANY = Variable("_")
 
