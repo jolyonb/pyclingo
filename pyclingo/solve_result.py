@@ -66,7 +66,7 @@ class SolveResult:
         self,
         control: clingo.Control,
         predicate_types: PREDICATE_TYPES,
-        deadline: float | None,
+        timeout: int,
         tic: float,
     ) -> None:
         self.satisfiable: bool | None = None
@@ -75,7 +75,7 @@ class SolveResult:
         self._statistics: dict[str, Any] | None = None
         self._control = control
         self._predicate_types = predicate_types
-        self._deadline = deadline
+        self._timeout = timeout
         self._tic = tic
         self._iterator = self._solve_generator()
 
@@ -105,6 +105,11 @@ class SolveResult:
 
     def _solve_generator(self) -> Generator[Model]:
         """Yields models and finalizes bookkeeping on every exit path."""
+        # The timeout clock starts here — at first iteration — not at solve():
+        # time between constructing the result and consuming it belongs to the
+        # caller, and clingo does no work until we resume the handle
+        deadline = time.monotonic() + self._timeout if self._timeout > 0 else None
+        timed_out = False
         final: clingo.SolveResult | None = None
         try:
             # Wall-clock timeouts require async solving: clingo has no timeout
@@ -115,9 +120,10 @@ class SolveResult:
                         handle.resume()
                         # Clamp to zero: wait() treats a negative timeout as "block forever",
                         # but a passed deadline should poll and cancel instead
-                        remaining = None if self._deadline is None else max(0.0, self._deadline - time.monotonic())
+                        remaining = None if deadline is None else max(0.0, deadline - time.monotonic())
                         if not handle.wait(remaining):
                             # The deadline passed before the next model was found
+                            timed_out = True
                             break
                         model = handle.model()
                         if model is None:
@@ -139,7 +145,9 @@ class SolveResult:
                     outcome: clingo.SolveResult = handle.get()
                     if outcome.satisfiable is not None:
                         self.satisfiable = outcome.satisfiable
-                    self.exhausted = outcome.exhausted
+                    # A fast search can finish between resume() and the deadline
+                    # check; a timed-out solve must never claim exhaustion
+                    self.exhausted = False if timed_out else outcome.exhausted
                     final = outcome
         finally:
             if final is not None:

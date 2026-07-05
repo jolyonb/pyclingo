@@ -4,6 +4,8 @@ comparisons, ground-truthed by solving (render-only pins let invalid ASP
 ship once; see AUDIT_v2 H1).
 """
 
+import pytest
+
 from pyclingo import ASPProgram, Not, Predicate, Variable
 
 
@@ -47,3 +49,12 @@ def test_double_negated_comparison_solves() -> None:
     program.when([P(x=X), Not(Not(X == 2))], let=Q(x=X))
     model = next(iter(program.solve()))
     assert [atom["x"].value for atom in model.atoms(Q)] == [2]
+
+
+def test_negated_pool_comparison_rejected() -> None:
+    # "not X = (2;3)" parses but expands disjunctively — true for every X
+    X = Variable("X")
+    with pytest.raises(ValueError, match="disjunctively"):
+        Not(X.in_([2, 3]))
+    with pytest.raises(ValueError, match="disjunctively"):
+        ~X.in_([2, 3])

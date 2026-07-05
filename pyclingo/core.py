@@ -1173,6 +1173,13 @@ class DefaultNegation(Negatable):
         if not isinstance(term, Negatable):
             raise TypeError("Default negation can only be applied to predicates, comparisons, or already negated terms")
 
+        if isinstance(term, Comparison) and isinstance(term.right_term, Pool):
+            raise ValueError(
+                "Negating a pool comparison does not mean 'not in': pools expand "
+                "disjunctively, so 'not X = (2;3)' is true for every X. Write "
+                "separate conditions instead, e.g. X != 2, X != 3"
+            )
+
         # Negating a double negation collapses it: not(not not X) becomes not X,
         # so we store X. Anything else (X or not X) is stored as given.
         self._term: Term = term

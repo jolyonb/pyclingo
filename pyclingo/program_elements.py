@@ -51,8 +51,8 @@ class RawASP(ProgramElement):
     predicates the block produces via the predicates argument — that is what
     makes #show directives cover them and lets solutions round-trip into
     typed instances. Undeclared atoms appearing in a model fail solving with
-    "Unknown predicate type". Defined constants used in raw text are likewise
-    not seen by define_constant validation; clingo reports those itself.
+    "Unknown predicate type". Constants registered via define_constant() are
+    always emitted, so raw text may use them freely.
     """
 
     def __init__(self, text: str, predicates: Sequence[PREDICATE_CLASS_TYPE] = ()):

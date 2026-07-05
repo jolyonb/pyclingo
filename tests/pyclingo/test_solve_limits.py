@@ -118,3 +118,12 @@ def test_negative_timeout_rejected() -> None:
     program = make_choice_program(2)
     with pytest.raises(ValueError, match="non-negative"):
         program.solve(timeout=-5)
+
+
+def test_timeout_anchors_at_first_iteration() -> None:
+    # Time between solve() and iteration belongs to the caller: the budget
+    # must not burn while clingo sits idle
+    result = make_choice_program(3).solve(models=0, timeout=1)
+    time.sleep(1.3)  # longer than the entire timeout
+    assert len(list(result)) == 8
+    assert result.exhausted is True
