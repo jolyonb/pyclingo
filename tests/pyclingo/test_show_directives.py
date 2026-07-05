@@ -13,7 +13,7 @@ def test_hiding_everything_emits_bare_show() -> None:
     program.fact(P(x=1))
     program.hide(P)
     assert "#show." in program.render()
-    assert list(program.solve())[0] == {}
+    assert next(iter(program.solve())) == {}
 
 
 def test_define_time_hidden_also_emits_bare_show() -> None:

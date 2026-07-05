@@ -1,4 +1,4 @@
-from typing import Sequence
+from collections.abc import Sequence
 
 from pyclingo.core import Term, Variable
 
@@ -15,7 +15,7 @@ def collect_variables(*terms: Term | Sequence[Term] | None) -> set[str]:
         if term is None:
             continue
 
-        elif isinstance(term, (list, tuple)):
+        if isinstance(term, (list, tuple)):
             for t in term:
                 used_variables.update(t.collect_variables())
 

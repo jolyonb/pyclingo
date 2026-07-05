@@ -71,7 +71,7 @@ class TestPredicateEquality:
     def test_unequal_predicates(self) -> None:
         Person = Predicate.define("person", ["name", "age"])
         assert Person(name="alice", age=1) != Person(name="bob", age=99)
-        assert not (Person(name="alice", age=1) == Person(name="alice", age=2))
+        assert Person(name="alice", age=1) != Person(name="alice", age=2)
 
     def test_distinct_classes_never_equal(self) -> None:
         A = Predicate.define("thing", ["x"])
@@ -106,4 +106,4 @@ class TestPredicateEquality:
         X = Variable("X")
         P = Predicate.define("p", ["x"])
         with pytest.raises(ValueError, match="Cannot compare"):
-            _ = X == P(x=1)
+            _ = P(x=1) == X

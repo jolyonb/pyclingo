@@ -23,4 +23,4 @@ def test_doc_code_blocks_execute(doc: str) -> None:
     assert blocks, f"no python code blocks found in {doc}"
 
     source = "\n".join(blocks)
-    exec(compile(source, str(path), "exec"), {})  # noqa: S102
+    exec(compile(source, str(path), "exec"), {})

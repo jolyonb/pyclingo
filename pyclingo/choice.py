@@ -1,4 +1,4 @@
-from typing import Self, Union
+from typing import Self
 
 from pyclingo.core import AggregateBase, Comparison, Number, RenderingContext, String, Term, Value, Variable
 from pyclingo.predicate import PREDICATE_CLASS_TYPE, DefaultNegation, Predicate
@@ -24,7 +24,7 @@ class Choice(Term):
     def __init__(
         self,
         element: CHOICE_ELEMENT_TYPE,
-        condition: Union[CHOICE_CONDITION_TYPE, list[CHOICE_CONDITION_TYPE], None] = None,
+        condition: CHOICE_CONDITION_TYPE | list[CHOICE_CONDITION_TYPE] | None = None,
     ):
         """
         Create a choice rule with an initial element; see add() for further elements.
@@ -43,7 +43,7 @@ class Choice(Term):
     def add(
         self,
         element: CHOICE_ELEMENT_TYPE,
-        condition: Union[CHOICE_CONDITION_TYPE, list[CHOICE_CONDITION_TYPE], None] = None,
+        condition: CHOICE_CONDITION_TYPE | list[CHOICE_CONDITION_TYPE] | None = None,
     ) -> Self:
         """
         Add another element with optional condition(s); returns self for chaining.
@@ -88,7 +88,7 @@ class Choice(Term):
         return self
 
     @staticmethod
-    def _validate_cardinality(count: Union[int, Value], description: str) -> Value:
+    def _validate_cardinality(count: int | Value, description: str) -> Value:
         """Validate a cardinality value, coercing ints to Number; raises on bad type or negative int."""
         if not isinstance(count, (int, Value)):
             raise TypeError(f"{description} must be an integer or Value, got {type(count).__name__}")
@@ -162,12 +162,12 @@ class Choice(Term):
         return self._elements.copy()
 
     @property
-    def min_cardinality(self) -> Union[Value, None]:
+    def min_cardinality(self) -> Value | None:
         """The minimum cardinality constraint, or None if not set."""
         return self._min_cardinality
 
     @property
-    def max_cardinality(self) -> Union[Value, None]:
+    def max_cardinality(self) -> Value | None:
         """The maximum cardinality constraint, or None if not set."""
         return self._max_cardinality
 
@@ -194,10 +194,7 @@ class Choice(Term):
         if self.min_cardinality and not self.min_cardinality.is_grounded:
             return False
 
-        if self.max_cardinality and not self.max_cardinality.is_grounded:
-            return False
-
-        return True
+        return not (self.max_cardinality and not self.max_cardinality.is_grounded)
 
     def render(self, context: RenderingContext = RenderingContext.DEFAULT) -> str:
         prefix = ""

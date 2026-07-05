@@ -44,8 +44,17 @@ include = ["pyclingo", "aspuzzle"]
 line-length = 120
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "Q", "I"]
+select = ["A", "B", "C4", "E", "F", "I", "Q", "RET", "RUF", "SIM", "UP", "W"]
+# RUF001/RUF002/RUF003: flag legitimate typography ("9×9 grid") as ambiguous unicode
+ignore = [
+    "RUF001", "RUF002", "RUF003",  # legitimate typography (9×9 grids)
+    "SIM300",  # 'yoda' flips change which operand builds the ASP Comparison, churning rendered output
+]
 fixable = ["ALL"]
+
+[tool.ruff.lint.per-file-ignores]
+# Solver's no-op methods are optional hooks for subclasses, not forgotten abstracts
+"aspuzzle/solvers/base.py" = ["B027"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["pyclingo", "aspuzzle"]

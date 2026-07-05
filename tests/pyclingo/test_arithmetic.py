@@ -15,7 +15,8 @@ evaluations share the one tree Python built, and the renderer's job is to
 make clingo see that same tree.
 """
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 import pytest
 

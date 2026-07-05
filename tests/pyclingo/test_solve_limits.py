@@ -97,3 +97,14 @@ def test_negative_timeout_rejected() -> None:
     program = make_choice_program(2)
     with pytest.raises(ValueError, match="non-negative"):
         program.solve(timeout=-5)
+
+
+def test_grounding_diagnostics_ride_in_the_error() -> None:
+    # An info-level message (q never appears in a head) halts at the default
+    # threshold, and the formatted diagnostics are part of the raised error
+    program = ASPProgram()
+    P = Predicate.define("p", ["x"])
+    Q = Predicate.define("q", ["x"])
+    program.when(conditions=Q(x=1), let=P(x=1))
+    with pytest.raises(RuntimeError, match="does not occur"):
+        list(program.solve())

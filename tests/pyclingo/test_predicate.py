@@ -26,7 +26,7 @@ def test_nullary_predicate_representations() -> None:
     program = ASPProgram()
     program.fact(f)
     assert "\nflag.\n" in program.render()
-    assert list(program.solve())[0]["flag"] == [Flag()]
+    assert next(iter(program.solve()))["flag"] == [Flag()]
 
 
 def test_define_validates_namespaces() -> None:

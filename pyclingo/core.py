@@ -7,8 +7,9 @@ Everything else in the package imports downward from here.
 """
 
 from abc import ABC, abstractmethod
+from collections.abc import Sequence
 from enum import Enum
-from typing import TYPE_CHECKING, Any, ClassVar, Self, Sequence, Union, cast, overload
+from typing import TYPE_CHECKING, Any, ClassVar, Self, cast, overload
 
 from pyclingo.operators import (
     BINARY_OPERATIONS,
@@ -332,7 +333,7 @@ class Variable(Value):
     def collect_variables(self) -> set[str]:
         return {self.name}
 
-    def in_(self, pool_or_range: Union[Pool, list, tuple, range]) -> Comparison:
+    def in_(self, pool_or_range: Pool | list | tuple | range) -> Comparison:
         """
         Creates a comparison that binds this variable to a pool or range.
 
@@ -676,7 +677,7 @@ class ExplicitPool(Pool):
         return variables
 
 
-def pool(elements: Union[range, Sequence[int | str | BasicTerm], Pool]) -> Pool:
+def pool(elements: range | Sequence[int | str | BasicTerm] | Pool) -> Pool:
     """
     Create a Pool object from a general variety of input options.
 
@@ -704,14 +705,14 @@ def pool(elements: Union[range, Sequence[int | str | BasicTerm], Pool]) -> Pool:
     if isinstance(elements, Pool):
         return elements
 
-    elif isinstance(elements, range):
+    if isinstance(elements, range):
         if len(elements) == 0:
             raise ValueError("Cannot create an empty pool from an empty range")
         if elements.step == 1:
             return RangePool(Number(elements.start), Number(elements.stop - 1))
         return ExplicitPool([Number(x) for x in elements])
 
-    elif isinstance(elements, (list, tuple)):
+    if isinstance(elements, (list, tuple)):
         if not elements:
             raise ValueError("Cannot create an empty pool")
 
@@ -733,8 +734,7 @@ def pool(elements: Union[range, Sequence[int | str | BasicTerm], Pool]) -> Pool:
 
         return ExplicitPool(pool_elements)
 
-    else:
-        raise TypeError(f"Expected Pool, list, tuple, or range, got {type(elements).__name__}")
+    raise TypeError(f"Expected Pool, list, tuple, or range, got {type(elements).__name__}")
 
 
 class Expression(ComparableTerm):
@@ -759,7 +759,7 @@ class Expression(ComparableTerm):
 
         if first_term is None and operator not in UNARY_OPERATIONS:
             raise ValueError(f"Unsupported unary operator: {operator}")
-        elif first_term is not None and operator not in BINARY_OPERATIONS:
+        if first_term is not None and operator not in BINARY_OPERATIONS:
             raise ValueError(f"Unsupported binary operator: {operator}")
 
         # Convert Python literals to ASP values
@@ -981,9 +981,9 @@ class Comparison(Term):
 
     def __init__(
         self,
-        left_term: Union[int, str, Term],
+        left_term: int | str | Term,
         operator: ComparisonOperator,
-        right_term: Union[int, str, Term],
+        right_term: int | str | Term,
     ):
         """
         int and str operands are coerced to Number and String.

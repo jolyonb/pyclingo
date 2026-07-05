@@ -1,6 +1,6 @@
 from abc import ABC
 from enum import StrEnum
-from typing import ClassVar, Self, Union
+from typing import ClassVar, Self
 
 from pyclingo.core import AggregateBase, Comparison, RenderingContext, Value
 from pyclingo.predicate import PREDICATE_CLASS_TYPE, DefaultNegation, Predicate
@@ -33,7 +33,7 @@ class Aggregate(AggregateBase, ABC):
     def __init__(
         self,
         element: AGGREGATE_ELEMENT_TYPE | tuple[AGGREGATE_ELEMENT_TYPE, ...],
-        condition: Union[AGGREGATE_CONDITION_TYPE, list[AGGREGATE_CONDITION_TYPE], None] = None,
+        condition: AGGREGATE_CONDITION_TYPE | list[AGGREGATE_CONDITION_TYPE] | None = None,
     ):
         """
         Create an aggregate with an initial element; see add() for further elements.
@@ -49,7 +49,7 @@ class Aggregate(AggregateBase, ABC):
     def add(
         self,
         element: AGGREGATE_ELEMENT_TYPE | tuple[AGGREGATE_ELEMENT_TYPE, ...],
-        condition: Union[AGGREGATE_CONDITION_TYPE, list[AGGREGATE_CONDITION_TYPE], None] = None,
+        condition: AGGREGATE_CONDITION_TYPE | list[AGGREGATE_CONDITION_TYPE] | None = None,
     ) -> Self:
         """
         Add an element with optional condition(s); returns self for chaining.

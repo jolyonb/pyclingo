@@ -51,7 +51,7 @@ def _collect() -> tuple[dict[str, set[str]], list[str]]:
     for path in sorted(PACKAGE_DIR.glob("*.py")):
         edges = graph.setdefault(path.stem, set())
 
-        def scan(node: ast.AST, in_function: bool) -> None:
+        def scan(node: ast.AST, in_function: bool, path: Path = path, edges: set[str] = edges) -> None:
             for child in ast.iter_child_nodes(node):
                 if _is_type_checking_block(child):
                     continue
@@ -80,11 +80,11 @@ def test_module_level_import_graph_is_acyclic() -> None:
         if state.get(module) == 1 or module not in graph:
             return
         if state.get(module) == 0:
-            cycle = stack[stack.index(module) :] + [module]
+            cycle = [*stack[stack.index(module) :], module]
             raise AssertionError("Import cycle detected: " + " -> ".join(cycle))
         state[module] = 0
         for dep in sorted(graph[module]):
-            visit(dep, stack + [module])
+            visit(dep, [*stack, module])
         state[module] = 1
 
     for module in graph:
@@ -95,7 +95,7 @@ def test_no_function_level_imports_in_tests() -> None:
     offenders: list[str] = []
     for path in sorted(TESTS_DIR.glob("*.py")):
 
-        def scan(node: ast.AST, in_function: bool) -> None:
+        def scan(node: ast.AST, in_function: bool, path: Path = path) -> None:
             for child in ast.iter_child_nodes(node):
                 if _is_type_checking_block(child):
                     continue

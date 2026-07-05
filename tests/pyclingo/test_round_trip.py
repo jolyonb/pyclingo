@@ -14,7 +14,7 @@ def test_arity_overloads_reconstruct_as_their_own_classes() -> None:
     Edge2 = Predicate.define("edge", ["a", "b"])
     Edge3 = Predicate.define("edge", ["a", "b", "w"])
     program.fact(Edge2(a=1, b=2), Edge3(a=1, b=2, w=9))
-    solution = list(program.solve())[0]
+    solution = next(iter(program.solve()))
     assert {type(i) for i in solution["edge"]} == {Edge2, Edge3}
 
 
@@ -33,5 +33,5 @@ def test_bare_atoms_reconstruct_as_nullary_predicates() -> None:
     N = Predicate.define("flag", [], show=False)  # argument-only: no flag/0 atoms to show
     Holds = Predicate.define("holds", ["what"])
     program.fact(Holds(what=N()))
-    solution = list(program.solve())[0]
+    solution = next(iter(program.solve()))
     assert isinstance(solution["holds"][0]["what"], N)

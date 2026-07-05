@@ -1,7 +1,8 @@
 import time
 from collections import defaultdict
+from collections.abc import Generator, Sequence
 from datetime import datetime
-from typing import Any, Generator, Sequence
+from typing import Any
 
 import clingo
 
@@ -179,7 +180,7 @@ class ASPProgram:
         """Collect all predicate classes used anywhere in the program, show_when conditions included."""
         predicates = set()
 
-        for segment_name, elements in self._segments.items():
+        for _segment_name, elements in self._segments.items():
             for element in elements:
                 predicates.update(element.collect_predicates())
 
@@ -272,7 +273,7 @@ class ASPProgram:
         """Collect all defined constant names used anywhere in the program."""
         constants = set()
 
-        for segment_name, elements in self._segments.items():
+        for _segment_name, elements in self._segments.items():
             for element in elements:
                 constants.update(element.collect_defined_constants())
 
@@ -291,7 +292,7 @@ class ASPProgram:
 
     def solve(
         self, models: int = 1000, timeout: int = 0, stop_on_log_level: LogLevel = LogLevel.INFO
-    ) -> Generator[dict[str, list[Predicate]], None, None]:
+    ) -> Generator[dict[str, list[Predicate]]]:
         """
         Solve the ASP program and yield solutions as sets of Predicate objects.
 
@@ -356,17 +357,15 @@ class ASPProgram:
                 error_msg += formatted_messages
             raise RuntimeError(error_msg) from e
 
-        # Check for messages after grounding
-        if message_handler.messages:
-            print(message_handler.format_all_messages(verb="grounding"))
-
-            # Check if we should halt based on log level
-            if message_handler.should_halt:
-                assert message_handler.highest_level is not None
-                raise RuntimeError(
-                    f"Grounding produced {message_handler.highest_level.name} level messages "
-                    f"(stop threshold: {stop_on_log_level.name})."
-                )
+        # Messages below the stop threshold are tolerated silently; at or above
+        # it, the full formatted diagnostics ride along in the raised error
+        if message_handler.should_halt:
+            assert message_handler.highest_level is not None
+            raise RuntimeError(
+                f"Grounding produced {message_handler.highest_level.name} level messages "
+                f"(stop threshold: {stop_on_log_level.name}).\n\n"
+                f"{message_handler.format_all_messages(verb='grounding')}"
+            )
 
         # Map (name, arity) to predicate class for solution reconstruction: arity
         # matters because p/1 and p/2 are distinct predicates in ASP
@@ -391,7 +390,7 @@ class ASPProgram:
         predicate_types: dict[tuple[str, int], type[Predicate]],
         deadline: float | None,
         tic: float,
-    ) -> Generator[dict[str, list[Predicate]], None, None]:
+    ) -> Generator[dict[str, list[Predicate]]]:
         """
         Lazy half of solve(): yields models and finalizes bookkeeping on every exit path
         (exhaustion, close(), exception, or garbage collection of the generator).
@@ -459,7 +458,7 @@ class ASPProgram:
         field_names = [f.name for f in pred_class.argument_fields()]
 
         kwargs: dict[str, ConstantBase | Predicate] = {}
-        for i, (arg, field_name) in enumerate(zip(symbol.arguments, field_names)):
+        for i, (arg, field_name) in enumerate(zip(symbol.arguments, field_names, strict=True)):
             if arg.type == clingo.SymbolType.Number:
                 kwargs[field_name] = Number(arg.number)
             elif arg.type == clingo.SymbolType.String:

@@ -1,5 +1,5 @@
 from dataclasses import Field, dataclass, fields, make_dataclass
-from typing import Any, ClassVar, Union
+from typing import Any, ClassVar
 
 from pyclingo.core import (
     BasicTerm,
@@ -55,13 +55,13 @@ class Predicate(BasicTerm):
         cls._predicate_name = cls.__name__.lower()
 
     @classmethod
-    def define(cls, name: str, fields: list[str], namespace: str = "", show: bool = True) -> type[Predicate]:
+    def define(cls, name: str, field_names: list[str], namespace: str = "", show: bool = True) -> type[Predicate]:
         """
         Dynamically create a new Predicate subclass.
 
         Args:
             name: The name of the predicate in ASP.
-            fields: List of field names for the predicate's arguments.
+            field_names: Names for the predicate's argument slots.
             namespace: Optional namespace prefix for the predicate.
             show: Whether this predicate should be included in the show directive.
 
@@ -91,7 +91,7 @@ class Predicate(BasicTerm):
             )
 
         reserved = {attr for attr in dir(Predicate) if not attr.startswith("__")}
-        for field_name in fields:
+        for field_name in field_names:
             if not field_name.isidentifier() or field_name.startswith("_"):
                 raise ValueError(
                     f"Field name must be a valid identifier not starting with an underscore: {field_name!r}"
@@ -99,7 +99,7 @@ class Predicate(BasicTerm):
             if field_name in reserved:
                 raise ValueError(f"Field name {field_name!r} would shadow a Predicate attribute")
 
-        field_specs = [(field_name, "PREDICATE_RAW_INPUT_TYPE") for field_name in fields]
+        field_specs = [(field_name, "PREDICATE_RAW_INPUT_TYPE") for field_name in field_names]
 
         # Create the new class with the provided name as the class name.
         # eq=False is essential: the generated __eq__ would compare field tuples, whose
@@ -289,7 +289,7 @@ class Predicate(BasicTerm):
         if not self.argument_fields():
             return f"{self.__class__.__name__}()"
 
-        kwargs = ", ".join(f"{f.name}={repr(self[f.name])}" for f in self.argument_fields())
+        kwargs = ", ".join(f"{f.name}={self[f.name]!r}" for f in self.argument_fields())
         return f"{self.__class__.__name__}({kwargs})"
 
 
@@ -303,7 +303,7 @@ class DefaultNegation(Term):
     (e.g. hitori's black/white).
     """
 
-    def __init__(self, term: Union[Predicate, Comparison, DefaultNegation]):
+    def __init__(self, term: Predicate | Comparison | DefaultNegation):
         """
         Initialize a default negation, simplifying nested negations:
         an odd number of negations is equivalent to 'not p', an even number to 'not not p'.
@@ -311,20 +311,11 @@ class DefaultNegation(Term):
         if not isinstance(term, (Predicate, Comparison, DefaultNegation)):
             raise TypeError("Default negation can only be applied to predicates, comparisons, or already negated terms")
 
-        if isinstance(term, DefaultNegation):
-            inner_term = term.term
-            if isinstance(inner_term, DefaultNegation):
-                # not not not X -> simplify to not X
-                # We're negating the inner term directly
-                actual_term = inner_term.term
-            else:
-                # not not X -> just pass through the original term
-                actual_term = term
-        else:
-            # Normal case: not X
-            actual_term = term
-
-        self._term = actual_term
+        # Negating a double negation collapses it: not(not not X) becomes not X,
+        # so we store X. Anything else (X or not X) is stored as given.
+        self._term: Term = term
+        if isinstance(term, DefaultNegation) and isinstance(term.term, DefaultNegation):
+            self._term = term.term.term
 
     @property
     def term(self) -> Term:
@@ -355,7 +346,7 @@ class DefaultNegation(Term):
             raise ValueError("Default negation (not) cannot be used in rule heads")
 
 
-def Not(term: Union[Predicate, Comparison, DefaultNegation]) -> DefaultNegation:
+def Not(term: Predicate | Comparison | DefaultNegation) -> DefaultNegation:
     """
     Helper function to create default negation.
 
