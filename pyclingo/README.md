@@ -15,8 +15,9 @@ The library is built around a rich hierarchy of term types that represent differ
         - `String` (string literals, e.g., `"hello"`)
         - `DefinedConstant` (#const-defined constants, e.g., `max_size`)
     - `Expression` (arithmetic expressions, e.g., `X+Y*2`)
-    - `Aggregate` (abstract)
-      - `Count`, `Sum`, `SumPlus`, `Min`, `Max`
+    - `AggregateBase` (abstract marker so core can recognize aggregates)
+      - `Aggregate` (abstract)
+        - `Count`, `Sum`, `SumPlus`, `Min`, `Max`
   - `BasicTerm` (abstract, can be direct predicate arguments: `Value`, `Predicate`, `Pool`)
     - `Predicate` (e.g., `person(john, 42)`)
     - `Pool` (abstract)

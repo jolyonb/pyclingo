@@ -142,6 +142,15 @@ class ComparableTerm(Term, ABC):
         return Comparison(self, ComparisonOperator.NOT_EQUAL, other)
 
 
+class AggregateBase(ComparableTerm, ABC):
+    """
+    Marker base for aggregates (#count, #sum, ...), which are defined in
+    aggregates.py. It exists so code here can recognize aggregates with
+    isinstance: aggregates.py imports downward from core, so core cannot
+    import the Aggregate class itself.
+    """
+
+
 class Value(BasicTerm, ComparableTerm, ABC):
     """
     Abstract base class for values: variables and constants, the most basic
@@ -1056,10 +1065,7 @@ class Comparison(Term):
         Comparisons involving aggregates are body-only: clingo rejects them in
         heads with a misleading "unsafe variables" error, so raise honestly here.
         """
-        # Duck-typed: Aggregate lives downstream of core, so detect by its marker attr
-        if is_in_head and any(
-            getattr(type(term), "AGGREGATE_TYPE", None) is not None for term in (self._left_term, self._right_term)
-        ):
+        if is_in_head and any(isinstance(term, AggregateBase) for term in (self._left_term, self._right_term)):
             raise ValueError(
                 "Comparisons involving aggregates cannot be rule heads; "
                 "compute the aggregate in a body condition instead"

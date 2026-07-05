@@ -1,6 +1,6 @@
 from typing import Self, Union
 
-from pyclingo.core import Comparison, Number, RenderingContext, String, Term, Value, Variable
+from pyclingo.core import AggregateBase, Comparison, Number, RenderingContext, String, Term, Value, Variable
 from pyclingo.predicate import PREDICATE_CLASS_TYPE, DefaultNegation, Predicate
 
 type CHOICE_ELEMENT_TYPE = Predicate
@@ -76,7 +76,7 @@ class Choice(Term):
                     f"Choice condition must be a Predicate, DefaultNegation, or Comparison, got {type(cond).__name__}"
                 )
             if isinstance(cond, Comparison) and any(
-                getattr(type(term), "AGGREGATE_TYPE", None) is not None for term in (cond.left_term, cond.right_term)
+                isinstance(term, AggregateBase) for term in (cond.left_term, cond.right_term)
             ):
                 raise ValueError(
                     "Aggregates cannot appear inside choice conditions (clingo syntax error); "

@@ -2,7 +2,7 @@ from abc import ABC
 from enum import StrEnum
 from typing import ClassVar, Self, Union
 
-from pyclingo.core import ComparableTerm, Comparison, RenderingContext, Value
+from pyclingo.core import AggregateBase, Comparison, RenderingContext, Value
 from pyclingo.predicate import PREDICATE_CLASS_TYPE, DefaultNegation, Predicate
 
 type AGGREGATE_ELEMENT_TYPE = Value | Predicate
@@ -19,7 +19,7 @@ class AggregateType(StrEnum):
     MAX = "#max"
 
 
-class Aggregate(ComparableTerm, ABC):
+class Aggregate(AggregateBase, ABC):
     """
     Abstract base class for aggregates in ASP programs.
 
