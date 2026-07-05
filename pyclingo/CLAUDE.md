@@ -160,6 +160,10 @@ Abstract base for Value, Expression, and Aggregate — the terms that may appear
 in comparisons. Provides the comparison operators (which build Comparison terms)
 and serves as the isinstance marker for comparison operands.
 
+#### Statistics (`statistics.py`)
+Formats a solve's raw statistics dict in clingo's native output style;
+ASPProgram.format_statistics_clingo_style() delegates here.
+
 #### Error Handling (`clingo_handler.py`)
 Comprehensive error message processing:
 - **ClingoMessageHandler**: Captures and formats clingo messages
