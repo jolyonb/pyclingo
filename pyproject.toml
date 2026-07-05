@@ -4,18 +4,18 @@ version = "0.2.0"
 description = "A python wrapper for clingo with ASP puzzle solving capabilities"
 license = { text = "MIT" }
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.14"
 authors = [{ name = "Jolyon Bloomfield", email = "jkb84@cornell.edu" }]
 
 [tool.poetry.dependencies]
-python = "^3.11"
+python = "^3.14"
 clingo = "^5.8.0"
 
 [tool.poetry.group.dev.dependencies]
 mypy = "^1.15.0"
 pre-commit = "^4.2.0"
 pyright = "^1.1.400"
-ruff = "^0.11.8"
+ruff = "^0.13"
 pytest = "^8.3.5"
 
 [build-system]
@@ -23,7 +23,7 @@ requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.14"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true

@@ -1,7 +1,5 @@
-from __future__ import annotations
-
 from dataclasses import Field, dataclass, fields, make_dataclass
-from typing import Any, ClassVar, Type, Union
+from typing import Any, ClassVar, Union
 
 from pyclingo.core import (
     BasicTerm,
@@ -15,10 +13,10 @@ from pyclingo.core import (
     Value,
 )
 
-# Runtime type aliases
-PREDICATE_RAW_INPUT_TYPE = Union[int, str, Value, "Predicate", Expression, Pool]
-PREDICATE_FIELD_TYPE = Union[Value, "Predicate", Expression, Pool]
-PREDICATE_CLASS_TYPE = Type["Predicate"]
+# Type aliases
+type PREDICATE_RAW_INPUT_TYPE = int | str | Value | Predicate | Expression | Pool
+type PREDICATE_FIELD_TYPE = Value | Predicate | Expression | Pool
+type PREDICATE_CLASS_TYPE = type[Predicate]
 
 
 @dataclass(frozen=True, eq=False)
@@ -57,7 +55,7 @@ class Predicate(BasicTerm):
         cls._predicate_name = cls.__name__.lower()
 
     @classmethod
-    def define(cls, name: str, fields: list[str], namespace: str = "", show: bool = True) -> Type[Predicate]:
+    def define(cls, name: str, fields: list[str], namespace: str = "", show: bool = True) -> type[Predicate]:
         """
         Dynamically create a new Predicate subclass.
 
@@ -242,7 +240,7 @@ class Predicate(BasicTerm):
     def __hash__(self) -> int:
         return hash((type(self), self.render()))
 
-    def __invert__(self) -> "DefaultNegation":
+    def __invert__(self) -> DefaultNegation:
         """
         Support for using `~predicate` syntax to create default negation.
 
@@ -305,7 +303,7 @@ class DefaultNegation(Term):
     (e.g. hitori's black/white).
     """
 
-    def __init__(self, term: Union[Predicate, Comparison, "DefaultNegation"]):
+    def __init__(self, term: Union[Predicate, Comparison, DefaultNegation]):
         """
         Initialize a default negation, simplifying nested negations:
         an odd number of negations is equivalent to 'not p', an even number to 'not not p'.

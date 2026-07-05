@@ -1,15 +1,12 @@
-from __future__ import annotations
-
 from abc import ABC
 from enum import StrEnum
-from typing import TYPE_CHECKING, ClassVar, Self, Union
+from typing import ClassVar, Self, Union
 
 from pyclingo.core import ComparableTerm, Comparison, RenderingContext, Value
 from pyclingo.predicate import PREDICATE_CLASS_TYPE, DefaultNegation, Predicate
 
-if TYPE_CHECKING:
-    AGGREGATE_ELEMENT_TYPE = Union[Value, Predicate]
-    AGGREGATE_CONDITION_TYPE = Union[Predicate, DefaultNegation, Comparison]
+type AGGREGATE_ELEMENT_TYPE = Value | Predicate
+type AGGREGATE_CONDITION_TYPE = Predicate | DefaultNegation | Comparison
 
 
 class AggregateType(StrEnum):

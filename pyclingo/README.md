@@ -118,7 +118,7 @@ for model in program.solve(models=0):  # 0 means find all models
 
 ## Requirements
 
-- Python 3.11+
+- Python 3.14+
 - clingo 5.8+
 
 ## License

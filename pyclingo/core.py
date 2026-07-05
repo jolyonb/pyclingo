@@ -6,8 +6,6 @@ Comparison), so they are merged into one module to avoid deferred imports.
 Everything else in the package imports downward from here.
 """
 
-from __future__ import annotations
-
 from abc import ABC, abstractmethod
 from enum import Enum
 from typing import TYPE_CHECKING, Any, ClassVar, Self, Sequence, Union, cast, overload
@@ -161,7 +159,7 @@ class Value(BasicTerm, ComparableTerm, ABC):
     behave correctly even though __eq__ builds Comparison terms instead of comparing.
     """
 
-    _cache: ClassVar[dict[tuple[type, type, Any], "Value"]] = {}
+    _cache: ClassVar[dict[tuple[type, type, Any], Value]] = {}
 
     def __new__(cls, *args: Any, **kwargs: Any) -> Self:
         # All concrete Value subclasses take exactly one constructor argument; anything
@@ -1102,10 +1100,10 @@ def Abs(term: EXPRESSION_FIELD_TYPE) -> Expression:
     return Expression(None, Operation.ABS, term)
 
 
-# Runtime type aliases for the operator cluster
-EXPRESSION_FIELD_TYPE = Union[Value, Expression, int]
-VALUE_EXPRESSION_TYPE = Union[Value, Expression]
-NUMBER_LIKE = Union[int, Number, DefinedConstant, Variable]
+# Type aliases for the operator cluster
+type EXPRESSION_FIELD_TYPE = Value | Expression | int
+type VALUE_EXPRESSION_TYPE = Value | Expression
+type NUMBER_LIKE = int | Number | DefinedConstant | Variable
 
 ANY = Variable("_")
 
