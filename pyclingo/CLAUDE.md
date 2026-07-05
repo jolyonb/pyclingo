@@ -26,8 +26,9 @@ Term (abstract base class)
 │   └── Pool (abstract)
 │       ├── RangePool (e.g., 1..5)
 │       └── ExplicitPool (e.g., (1;3;5))
-├── Comparison (comparisons, e.g., X < Y)
-├── DefaultNegation (default negation, e.g., not p(X))
+├── Negatable (abstract mixin: provides ~ for default negation; Predicate, Comparison, DefaultNegation)
+│   ├── Comparison (comparisons, e.g., X < Y)
+│   └── DefaultNegation (default negation, e.g., not p(X))
 ├── ConditionalLiteral (e.g., p(X) : q(X))
 └── Choice (e.g., { p(X) : q(X) })
 ```
@@ -106,8 +107,9 @@ Aggregate functions for ASP:
 
 All support multiple elements and conditions via `add()` method.
 
-#### Negation (`predicate.py`)
-- **DefaultNegation**: `not p(X)` (negation as failure), via `Not()` or `~predicate`
+#### Negation (`core.py`)
+- **DefaultNegation**: `not p(X)` (negation as failure), via `Not()` or `~` on
+  any Negatable (predicates and comparisons alike)
 - Automatic simplification of nested negations
 - Classical negation (`-p`) is deliberately unsupported: model explicit falsity
   as a complementary predicate

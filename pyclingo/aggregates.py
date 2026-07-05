@@ -2,8 +2,8 @@ from abc import ABC
 from enum import StrEnum
 from typing import ClassVar, Self
 
-from pyclingo.core import AggregateBase, Comparison, RenderingContext, Value
-from pyclingo.predicate import PREDICATE_CLASS_TYPE, DefaultNegation, Predicate
+from pyclingo.core import AggregateBase, Comparison, DefaultNegation, RenderingContext, Value
+from pyclingo.predicate import PREDICATE_CLASS_TYPE, Predicate
 
 type AGGREGATE_ELEMENT_TYPE = Value | Predicate
 type AGGREGATE_CONDITION_TYPE = Predicate | DefaultNegation | Comparison

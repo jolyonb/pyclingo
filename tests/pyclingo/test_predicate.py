@@ -1,7 +1,7 @@
 import pytest
 
-from pyclingo import ASPProgram
-from pyclingo.predicate import DefaultNegation, Predicate
+from pyclingo import ASPProgram, DefaultNegation
+from pyclingo.predicate import Predicate
 
 
 def test_predicate_default_negation_operator() -> None:

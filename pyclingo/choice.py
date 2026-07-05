@@ -1,7 +1,17 @@
 from typing import Self
 
-from pyclingo.core import AggregateBase, Comparison, Number, RenderingContext, String, Term, Value, Variable
-from pyclingo.predicate import PREDICATE_CLASS_TYPE, DefaultNegation, Predicate
+from pyclingo.core import (
+    AggregateBase,
+    Comparison,
+    DefaultNegation,
+    Number,
+    RenderingContext,
+    String,
+    Term,
+    Value,
+    Variable,
+)
+from pyclingo.predicate import PREDICATE_CLASS_TYPE, Predicate
 
 type CHOICE_ELEMENT_TYPE = Predicate
 type CHOICE_CONDITION_TYPE = Predicate | DefaultNegation | Comparison

@@ -1,5 +1,5 @@
-from pyclingo.core import Comparison, RenderingContext, Term
-from pyclingo.predicate import PREDICATE_CLASS_TYPE, DefaultNegation, Predicate
+from pyclingo.core import Comparison, DefaultNegation, RenderingContext, Term
+from pyclingo.predicate import PREDICATE_CLASS_TYPE, Predicate
 
 # Terms that can be used in a conditional literal
 type CONDITIONAL_TERM_TYPE = Predicate | Comparison | DefaultNegation

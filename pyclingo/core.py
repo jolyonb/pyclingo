@@ -158,6 +158,18 @@ class AggregateBase(ComparableTerm, ABC):
     """
 
 
+class Negatable(Term, ABC):
+    """
+    Mixin for terms that can be default-negated: Predicate, Comparison, and
+    DefaultNegation itself. Provides ~, which builds "not term". (On Values
+    and Expressions, ~ is bitwise complement instead — integers negate
+    bitwise, literals negate logically.)
+    """
+
+    def __invert__(self) -> DefaultNegation:
+        return DefaultNegation(self)
+
+
 class Value(BasicTerm, ComparableTerm, ABC):
     """
     Abstract base class for values: variables and constants, the most basic
@@ -979,7 +991,7 @@ class Expression(ComparableTerm):
         return variables
 
 
-class Comparison(Term):
+class Comparison(Negatable):
     """
     Represents a comparison between two terms in an ASP program.
 
@@ -1116,6 +1128,86 @@ class Comparison(Term):
         variables.update(self.right_term.collect_variables())
 
         return variables
+
+
+class DefaultNegation(Negatable):
+    """
+    Represents default negation ('not') in ASP programs.
+
+    Default negation expresses that a literal cannot be proven true (it may be
+    either false or unknown). Classical negation ('-p') is deliberately
+    unsupported: model explicit falsity as a complementary predicate instead
+    (e.g. hitori's black/white).
+    """
+
+    def __init__(self, term: Negatable):
+        """
+        Initialize a default negation, simplifying nested negations:
+        an odd number of negations is equivalent to 'not p', an even number to 'not not p'.
+        """
+        if not isinstance(term, Negatable):
+            raise TypeError("Default negation can only be applied to predicates, comparisons, or already negated terms")
+
+        # Negating a double negation collapses it: not(not not X) becomes not X,
+        # so we store X. Anything else (X or not X) is stored as given.
+        self._term: Term = term
+        if isinstance(term, DefaultNegation) and isinstance(term.term, DefaultNegation):
+            self._term = term.term.term
+
+    @property
+    def term(self) -> Term:
+        """The term being negated."""
+        return self._term
+
+    @property
+    def is_grounded(self) -> bool:
+        """A negation is grounded if its term is grounded."""
+        return self._term.is_grounded
+
+    def collect_predicates(self) -> set[PREDICATE_CLASS_TYPE]:
+        return self._term.collect_predicates()
+
+    def collect_defined_constants(self) -> set[str]:
+        return self._term.collect_defined_constants()
+
+    def collect_variables(self) -> set[str]:
+        return self._term.collect_variables()
+
+    def render(self, context: RenderingContext = RenderingContext.DEFAULT) -> str:
+        term_str = self._term.render(context=RenderingContext.NEGATION)
+        return f"not {term_str}"
+
+    def validate_in_context(self, is_in_head: bool) -> None:
+        """Default negation is body-only: raises in heads."""
+        if is_in_head:
+            raise ValueError("Default negation (not) cannot be used in rule heads")
+
+
+def Not(term: Negatable) -> DefaultNegation:
+    """
+    Helper function to create default negation.
+
+    This function applies default negation to the term, with automatic
+    simplification of nested negations when appropriate.
+
+    Args:
+        term: The term to negate with default negation.
+
+    Returns:
+        Term: A default negation of the given term, simplified if needed.
+
+    Example:
+        >>> from pyclingo import Predicate
+        >>> Person = Predicate.define("person", ["name"])
+        >>> person = Person(name="john")
+        >>> Not(person).render()
+        'not person("john")'
+        >>> Not(Not(person)).render()
+        'not not person("john")'
+        >>> Not(Not(Not(person))).render()  # triple negation simplifies
+        'not person("john")'
+    """
+    return DefaultNegation(term)
 
 
 def Abs(term: EXPRESSION_FIELD_TYPE) -> Expression:
