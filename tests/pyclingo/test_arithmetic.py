@@ -74,9 +74,9 @@ def test_clingo_evaluates_rendered_tree_identically(
     expression = build(*(Number(v) for v in args))
     program.fact(Result(value=expression))
 
-    solutions = list(program.solve())
-    assert len(solutions) == 1, f"{name}: rendered program was not satisfiable"
-    values = [pred["value"].value for pred in solutions[0]["result"]]
+    models = list(program.solve())
+    assert len(models) == 1, f"{name}: rendered program was not satisfiable"
+    values = [pred["value"].value for pred in models[0].atoms(Result)]
     assert values == [expected], (
         f"{name}: rendered {expression.render()!r}, clingo says {values}, python says {expected}"
     )

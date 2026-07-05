@@ -133,13 +133,20 @@ Main class for building and solving ASP programs:
 - **Constraint creation**: `forbid()` method
 - **Comments and formatting**: `comment()`, `section()`, `blank_line()`
 - **Defined constants**: `define_constant()`
-- **Solving**: `solve()` method with clingo integration
+- **Solving**: `solve()` returns a SolveResult (see below)
 
 Key features:
 - Segment-based organization
 - Automatic show directive generation
 - Comprehensive error handling
-- Statistics formatting in clingo style
+
+#### Solve Results (`solve_result.py`)
+- **SolveResult**: the handle returned by solve() — iterate it for Models;
+  satisfiable/exhausted/solution_count/statistics finalize when iteration
+  ends on any path (exhaustion, close(), or a with-block). Each solve()
+  call returns an independent result.
+- **Model**: one answer set; `atoms(Cls)` returns typed instances of a
+  predicate class, `atoms()` returns everything.
 
 #### Program Elements (`program_elements.py`)
 Building blocks for ASP programs:

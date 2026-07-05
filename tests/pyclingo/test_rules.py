@@ -20,5 +20,5 @@ def test_body_literal_after_conditional_literal_stays_separate() -> None:
     program.when([ConditionalLiteral(Q(x=X), Q(x=X)), R()], let=Good())
     assert "q(X) : q(X); r." in program.render()
     # r is deliberately absent, which draws a clingo info; tolerate it
-    solutions = list(program.solve(stop_on_log_level=LogLevel.WARNING))
-    assert solutions[0].get("good") is None
+    models = list(program.solve(stop_on_log_level=LogLevel.WARNING))
+    assert models[0].atoms(Good) == []

@@ -17,4 +17,5 @@ from .choice import Choice
 from .conditional_literal import key_for_each_lock
 from .core import ANY, Abs, ExplicitPool, RangePool, Variable, create_variables
 from .predicate import Not, Predicate
+from .solve_result import Model, SolveResult
 from .solver import ASPProgram

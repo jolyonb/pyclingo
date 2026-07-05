@@ -110,11 +110,12 @@ asp_code = program.render()
 print(asp_code)
 
 # Solve
-for model in program.solve(models=0):  # 0 means find all models
+result = program.solve(models=0)  # 0 means find all models
+for model in result:
     print("Solution found:")
-    for pred_type, instances in model.items():
-        for instance in instances:
-            print(f"  {instance}")
+    for adult in model.atoms(Adult):
+        print(f"  {adult}")
+print(f"Satisfiable: {result.satisfiable}")
 ```
 
 ## Requirements

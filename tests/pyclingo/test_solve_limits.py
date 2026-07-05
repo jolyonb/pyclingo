@@ -1,5 +1,5 @@
 """
-Tests for model-count limits and wall-clock timeouts in ASPProgram.solve().
+Tests for model-count limits, wall-clock timeouts, and SolveResult lifecycle.
 """
 
 import time
@@ -19,66 +19,76 @@ def make_choice_program(n: int) -> ASPProgram:
 
 
 def test_explicit_model_limit() -> None:
-    program = make_choice_program(3)  # 8 models
-    solutions = list(program.solve(models=2))
-    assert len(solutions) == 2
-    assert program.exhausted is False
+    result = make_choice_program(3).solve(models=2)  # 8 models exist
+    assert len(list(result)) == 2
+    assert result.exhausted is False
 
 
 def test_zero_means_enumerate_all() -> None:
-    program = make_choice_program(3)  # 8 models
-    solutions = list(program.solve(models=0))
-    assert len(solutions) == 8
-    assert program.exhausted is True
-    assert program.satisfiable is True
+    result = make_choice_program(3).solve(models=0)  # 8 models
+    assert len(list(result)) == 8
+    assert result.exhausted is True
+    assert result.satisfiable is True
 
 
 def test_default_limit_does_not_truncate_small_spaces() -> None:
-    program = make_choice_program(3)  # 8 models, well under the default of 1000
-    solutions = list(program.solve())
-    assert len(solutions) == 8
-    assert program.exhausted is True
+    result = make_choice_program(3).solve()  # 8 models, well under the default of 1000
+    assert len(list(result)) == 8
+    assert result.exhausted is True
 
 
 def test_timeout_yields_partial_results() -> None:
     # 2^60 models: unlimited enumeration can never finish, so the timeout must fire
-    program = make_choice_program(60)
+    result = make_choice_program(60).solve(models=0, timeout=1)
     start = time.monotonic()
-    solutions = list(program.solve(models=0, timeout=1))
+    models = list(result)
     elapsed = time.monotonic() - start
-    assert len(solutions) > 0  # models found before the deadline were yielded
-    assert program.exhausted is False
-    assert program.satisfiable is True  # learned from the yielded models
+    assert len(models) > 0  # models found before the deadline were yielded
+    assert result.exhausted is False
+    assert result.satisfiable is True  # learned from the yielded models
     assert elapsed < 3  # cancelled promptly rather than enumerating forever
 
 
 def test_no_timeout_unaffected() -> None:
-    program = make_choice_program(2)  # 4 models
-    solutions = list(program.solve(timeout=60))
-    assert len(solutions) == 4
-    assert program.exhausted is True
+    result = make_choice_program(2).solve(timeout=60)  # 4 models
+    assert len(list(result)) == 4
+    assert result.exhausted is True
 
 
 def test_early_close_finalizes_bookkeeping() -> None:
-    program = make_choice_program(3)  # 8 models
-    solutions = program.solve(models=0)
-    first = next(solutions)
-    assert isinstance(first, dict)
-    solutions.close()
-    assert program.exhausted is False  # we stopped early, truthfully reported
-    assert program.satisfiable is True
-    assert program.solution_count == 1
-    assert "No statistics" not in program.format_statistics_clingo_style()
+    result = make_choice_program(3).solve(models=0)  # 8 models
+    next(iter(result))  # a choice model may legitimately be the empty set
+    result.close()
+    assert result.exhausted is False  # we stopped early, truthfully reported
+    assert result.satisfiable is True
+    assert result.solution_count == 1
+    assert "No statistics" not in result.format_statistics()
 
 
-def test_second_solve_while_active_raises() -> None:
+def test_context_manager_closes() -> None:
+    program = make_choice_program(3)
+    with program.solve(models=0) as result:
+        next(iter(result))
+    assert result.solution_count == 1
+    assert result.exhausted is False
+
+
+def test_repeated_solves_are_independent() -> None:
+    # Each solve() returns its own SolveResult; nothing is shared or locked
     program = make_choice_program(2)
-    running = program.solve()
-    with pytest.raises(RuntimeError, match="already in progress"):
-        program.solve()
-    running.close()
-    # Releasing the generator makes the program solvable again
-    assert len(list(program.solve())) == 4
+    first = program.solve()
+    second = program.solve()
+    assert len(list(second)) == 4
+    assert len(list(first)) == 4
+    assert first.exhausted and second.exhausted
+    assert first.solution_count == second.solution_count == 4
+
+
+def test_unconsumed_result_reports_honestly() -> None:
+    result = make_choice_program(2).solve()
+    assert result.satisfiable is None  # never iterated: nothing learned
+    assert result.solution_count == 0
+    assert result.format_statistics() == "No statistics available"
 
 
 def test_setup_errors_raise_at_call_time() -> None:
@@ -93,12 +103,6 @@ def test_setup_errors_raise_at_call_time() -> None:
         program.solve()
 
 
-def test_negative_timeout_rejected() -> None:
-    program = make_choice_program(2)
-    with pytest.raises(ValueError, match="non-negative"):
-        program.solve(timeout=-5)
-
-
 def test_grounding_diagnostics_ride_in_the_error() -> None:
     # An info-level message (q never appears in a head) halts at the default
     # threshold, and the formatted diagnostics are part of the raised error
@@ -107,4 +111,10 @@ def test_grounding_diagnostics_ride_in_the_error() -> None:
     Q = Predicate.define("q", ["x"])
     program.when(conditions=Q(x=1), let=P(x=1))
     with pytest.raises(RuntimeError, match="does not occur"):
-        list(program.solve())
+        program.solve()
+
+
+def test_negative_timeout_rejected() -> None:
+    program = make_choice_program(2)
+    with pytest.raises(ValueError, match="non-negative"):
+        program.solve(timeout=-5)

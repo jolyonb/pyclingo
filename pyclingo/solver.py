@@ -1,18 +1,17 @@
 import time
 from collections import defaultdict
-from collections.abc import Generator, Sequence
+from collections.abc import Sequence
 from datetime import datetime
-from typing import Any
 
 import clingo
 
 from pyclingo.choice import Choice
 from pyclingo.clingo_handler import ClingoMessageHandler, LogLevel
 from pyclingo.conditional_literal import ConditionalLiteral
-from pyclingo.core import ConstantBase, DefinedConstant, Number, String, Term
+from pyclingo.core import DefinedConstant, Term
 from pyclingo.predicate import Predicate
 from pyclingo.program_elements import BlankLine, Comment, ProgramElement, RawASP, Rule
-from pyclingo.statistics import format_statistics_clingo_style
+from pyclingo.solve_result import SolveResult
 
 
 class ASPProgram:
@@ -27,17 +26,11 @@ class ASPProgram:
     header: str | None = None
     default_segment: str = "Rules"
 
-    satisfiable: bool | None = None
-    exhausted: bool | None = None
-    solution_count: int | None = None
-    _clingo_statistics: dict[str, Any] | None = None
-
     def __init__(self, header: str | None = None, default_segment: str = "Rules") -> None:
         """Initialize an empty ASP program."""
         self._segments: defaultdict[str, list[ProgramElement]] = defaultdict(list)
         self._defined_constants: dict[str, int | str] = {}
         self._show_overrides: dict[type[Predicate], bool | ConditionalLiteral] = {}
-        self._solving = False
         self.header = header
         self.default_segment = default_segment.lower()
 
@@ -291,11 +284,9 @@ class ASPProgram:
         if unregistered := used_constants - set(self._defined_constants.keys()):
             raise ValueError(f"Undefined constants used in program: {', '.join(sorted(unregistered))}")
 
-    def solve(
-        self, models: int = 1000, timeout: int = 0, stop_on_log_level: LogLevel = LogLevel.INFO
-    ) -> Generator[dict[str, list[Predicate]]]:
+    def solve(self, models: int = 1000, timeout: int = 0, stop_on_log_level: LogLevel = LogLevel.INFO) -> SolveResult:
         """
-        Solve the ASP program and yield solutions as sets of Predicate objects.
+        Solve the ASP program, returning a SolveResult that yields Models lazily.
 
         Args:
             models: Maximum number of models to compute. Pass 0 to enumerate all models —
@@ -304,25 +295,20 @@ class ASPProgram:
                      so far will have been yielded and 'exhausted' remains False.
             stop_on_log_level: Log level at which to abort solving
 
-        Yields:
-            For each solution, a dictionary mapping predicate names to lists of Predicate instances
+        Returns:
+            A SolveResult: iterate it for Models (each with typed atoms() access);
+            its satisfiable/exhausted/solution_count/statistics finalize when
+            iteration ends on any path (exhaustion, close(), or a with-block).
 
         Raises:
-            RuntimeError: If a solve is already in progress on this program, if an error
-                occurs during parsing or grounding, or if the log level threshold is exceeded
+            RuntimeError: If an error occurs during parsing or grounding, or the
+                log level threshold is exceeded
 
         Notes:
             Rendering, grounding, and their error checks run eagerly at this call; only
-            model enumeration is lazy. One solve runs at a time per program: this call
-            claims the program, and exhausting or closing the returned generator releases
-            it. To stop early, call .close() on the generator; 'satisfiable', 'exhausted',
-            'solution_count', and the solver statistics are finalized on every exit path.
+            model enumeration is lazy. Every call returns an independent SolveResult,
+            so repeated solves on one program never interfere.
         """
-        if self._solving:
-            raise RuntimeError(
-                "A solve is already in progress on this program: "
-                "exhaust or close() the existing solve() generator first"
-            )
         if timeout < 0:
             raise ValueError(f"timeout must be non-negative, got {timeout}")
 
@@ -368,124 +354,7 @@ class ASPProgram:
                 f"{message_handler.format_all_messages(verb='grounding')}"
             )
 
-        # Map (name, arity) to predicate class for solution reconstruction: arity
-        # matters because p/1 and p/2 are distinct predicates in ASP
         predicate_types = {(pred.get_name(), pred.get_arity()): pred for pred in self._collect_predicates()}
-
-        # Claim the program and reset solve state before handing over to the lazy iterator
-        self._solving = True
-        self.satisfiable = None
-        self.exhausted = False
-        self.solution_count = 0
         deadline = time.monotonic() + timeout if timeout > 0 else None
 
-        generator = self._solve_iterator(control, predicate_types, deadline, tic)
-        # Prime past the sentinel yield so the iterator's cleanup is armed even if the
-        # caller closes or abandons the generator without ever iterating it
-        next(generator)
-        return generator
-
-    def _solve_iterator(
-        self,
-        control: clingo.Control,
-        predicate_types: dict[tuple[str, int], type[Predicate]],
-        deadline: float | None,
-        tic: float,
-    ) -> Generator[dict[str, list[Predicate]]]:
-        """
-        Lazy half of solve(): yields models and finalizes bookkeeping on every exit path
-        (exhaustion, close(), exception, or garbage collection of the generator).
-        """
-        result: clingo.SolveResult | None = None
-        solution_count = 0
-        try:
-            # Sentinel consumed by solve()'s priming next(); callers never see it
-            yield {}
-
-            # Wall-clock timeouts require async solving: clingo has no timeout
-            # configuration key; instead we wait on the handle and cancel at the deadline.
-            with control.solve(yield_=True, async_=True) as handle:
-                try:
-                    while True:
-                        handle.resume()
-                        # Clamp to zero: wait() treats a negative timeout as "block forever",
-                        # but a passed deadline should poll and cancel instead
-                        remaining = None if deadline is None else max(0.0, deadline - time.monotonic())
-                        if not handle.wait(remaining):
-                            # The deadline passed before the next model was found
-                            break
-                        model = handle.model()
-                        if model is None:
-                            break
-                        solution_count += 1
-                        self.solution_count = solution_count
-                        self.satisfiable = True
-                        yield self._convert_model_to_predicates(model, predicate_types)
-                finally:
-                    # Also reached when the caller close()s mid-iteration. Cancelling a
-                    # finished search is a no-op, so this is safe on every path.
-                    handle.cancel()
-                    # After a cancelled solve, satisfiability may be unknown (None);
-                    # keep what we learned from any yielded models.
-                    final: clingo.SolveResult = handle.get()
-                    if final.satisfiable is not None:
-                        self.satisfiable = final.satisfiable
-                    self.exhausted = final.exhausted
-                    result = final
-        finally:
-            self._solving = False
-            if result is not None:
-                # Store the raw clingo statistics for detailed formatting. Skipped if the
-                # generator was closed before solving began (statistics would be empty).
-                self._clingo_statistics = dict(control.statistics)
-                self._clingo_statistics["total_time"] = time.perf_counter() - tic
-
-    def _convert_symbol_to_predicate(
-        self, symbol: clingo.Symbol, predicate_types: dict[tuple[str, int], type[Predicate]]
-    ) -> Predicate:
-        """
-        Convert a clingo model symbol back into a typed Predicate instance, recursively.
-
-        Raises:
-            ValueError: If the symbol's name/arity doesn't match any known predicate.
-        """
-        pred_name = symbol.name
-        key = (pred_name, len(symbol.arguments))
-
-        if key not in predicate_types:
-            raise ValueError(f"Unknown predicate type: {pred_name}/{len(symbol.arguments)}")
-
-        pred_class = predicate_types[key]
-        field_names = [f.name for f in pred_class.argument_fields()]
-
-        kwargs: dict[str, ConstantBase | Predicate] = {}
-        for i, (arg, field_name) in enumerate(zip(symbol.arguments, field_names, strict=True)):
-            if arg.type == clingo.SymbolType.Number:
-                kwargs[field_name] = Number(arg.number)
-            elif arg.type == clingo.SymbolType.String:
-                kwargs[field_name] = String(arg.string)
-            elif arg.type == clingo.SymbolType.Function:
-                # Recursively convert nested predicates; bare atoms are nullary predicates
-                kwargs[field_name] = self._convert_symbol_to_predicate(arg, predicate_types)
-            else:
-                raise ValueError(f"Unsupported symbol type in argument {i} of {pred_name}: {arg.type}")
-
-        return pred_class(**kwargs)
-
-    def _convert_model_to_predicates(
-        self, model: clingo.Model, predicate_types: dict[tuple[str, int], type[Predicate]]
-    ) -> dict[str, list[Predicate]]:
-        """Convert a clingo model into {predicate_name: [Predicate instances]}."""
-        result = defaultdict(list)
-
-        for symbol in model.symbols(shown=True):
-            pred_instance = self._convert_symbol_to_predicate(symbol, predicate_types)
-            result[pred_instance.get_name()].append(pred_instance)
-
-        return dict(result)
-
-    def format_statistics_clingo_style(self) -> str:
-        """Format the last solve's statistics in clingo's native style."""
-        if self._clingo_statistics is None:
-            return "No statistics available"
-        return format_statistics_clingo_style(self._clingo_statistics)
+        return SolveResult(control, predicate_types, deadline, tic)

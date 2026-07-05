@@ -14,8 +14,9 @@ def test_arity_overloads_reconstruct_as_their_own_classes() -> None:
     Edge2 = Predicate.define("edge", ["a", "b"])
     Edge3 = Predicate.define("edge", ["a", "b", "w"])
     program.fact(Edge2(a=1, b=2), Edge3(a=1, b=2, w=9))
-    solution = next(iter(program.solve()))
-    assert {type(i) for i in solution["edge"]} == {Edge2, Edge3}
+    model = next(iter(program.solve()))
+    assert model.atoms(Edge2) == [Edge2(a=1, b=2)]
+    assert model.atoms(Edge3) == [Edge3(a=1, b=2, w=9)]
 
 
 def test_same_signature_collision_raises_at_render() -> None:
@@ -33,5 +34,5 @@ def test_bare_atoms_reconstruct_as_nullary_predicates() -> None:
     N = Predicate.define("flag", [], show=False)  # argument-only: no flag/0 atoms to show
     Holds = Predicate.define("holds", ["what"])
     program.fact(Holds(what=N()))
-    solution = next(iter(program.solve()))
-    assert isinstance(solution["holds"][0]["what"], N)
+    model = next(iter(program.solve()))
+    assert isinstance(model.atoms(Holds)[0]["what"], N)

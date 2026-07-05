@@ -22,9 +22,9 @@ def test_declared_predicates_are_shown_and_round_trip() -> None:
 
     assert "#show foo/1." in program.render()
 
-    solutions = list(program.solve())
-    assert len(solutions) == 1
-    facts = solutions[0]["foo"]
+    models = list(program.solve())
+    assert len(models) == 1
+    facts = models[0].atoms(Foo)
     assert sorted(f["x"].value for f in facts) == [1, 2, 3]
     assert all(isinstance(f, Foo) for f in facts)
 
