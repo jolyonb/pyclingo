@@ -8,7 +8,7 @@ import clingo
 from pyclingo.choice import Choice
 from pyclingo.clingo_handler import ClingoMessageHandler, LogLevel
 from pyclingo.conditional_literal import ConditionalLiteral
-from pyclingo.core import DefinedConstant, Term
+from pyclingo.core import AtomSign, DefinedConstant, Term
 from pyclingo.predicate import Predicate
 from pyclingo.program_elements import BlankLine, Comment, ProgramElement, RawASP, Rule
 from pyclingo.scoping import validate_rule
@@ -190,6 +190,17 @@ class ASPProgram:
 
         return predicates
 
+    def _collect_predicate_signs(self) -> set[AtomSign]:
+        """(class, negated, is_atom) occurrences across the whole program."""
+        signs: set[AtomSign] = set()
+        for elements in self._segments.values():
+            for element in elements:
+                signs.update(element.collect_predicate_signs())
+        for visibility in self._show_overrides.values():
+            if isinstance(visibility, ConditionalLiteral):
+                signs.update(visibility.collect_predicate_signs())
+        return signs
+
     def _validate_names(self) -> None:
         """
         Raise on naming collisions that would corrupt solving:
@@ -253,12 +264,22 @@ class ASPProgram:
         # nothing is shown — without it, clingo defaults to showing every atom.
         show_statements: set[str] = set()
         any_hidden = False
-        # Explicit overrides are honored even for predicates the walkers didn't
-        # collect (e.g. produced only by raw_asp text)
+        # Each sign has its own show signature, and a directive for an absent
+        # signature draws a gringo info — so emit per present sign. An
+        # explicit show() override counts as positive presence (the user
+        # asked; raw_asp-only predicates have no walkable occurrences).
+        signs = self._collect_predicate_signs()
+        positive_classes = {cls for cls, negated, is_atom in signs if is_atom and not negated} | set(
+            self._show_overrides
+        )
+        negated_classes = {cls for cls, negated, is_atom in signs if is_atom and negated}
         for pred in self._collect_predicates() | set(self._show_overrides):
             visibility = self._show_overrides.get(pred, pred.shown_by_default())
             if visibility is True:
-                show_statements.add(f"#show {pred.get_name()}/{pred.get_arity()}.")
+                if pred in positive_classes:
+                    show_statements.add(f"#show {pred.get_name()}/{pred.get_arity()}.")
+                if pred in negated_classes:
+                    show_statements.add(f"#show -{pred.get_name()}/{pred.get_arity()}.")
             elif isinstance(visibility, ConditionalLiteral):
                 show_statements.add(f"#show {visibility.render()}.")
             else:

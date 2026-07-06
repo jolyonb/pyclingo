@@ -27,6 +27,19 @@ if TYPE_CHECKING:
     from pyclingo.predicate import PREDICATE_CLASS_TYPE
 
 
+# One occurrence of a predicate class: (class, classically negated, is_atom).
+#
+# The same p(...) syntax plays two grammatical roles in ASP. As an ATOM it is
+# a statement with a truth value — a fact, a rule head, a body literal, or an
+# element/condition inside an aggregate, choice, or conditional literal. As a
+# TERM it is a piece of data sitting inside another predicate's argument, with
+# no truth value of its own. In region(cell(1, 2), a), region/2 occurs as an
+# atom; cell/2 occurs only as a term. is_atom records which role: #show
+# signatures exist only for atom occurrences (a directive for cell/2 here
+# would draw gringo's "no atoms over signature" info), while term occurrences
+# still matter for reconstructing solutions into typed instances.
+type AtomSign = tuple[PREDICATE_CLASS_TYPE, bool, bool]
+
 # Type aliases for the operator cluster
 type EXPRESSION_FIELD_TYPE = Value | Expression | int
 type VALUE_EXPRESSION_TYPE = Value | Expression
@@ -75,10 +88,17 @@ class Term(ABC):
         """
         pass
 
-    @abstractmethod
+    def collect_predicate_signs(self) -> set[AtomSign]:
+        """
+        Collects (class, negated, is_atom) occurrences in this term; empty by
+        default, composites recurse, Predicate reports itself and demotes its
+        argument-position children.
+        """
+        return set()
+
     def collect_predicates(self) -> set[PREDICATE_CLASS_TYPE]:
-        """Collects all Predicate classes (not instances) used in this term."""
-        pass
+        """All Predicate classes used in this term (both signs, any position)."""
+        return {predicate for predicate, _negated, _is_atom in self.collect_predicate_signs()}
 
     @abstractmethod
     def collect_defined_constants(self) -> set[str]:
@@ -353,9 +373,6 @@ class Variable(Value):
         """Variables can only appear as arguments, never standalone: always raises."""
         raise ValueError("Variables can only be used as arguments to predicates or other terms")
 
-    def collect_predicates(self) -> set[PREDICATE_CLASS_TYPE]:
-        return set()
-
     def collect_defined_constants(self) -> set[str]:
         return set()
 
@@ -419,9 +436,6 @@ class ConstantBase(Value, ABC):
     def validate_in_context(self, is_in_head: bool) -> None:
         """Constants can only appear as arguments, never standalone: always raises."""
         raise ValueError("Constants can only be used as arguments to predicates or other terms")
-
-    def collect_predicates(self) -> set[PREDICATE_CLASS_TYPE]:
-        return set()
 
     def collect_defined_constants(self) -> set[str]:
         """Empty by default; DefinedConstant overrides to report its name."""
@@ -624,10 +638,6 @@ class RangePool(Pool):
     def render(self, context: RenderingContext = RenderingContext.DEFAULT) -> str:
         return f"{self.start.render()}..{self.end.render()}"
 
-    def collect_predicates(self) -> set[PREDICATE_CLASS_TYPE]:
-        """Range pools cannot contain predicates."""
-        return set()
-
     def collect_defined_constants(self) -> set[str]:
         constants = set()
 
@@ -690,14 +700,6 @@ class ExplicitPool(Pool):
         elements_str = "; ".join(element.render() for element in self._elements)
         return elements_str if context == RenderingContext.LONE_PREDICATE_ARGUMENT else f"({elements_str})"
 
-    def collect_predicates(self) -> set[PREDICATE_CLASS_TYPE]:
-        predicates = set()
-
-        for element in self.elements:
-            predicates.update(element.collect_predicates())
-
-        return predicates
-
     def collect_defined_constants(self) -> set[str]:
         constants = set()
 
@@ -713,6 +715,14 @@ class ExplicitPool(Pool):
             variables.update(element.collect_variables())
 
         return variables
+
+    def collect_predicate_signs(self) -> set[AtomSign]:
+        # Pool elements sit in argument positions: demote to non-atoms
+        return {
+            (predicate, negated, False)
+            for element in self.elements
+            for predicate, negated, _is_atom in element.collect_predicate_signs()
+        }
 
 
 def pool(elements: range | Sequence[int | str | BasicTerm] | Pool) -> Pool:
@@ -981,16 +991,6 @@ class Expression(ComparableTerm):
     def __repr__(self) -> str:
         return f"{type(self).__name__}({self.render()!r})"
 
-    def collect_predicates(self) -> set[PREDICATE_CLASS_TYPE]:
-        predicates = set()
-
-        if self.first_term is not None:
-            predicates.update(self.first_term.collect_predicates())
-
-        predicates.update(self.second_term.collect_predicates())
-
-        return predicates
-
     def collect_defined_constants(self) -> set[str]:
         constants = set()
 
@@ -1091,6 +1091,9 @@ class Comparison(Negatable):
         self.left_term.freeze()
         self.right_term.freeze()
 
+    def collect_predicate_signs(self) -> set[AtomSign]:
+        return self.left_term.collect_predicate_signs() | self.right_term.collect_predicate_signs()
+
     def __bool__(self) -> bool:
         """
         Comparisons deliberately have no truth value.
@@ -1141,14 +1144,6 @@ class Comparison(Negatable):
     def is_equality(self) -> bool:
         """Whether this comparison uses = (the only operator that binds variables)."""
         return self.operator == ComparisonOperator.EQUAL
-
-    def collect_predicates(self) -> set[PREDICATE_CLASS_TYPE]:
-        predicates = set()
-
-        predicates.update(self.left_term.collect_predicates())
-        predicates.update(self.right_term.collect_predicates())
-
-        return predicates
 
     def collect_defined_constants(self) -> set[str]:
         constants = set()
@@ -1208,9 +1203,6 @@ class DefaultNegation(Negatable):
         """A negation is grounded if its term is grounded."""
         return self._term.is_grounded
 
-    def collect_predicates(self) -> set[PREDICATE_CLASS_TYPE]:
-        return self._term.collect_predicates()
-
     def collect_defined_constants(self) -> set[str]:
         return self._term.collect_defined_constants()
 
@@ -1219,6 +1211,9 @@ class DefaultNegation(Negatable):
 
     def freeze(self) -> None:
         self._term.freeze()
+
+    def collect_predicate_signs(self) -> set[AtomSign]:
+        return self._term.collect_predicate_signs()
 
     def render(self, context: RenderingContext = RenderingContext.DEFAULT) -> str:
         return f"not {self._term.render()}"

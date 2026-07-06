@@ -1,3 +1,4 @@
+import copy
 import keyword
 import re
 import types
@@ -6,6 +7,7 @@ from dataclasses import dataclass, fields
 from typing import Any, ClassVar, Self, cast, dataclass_transform, get_args, get_origin, overload
 
 from pyclingo.core import (
+    AtomSign,
     BasicTerm,
     DefinedConstant,
     Expression,
@@ -225,8 +227,9 @@ class Predicate(BasicTerm, Negatable):
         _validate_schema(cls._predicate_name, namespace, declared_fields)
         ground_types = _field_ground_types(cls)
         # dataclass() mutates cls in place (adding __init__ etc.) and returns it;
-        # no reassignment is needed
-        dataclass(frozen=True, eq=False)(cls)
+        # no reassignment is needed. repr=False: the generated __repr__ would
+        # shadow Predicate's sign-aware one on every subclass
+        dataclass(frozen=True, eq=False, repr=False)(cls)
         # Install the Field descriptors only after dataclass() has run, so it
         # treats these as required fields rather than defaulted ones. Inherited
         # descriptor fields stay registered so __post_init__ keeps skipping them.
@@ -341,7 +344,9 @@ class Predicate(BasicTerm, Negatable):
 
     def __post_init__(self) -> None:
         """Validate all field values and convert literals to appropriate terms."""
-        # Use object.__setattr__ since the dataclass is frozen
+        # Use object.__setattr__ since the dataclass is frozen. Atoms are born
+        # positive; __neg__ produces the classically negated copy
+        object.__setattr__(self, "_negated", False)
         for field_info in self.argument_fields():
             if field_info.name in type(self)._descriptor_fields:
                 continue  # the Field descriptor already validated and stored this one
@@ -423,28 +428,20 @@ class Predicate(BasicTerm, Negatable):
         return all(arg.is_grounded for arg in self.arguments)
 
     def render(self, context: RenderingContext = RenderingContext.DEFAULT) -> str:
+        sign = "-" if self.negated else ""
         if not self.argument_fields():
-            return self.get_name()
+            return f"{sign}{self.get_name()}"
 
         if len(self.arguments) == 1:
             args_str = self.arguments[0].render(context=RenderingContext.LONE_PREDICATE_ARGUMENT)
         else:
             args_str = ", ".join(arg.render() for arg in self.arguments)
 
-        return f"{self.get_name()}({args_str})"
+        return f"{sign}{self.get_name()}({args_str})"
 
     def validate_in_context(self, is_in_head: bool) -> None:
         """Predicates are valid in both heads and bodies."""
         pass
-
-    def collect_predicates(self) -> set[PREDICATE_CLASS_TYPE]:
-        """Returns this predicate's class plus any predicate classes used as arguments."""
-        predicates: set[PREDICATE_CLASS_TYPE] = {type(self)}
-
-        for arg in self.arguments:
-            predicates.update(arg.collect_predicates())
-
-        return predicates
 
     def collect_defined_constants(self) -> set[str]:
         constants = set()
@@ -484,6 +481,31 @@ class Predicate(BasicTerm, Negatable):
 
         return variables
 
+    @property
+    def negated(self) -> bool:
+        """Whether this atom is classically negated (-p(...))."""
+        return self._negated  # type: ignore[attr-defined, no-any-return]
+
+    def __neg__(self) -> Self:
+        """
+        The classically negated copy of this atom: -p(1) asserts that p(1)
+        is false — a distinct atom, and deriving both makes the program
+        UNSAT. The sign is part of the atom, exactly as in clingo's own
+        symbol model; negating a negated atom gives back the positive one.
+        """
+        negation = copy.copy(self)
+        object.__setattr__(negation, "_negated", not self.negated)
+        return negation
+
+    def collect_predicate_signs(self) -> set[AtomSign]:
+        # This predicate is an atom occurrence; anything nested in its
+        # arguments is a term, not an atom — demoted, but still collected
+        # (the converter needs nested classes registered)
+        signs: set[AtomSign] = {(type(self), self.negated, True)}
+        for arg in self.arguments:
+            signs.update((predicate, negated, False) for predicate, negated, _ in arg.collect_predicate_signs())
+        return signs
+
     def canonical_str(self) -> str:
         """
         The canonical named-field form of this fact, e.g. number(loc=cell(row=1, col=1), value=6).
@@ -493,14 +515,15 @@ class Predicate(BasicTerm, Negatable):
         order and survives reordering. The three representations: str() is ASP,
         repr() is Python, canonical_str() is this explicit form.
         """
+        sign = "-" if self.negated else ""
         if not self.argument_fields():
-            return f"{self.get_name()}()"
+            return f"{sign}{self.get_name()}()"
         args = ", ".join(
             f"{f.name}={value.canonical_str() if isinstance(value, Predicate) else value.render()}"
             for f in self.argument_fields()
             for value in (self[f.name],)
         )
-        return f"{self.get_name()}({args})"
+        return f"{sign}{self.get_name()}({args})"
 
     def __str__(self) -> str:
         """The predicate rendered as ASP text, e.g. name(value1, value2)."""
@@ -508,11 +531,12 @@ class Predicate(BasicTerm, Negatable):
 
     def __repr__(self) -> str:
         """A Python-syntax representation that could recreate this predicate."""
+        sign = "-" if self.negated else ""
         if not self.argument_fields():
-            return f"{self.__class__.__name__}()"
+            return f"{sign}{self.__class__.__name__}()"
 
         kwargs = ", ".join(f"{f.name}={self[f.name]!r}" for f in self.argument_fields())
-        return f"{self.__class__.__name__}({kwargs})"
+        return f"{sign}{self.__class__.__name__}({kwargs})"
 
 
 # Field names that would shadow Predicate API; computed once Predicate exists

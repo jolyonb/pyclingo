@@ -2,6 +2,7 @@ from typing import Self
 
 from pyclingo.core import (
     AggregateBase,
+    AtomSign,
     Comparison,
     DefaultNegation,
     Number,
@@ -11,7 +12,7 @@ from pyclingo.core import (
     Value,
     Variable,
 )
-from pyclingo.predicate import PREDICATE_CLASS_TYPE, Predicate
+from pyclingo.predicate import Predicate
 
 type CHOICE_ELEMENT_TYPE = Predicate
 type CHOICE_CONDITION_TYPE = Predicate | DefaultNegation | Comparison
@@ -269,19 +270,6 @@ class Choice(Term):
         if not is_in_head:
             raise ValueError("Choice rules can only be used in rule heads, not in rule bodies")
 
-    def collect_predicates(self) -> set[PREDICATE_CLASS_TYPE]:
-        predicates = set()
-
-        for element, conditions in self._elements:
-            predicates.update(element.collect_predicates())
-
-            for condition in conditions:
-                predicates.update(condition.collect_predicates())
-
-        # Cardinality bounds can never contain predicates
-
-        return predicates
-
     def collect_defined_constants(self) -> set[str]:
         constants = set()
 
@@ -315,3 +303,11 @@ class Choice(Term):
             variables.add(self.max_cardinality.name)
 
         return variables
+
+    def collect_predicate_signs(self) -> set[AtomSign]:
+        signs: set[AtomSign] = set()
+        for element, conditions in self._elements:
+            signs.update(element.collect_predicate_signs())
+            for condition in conditions:
+                signs.update(condition.collect_predicate_signs())
+        return signs

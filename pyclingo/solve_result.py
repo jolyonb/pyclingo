@@ -37,7 +37,11 @@ class Model:
     def atoms[P: Predicate](self, predicate: type[P]) -> list[P]: ...
 
     def atoms(self, predicate: type[Predicate] | None = None) -> list[Any]:
-        """All atoms in the model, or only those of the given predicate class."""
+        """
+        All atoms in the model, or all of the given predicate class — BOTH
+        signs: classically negated atoms (-p) are instances of the same class,
+        so filter on .negated if your program uses classical negation.
+        """
         if predicate is None:
             return list(self._atoms)
         return list(self._by_class.get(predicate, []))
@@ -200,4 +204,5 @@ def convert_symbol_to_predicate(symbol: clingo.Symbol, predicate_types: PREDICAT
         else:
             raise ValueError(f"Unsupported symbol type in argument {i} of {pred_name}: {arg.type}")
 
-    return pred_class(**kwargs)
+    instance = pred_class(**kwargs)
+    return -instance if symbol.negative else instance

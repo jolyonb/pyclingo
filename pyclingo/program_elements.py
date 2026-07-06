@@ -3,7 +3,7 @@ from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
 from pyclingo.conditional_literal import ConditionalLiteral
-from pyclingo.core import Term
+from pyclingo.core import AtomSign, Term
 from pyclingo.scoping import validate_rule
 
 if TYPE_CHECKING:
@@ -18,13 +18,17 @@ class ProgramElement(ABC):
         """Render this element as an ASP string."""
         pass
 
-    def collect_predicates(self) -> set[PREDICATE_CLASS_TYPE]:
-        """Collects all predicate classes used in this element; the base implementation returns an empty set."""
-        return set()
-
     def collect_defined_constants(self) -> set[str]:
         """Collects all defined constant names used in this element; the base implementation returns an empty set."""
         return set()
+
+    def collect_predicate_signs(self) -> set[AtomSign]:
+        """Collects (class, negated, is_atom) occurrences; empty by default."""
+        return set()
+
+    def collect_predicates(self) -> set[PREDICATE_CLASS_TYPE]:
+        """All Predicate classes used in this element (both signs, any position)."""
+        return {predicate for predicate, _negated, _is_atom in self.collect_predicate_signs()}
 
 
 class Comment(ProgramElement):
@@ -65,8 +69,10 @@ class RawASP(ProgramElement):
     def render(self) -> str:
         return self.text
 
-    def collect_predicates(self) -> set[PREDICATE_CLASS_TYPE]:
-        return set(self.predicates)
+    def collect_predicate_signs(self) -> set[AtomSign]:
+        # Declared predicates count as positive atom presence: raw text is
+        # invisible to walkers, and predicates= exists to keep #show working
+        return {(predicate, False, True) for predicate in self.predicates}
 
 
 class BlankLine(ProgramElement):
@@ -140,17 +146,6 @@ class Rule(ProgramElement):
 
         return result
 
-    def collect_predicates(self) -> set[PREDICATE_CLASS_TYPE]:
-        predicates = set()
-
-        if self.head is not None:
-            predicates.update(self.head.collect_predicates())
-
-        for term in self.body:
-            predicates.update(term.collect_predicates())
-
-        return predicates
-
     def collect_defined_constants(self) -> set[str]:
         constants = set()
 
@@ -161,3 +156,9 @@ class Rule(ProgramElement):
             constants.update(term.collect_defined_constants())
 
         return constants
+
+    def collect_predicate_signs(self) -> set[AtomSign]:
+        signs = set() if self.head is None else set(self.head.collect_predicate_signs())
+        for term in self.body:
+            signs.update(term.collect_predicate_signs())
+        return signs

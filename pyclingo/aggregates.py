@@ -2,8 +2,8 @@ from abc import ABC
 from enum import StrEnum
 from typing import ClassVar, Self
 
-from pyclingo.core import AggregateBase, Comparison, DefaultNegation, RenderingContext, Value
-from pyclingo.predicate import PREDICATE_CLASS_TYPE, Predicate
+from pyclingo.core import AggregateBase, AtomSign, Comparison, DefaultNegation, RenderingContext, Value
+from pyclingo.predicate import Predicate
 
 type AGGREGATE_ELEMENT_TYPE = Value | Predicate
 type AGGREGATE_CONDITION_TYPE = Predicate | DefaultNegation | Comparison
@@ -161,18 +161,6 @@ class Aggregate(AggregateBase, ABC):
             "and cannot appear directly in rule heads or bodies"
         )
 
-    def collect_predicates(self) -> set[PREDICATE_CLASS_TYPE]:
-        predicates = set()
-
-        for element_tuple, conditions in self._elements:
-            for element in element_tuple:
-                predicates.update(element.collect_predicates())
-
-            for condition in conditions:
-                predicates.update(condition.collect_predicates())
-
-        return predicates
-
     def collect_defined_constants(self) -> set[str]:
         constants = set()
 
@@ -196,6 +184,15 @@ class Aggregate(AggregateBase, ABC):
                 variables.update(condition.collect_variables())
 
         return variables
+
+    def collect_predicate_signs(self) -> set[AtomSign]:
+        signs: set[AtomSign] = set()
+        for element_tuple, conditions in self._elements:
+            for element in element_tuple:
+                signs.update(element.collect_predicate_signs())
+            for condition in conditions:
+                signs.update(condition.collect_predicate_signs())
+        return signs
 
 
 class Count(Aggregate):

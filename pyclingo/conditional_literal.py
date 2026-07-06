@@ -1,5 +1,5 @@
-from pyclingo.core import AggregateBase, Comparison, DefaultNegation, RenderingContext, Term
-from pyclingo.predicate import PREDICATE_CLASS_TYPE, Predicate
+from pyclingo.core import AggregateBase, AtomSign, Comparison, DefaultNegation, RenderingContext, Term
+from pyclingo.predicate import Predicate
 
 # Terms that can be used in a conditional literal
 type CONDITIONAL_TERM_TYPE = Predicate | Comparison | DefaultNegation
@@ -84,16 +84,6 @@ class ConditionalLiteral(Term):
         if is_in_head:
             raise ValueError("Conditional literals cannot be used in rule heads")
 
-    def collect_predicates(self) -> set[PREDICATE_CLASS_TYPE]:
-        predicates = set()
-
-        predicates.update(self.head.collect_predicates())
-
-        for cond in self.condition:
-            predicates.update(cond.collect_predicates())
-
-        return predicates
-
     def collect_defined_constants(self) -> set[str]:
         constants = set()
 
@@ -113,6 +103,12 @@ class ConditionalLiteral(Term):
             variables.update(cond.collect_variables())
 
         return variables
+
+    def collect_predicate_signs(self) -> set[AtomSign]:
+        signs = set(self.head.collect_predicate_signs())
+        for cond in self.condition:
+            signs.update(cond.collect_predicate_signs())
+        return signs
 
 
 def key_for_each_lock(
