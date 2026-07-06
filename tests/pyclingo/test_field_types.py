@@ -153,3 +153,12 @@ def test_classvar_helpers_are_not_fields() -> None:
     assert WithHelper.get_arity() == 1
     assert WithHelper(loc="a1").render() == 'with_helper("a1")'
     assert WithHelper._threshold == 3
+
+
+def test_define_mixed_schema_with_untyped_slots() -> None:
+    Mixed = Predicate.define("mixed_schema", {"tag": str, "anything": None})
+    m = Mixed(tag="t", anything=5)
+    assert m.tag == "t"  # type: ignore[attr-defined]
+    assert isinstance(m["anything"], Number)  # untyped slot behaves classically
+    with pytest.raises(TypeError, match="Field 'tag' expects str"):
+        Mixed(tag=1, anything=5)

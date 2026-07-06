@@ -272,12 +272,13 @@ class Predicate(BasicTerm, Negatable):
     def define(
         cls,
         name: str,
-        field_names: list[str] | dict[str, type],
+        field_names: list[str] | dict[str, type | None],
         namespace: str = "",
         show: bool = True,
-    ) -> type[Predicate]:
+    ) -> type[Self]:
         """
-        Dynamically create a new Predicate subclass.
+        Dynamically create a new Predicate subclass (of the class it is called
+        on, so GridCell.define(...) returns a GridCell subclass).
 
         Args:
             name: The name of the predicate in ASP.
@@ -285,7 +286,8 @@ class Predicate(BasicTerm, Negatable):
                 mapping names to int, str, or a Predicate subclass to get
                 runtime-typed slots: writes are validated per field (a solution
                 atom carrying the wrong type fails loudly at load) and
-                attribute reads return plain Python values.
+                attribute reads return plain Python values. A None value leaves
+                that slot untyped, for mixed schemas.
             namespace: Optional namespace prefix for the predicate.
             show: Whether this predicate should be included in the show directive.
 
@@ -318,8 +320,8 @@ class Predicate(BasicTerm, Negatable):
         if isinstance(field_names, dict):
             annotations = {
                 # Subscripting with a runtime value is meaningless to mypy but is
-                # exactly what __class_getitem__ does at runtime
-                field_name: Field[ground]  # type: ignore[valid-type]
+                # exactly what __class_getitem__ does at runtime; None means untyped
+                field_name: Field[ground] if ground is not None else "PredicateField"  # type: ignore[valid-type]
                 for field_name, ground in field_names.items()
             }
         else:
@@ -334,8 +336,8 @@ class Predicate(BasicTerm, Negatable):
             kwds={"name": name, "namespace": namespace, "show": show},
             exec_body=set_annotations,
         )
-        assert issubclass(new_class, Predicate)
-        return new_class
+        assert issubclass(new_class, cls)
+        return cast(type[Self], new_class)
 
     def __post_init__(self) -> None:
         """Validate all field values and convert literals to appropriate terms."""
