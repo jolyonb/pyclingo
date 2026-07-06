@@ -194,7 +194,10 @@ Helper functions:
 1. **Type Safety**: Extensive use of type hints and runtime validation
 2. **Immutability**: Values and Predicates are immutable (cached/frozen); Choice and Aggregate are mutable builders that freeze when a rule captures them — mutating one afterwards raises instead of silently rewriting the recorded rule
 3. **Composability**: Rich operator overloading for natural expression building
-4. **Validation**: Context-aware validation for rule construction
+4. **Validation**: Context-aware validation for rule construction, including
+   unsafe- and singleton-variable rejection at the line that built the rule
+   (scoping.py: an over-approximating binding analysis — every rejection is a
+   certain gringo rejection)
 5. **Error Reporting**: Detailed error messages with source context
 6. **Performance**: Efficient rendering and minimal object creation
 

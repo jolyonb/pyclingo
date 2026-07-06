@@ -38,11 +38,22 @@ def test_show_when_predicates_reach_the_round_trip() -> None:
     list(program.solve())  # must not raise "Unknown predicate type"
 
 
-def test_show_when_freezes_its_condition() -> None:
-    program = ASPProgram()
+def test_aggregates_rejected_in_conditional_literal_conditions() -> None:
+    # clingo's grammar rejects aggregates inside CL conditions — caught at
+    # construction (this also means nothing mutable can reach a show directive)
     P = Predicate.define("p", ["x"])
     X, Y = Variable("X"), Variable("Y")
     count = Count(Y, condition=P(x=Y))
-    program.show_when(P, ConditionalLiteral(P(x=X), [P(x=X), count == 1]))
-    with pytest.raises(RuntimeError, match="frozen"):
-        count.add(X, P(x=X))
+    with pytest.raises(ValueError, match="conditional literal conditions"):
+        ConditionalLiteral(P(x=X), [P(x=X), count == 1])
+
+
+def test_show_when_validates_its_condition() -> None:
+    # A #show directive has no rule body: every variable must be bound inside
+    # the conditional literal itself
+    program = ASPProgram()
+    P = Predicate.define("p", ["x"])
+    Q = Predicate.define("q", ["x"])
+    X, Y = Variable("X"), Variable("Y")
+    with pytest.raises(ValueError, match="Unsafe"):
+        program.show_when(P, ConditionalLiteral(P(x=X), Q(x=Y)))

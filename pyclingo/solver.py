@@ -11,6 +11,7 @@ from pyclingo.conditional_literal import ConditionalLiteral
 from pyclingo.core import DefinedConstant, Term
 from pyclingo.predicate import Predicate
 from pyclingo.program_elements import BlankLine, Comment, ProgramElement, RawASP, Rule
+from pyclingo.scoping import validate_rule
 from pyclingo.solve_result import SolveResult
 
 
@@ -168,7 +169,10 @@ class ASPProgram:
         if not isinstance(condition, ConditionalLiteral):
             raise TypeError(f"show_when condition must be a ConditionalLiteral, got {type(condition).__name__}")
         # A show directive is a capture too: freeze so later mutation of a
-        # shared builder cannot silently rewrite it
+        # shared builder cannot silently rewrite it, and validate its variables
+        # (a #show directive has no rule body, so everything must be bound
+        # inside the conditional literal itself)
+        validate_rule(None, [condition], f"#show {condition.render()}.")
         condition.freeze()
         self._show_overrides[predicate] = condition
 

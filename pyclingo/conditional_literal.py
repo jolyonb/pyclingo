@@ -1,4 +1,4 @@
-from pyclingo.core import Comparison, DefaultNegation, RenderingContext, Term
+from pyclingo.core import AggregateBase, Comparison, DefaultNegation, RenderingContext, Term
 from pyclingo.predicate import PREDICATE_CLASS_TYPE, Predicate
 
 # Terms that can be used in a conditional literal
@@ -39,6 +39,13 @@ class ConditionalLiteral(Term):
         for cond in self._condition:
             if not isinstance(cond, (Predicate, Comparison, DefaultNegation)):
                 raise TypeError("Conditions in a conditional literal must be predicates, comparisons, or negated terms")
+            if isinstance(cond, Comparison) and any(
+                isinstance(term, AggregateBase) for term in (cond.left_term, cond.right_term)
+            ):
+                raise ValueError(
+                    "Aggregates cannot appear inside conditional literal conditions (clingo "
+                    "syntax error); compute the aggregate in a separate rule"
+                )
 
     @property
     def head(self) -> CONDITIONAL_TERM_TYPE:

@@ -94,7 +94,7 @@ assert total == 8
 Build rules with clear syntax:
 
 ```python
-from pyclingo import ASPProgram, Variable
+from pyclingo import ANY, ASPProgram, Variable
 
 program = ASPProgram()
 X, Y = Variable("X"), Variable("Y")
@@ -108,7 +108,7 @@ program.fact(mary)
 program.when([Person(name=X, age=Y), Y >= 18], let=Adult(name=X))
 
 # Constraints
-program.forbid(Person(name=X, age=Y), Y < 0)
+program.forbid(Person(name=ANY, age=Y), Y < 0)
 ```
 
 ### Comparisons

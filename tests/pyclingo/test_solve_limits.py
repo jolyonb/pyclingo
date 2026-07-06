@@ -91,16 +91,15 @@ def test_unconsumed_result_reports_honestly() -> None:
     assert result.format_statistics() == "No statistics available"
 
 
-def test_setup_errors_raise_at_call_time() -> None:
+def test_unsafe_rules_raise_at_construction() -> None:
+    # Unsafe variables do not wait for clingo's grounding error: the rule
+    # is rejected at the when() call, on the author's own line
     program = ASPProgram()
     P = Predicate.define("p", ["x"])
     Q = Predicate.define("q", ["x"])
     X, Y = Variable("X"), Variable("Y")
-    program.when(conditions=P(x=X), let=Q(x=Y))  # Y is unsafe
-
-    # The grounding error surfaces at the solve() call, not at first iteration
-    with pytest.raises(RuntimeError):
-        program.solve()
+    with pytest.raises(ValueError, match="Unsafe variable"):
+        program.when(conditions=P(x=X), let=Q(x=Y))
 
 
 def test_grounding_diagnostics_ride_in_the_error() -> None:

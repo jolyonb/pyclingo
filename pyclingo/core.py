@@ -1138,9 +1138,9 @@ class Comparison(Negatable):
         return f"{type(self).__name__}({self.render()!r})"
 
     @property
-    def is_assignment(self) -> bool:
-        """Whether this comparison assigns a variable: Variable = value."""
-        return self.operator == ComparisonOperator.EQUAL and isinstance(self.left_term, Variable)
+    def is_equality(self) -> bool:
+        """Whether this comparison uses = (the only operator that binds variables)."""
+        return self.operator == ComparisonOperator.EQUAL
 
     def collect_predicates(self) -> set[PREDICATE_CLASS_TYPE]:
         predicates = set()

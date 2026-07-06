@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 
 from pyclingo.conditional_literal import ConditionalLiteral
 from pyclingo.core import Term
+from pyclingo.scoping import validate_rule
 
 if TYPE_CHECKING:
     from pyclingo.predicate import PREDICATE_CLASS_TYPE
@@ -112,6 +113,10 @@ class Rule(ProgramElement):
                 term.freeze()
 
         self.body = body_terms
+
+        # Fail fast on unsafe and singleton variables: the traceback lands on
+        # the solver author's line, not in clingo's grounding output
+        validate_rule(self.head, self.body, self.render())
 
     def render(self) -> str:
         result = ""
