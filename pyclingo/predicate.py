@@ -3,7 +3,7 @@ import re
 import types
 from dataclasses import Field as DataclassField
 from dataclasses import dataclass, fields
-from typing import Any, ClassVar, cast, dataclass_transform, get_args, get_origin, overload
+from typing import Any, ClassVar, Self, cast, dataclass_transform, get_args, get_origin, overload
 
 from pyclingo.core import (
     BasicTerm,
@@ -189,6 +189,9 @@ class Predicate(BasicTerm, Negatable):
     # Names of Field[...]-typed slots, whose descriptors validate and store
     # plain Python values; __post_init__ leaves them alone
     _descriptor_fields: ClassVar[frozenset[str]] = frozenset()
+    # in_namespace() clones, cached so repeated calls return the same class —
+    # two distinct classes sharing a (name, arity) would be a collision
+    _namespace_clones: ClassVar[dict[tuple[type, str], type[Predicate]]] = {}
 
     def __init__(self, *args: PredicateField, **kwargs: PredicateField) -> None:
         # Satisfies the type checker for dynamically defined classes (type[Predicate]),
@@ -232,6 +235,38 @@ class Predicate(BasicTerm, Negatable):
             descriptor._configure(field_name, ground)
             setattr(cls, field_name, descriptor)
         cls._descriptor_fields = getattr(cls, "_descriptor_fields", frozenset()) | frozenset(ground_types)
+
+    @classmethod
+    def in_namespace(cls, namespace: str) -> type[Self]:
+        """
+        A copy of this predicate class under the given namespace.
+
+        The copy is a cached subclass: its fields (including Field[...] typing)
+        are inherited, repeated calls return the same class object, and
+        instances of differently-namespaced copies are never equal — the
+        namespace is part of a predicate's identity, fixed at creation.
+
+        Example:
+            >>> Clue = Predicate.define("clue", ["loc"])
+            >>> GridClue = Clue.in_namespace("grid")
+            >>> GridClue(loc=1).render()
+            'grid_clue(1)'
+            >>> Clue.in_namespace("grid") is GridClue
+            True
+        """
+        if namespace == cls._namespace:
+            return cls  # already in this namespace
+        key = (cls, namespace)
+        clone = Predicate._namespace_clones.get(key)
+        if clone is None:
+            clone = types.new_class(
+                cls.__name__,
+                bases=(cls,),
+                kwds={"name": cls._predicate_name, "namespace": namespace, "show": cls._show},
+            )
+            assert issubclass(clone, Predicate)
+            Predicate._namespace_clones[key] = clone
+        return cast(type[Self], clone)
 
     @classmethod
     def define(
