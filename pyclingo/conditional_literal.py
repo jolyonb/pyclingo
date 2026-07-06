@@ -55,6 +55,11 @@ class ConditionalLiteral(Term):
         """A conditional literal is grounded if the head and all conditions are grounded."""
         return self.head.is_grounded and all(cond.is_grounded for cond in self.condition)
 
+    def freeze(self) -> None:
+        self.head.freeze()
+        for cond in self._condition:
+            cond.freeze()
+
     def render(self, context: RenderingContext = RenderingContext.DEFAULT) -> str:
         head_str = self.head.render()
         condition_str = ", ".join(cond.render() for cond in self.condition)

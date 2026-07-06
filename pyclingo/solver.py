@@ -167,6 +167,9 @@ class ASPProgram:
         """
         if not isinstance(condition, ConditionalLiteral):
             raise TypeError(f"show_when condition must be a ConditionalLiteral, got {type(condition).__name__}")
+        # A show directive is a capture too: freeze so later mutation of a
+        # shared builder cannot silently rewrite it
+        condition.freeze()
         self._show_overrides[predicate] = condition
 
     def _collect_predicates(self) -> set[type[Predicate]]:

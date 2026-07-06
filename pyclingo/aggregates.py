@@ -44,6 +44,7 @@ class Aggregate(AggregateBase, ABC):
                       If None, it's an unconditional element
         """
         self._elements: list[tuple[tuple[AGGREGATE_ELEMENT_TYPE, ...], list[AGGREGATE_CONDITION_TYPE]]] = []
+        self._frozen = False
         self.add(element, condition)
 
     def add(
@@ -66,6 +67,11 @@ class Aggregate(AggregateBase, ABC):
             >>> Count(X).add(Y, p(x=Y)).add((Z, W), [q(x=Z), r(x=W)]).render()
             '#count{X; Y : p(Y); Z, W : q(Z), r(W)}'
         """
+        if self._frozen:
+            raise RuntimeError(
+                "This aggregate was captured by a rule and is frozen; mutating it would "
+                "silently rewrite the recorded rule. Build a new aggregate instead."
+            )
         element_tuple = element if isinstance(element, tuple) else (element,)
         for item in element_tuple:
             if not isinstance(item, (Value, Predicate)):
@@ -94,6 +100,9 @@ class Aggregate(AggregateBase, ABC):
         self._elements.append((element_tuple, conditions))
 
         return self
+
+    def freeze(self) -> None:
+        self._frozen = True
 
     @property
     def elements(

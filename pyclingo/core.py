@@ -90,6 +90,14 @@ class Term(ABC):
         """Collects the names of all variables used in this term."""
         pass
 
+    def freeze(self) -> None:  # noqa: B027 (deliberate no-op default, not a forgotten abstract)
+        """
+        Called when a Rule captures this term. Mutable builders (Choice,
+        Aggregate) lock themselves so later mutation cannot silently rewrite a
+        recorded rule; composite terms propagate to their children; everything
+        else is already immutable and does nothing.
+        """
+
 
 class BasicTerm(Term, ABC):
     """
@@ -1079,6 +1087,10 @@ class Comparison(Negatable):
     def right_term(self) -> ComparableTerm | Pool:
         return self._right_term
 
+    def freeze(self) -> None:
+        self.left_term.freeze()
+        self.right_term.freeze()
+
     def __bool__(self) -> bool:
         """
         Comparisons deliberately have no truth value.
@@ -1204,6 +1216,9 @@ class DefaultNegation(Negatable):
 
     def collect_variables(self) -> set[str]:
         return self._term.collect_variables()
+
+    def freeze(self) -> None:
+        self._term.freeze()
 
     def render(self, context: RenderingContext = RenderingContext.DEFAULT) -> str:
         return f"not {self._term.render()}"

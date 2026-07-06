@@ -47,6 +47,7 @@ class Choice(Term):
         self._elements: list[tuple[CHOICE_ELEMENT_TYPE, list[CHOICE_CONDITION_TYPE]]] = []
         self._min_cardinality: None | Value = None
         self._max_cardinality: None | Value = None
+        self._frozen = False
 
         self.add(element, condition)
 
@@ -70,6 +71,7 @@ class Choice(Term):
             >>> Choice(p(x=X)).add(q(x=X), r(x=X)).add(s(x=X), [t(x=X), u(x=X)]).render()
             '{ p(X); q(X) : r(X); s(X) : t(X), u(X) }'
         """
+        self._require_mutable()
         if not isinstance(element, Predicate):
             raise TypeError(f"Choice element must be a Predicate, got {type(element).__name__}")
 
@@ -96,6 +98,16 @@ class Choice(Term):
         self._elements.append((element, conditions))
 
         return self
+
+    def _require_mutable(self) -> None:
+        if self._frozen:
+            raise RuntimeError(
+                "This Choice was captured by a rule and is frozen; mutating it would "
+                "silently rewrite the recorded rule. Build a new Choice instead."
+            )
+
+    def freeze(self) -> None:
+        self._frozen = True
 
     @staticmethod
     def _validate_cardinality(count: int | Value, description: str) -> Value:
@@ -124,6 +136,7 @@ class Choice(Term):
 
         Raises ValueError if cardinality constraints are already set.
         """
+        self._require_mutable()
         count = self._validate_cardinality(count, "Exact cardinality")
 
         if self._min_cardinality is not None or self._max_cardinality is not None:
@@ -140,6 +153,7 @@ class Choice(Term):
 
         Raises ValueError if minimum cardinality is already set.
         """
+        self._require_mutable()
         count = self._validate_cardinality(count, "Minimum cardinality")
 
         if self._min_cardinality is not None:
@@ -156,6 +170,7 @@ class Choice(Term):
 
         Raises ValueError if maximum cardinality is already set.
         """
+        self._require_mutable()
         count = self._validate_cardinality(count, "Maximum cardinality")
 
         if self._max_cardinality is not None:

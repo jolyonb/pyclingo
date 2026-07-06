@@ -2,7 +2,9 @@
 Tests for #show directive emission and visibility overrides.
 """
 
-from pyclingo import ASPProgram, ConditionalLiteral, Not, Predicate, Variable
+import pytest
+
+from pyclingo import ASPProgram, ConditionalLiteral, Count, Not, Predicate, Variable
 
 
 def test_hiding_everything_emits_bare_show() -> None:
@@ -34,3 +36,13 @@ def test_show_when_predicates_reach_the_round_trip() -> None:
     program.show_when(P, ConditionalLiteral(P(x=X), [P(x=X), Not(Q(x=X))]))
     assert "#show p(X) : p(X), not q(X)." in program.render()
     list(program.solve())  # must not raise "Unknown predicate type"
+
+
+def test_show_when_freezes_its_condition() -> None:
+    program = ASPProgram()
+    P = Predicate.define("p", ["x"])
+    X, Y = Variable("X"), Variable("Y")
+    count = Count(Y, condition=P(x=Y))
+    program.show_when(P, ConditionalLiteral(P(x=X), [P(x=X), count == 1]))
+    with pytest.raises(RuntimeError, match="frozen"):
+        count.add(X, P(x=X))
