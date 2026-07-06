@@ -127,3 +127,38 @@ def test_timeout_anchors_at_first_iteration() -> None:
     time.sleep(1.3)  # longer than the entire timeout
     assert len(list(result)) == 8
     assert result.exhausted is True
+
+
+def test_iterating_a_consumed_result_raises() -> None:
+    result = make_choice_program(2).solve()
+    assert len(list(result)) == 4
+    with pytest.raises(RuntimeError, match="already consumed"):
+        list(result)
+
+
+def test_closed_result_raises_on_iteration() -> None:
+    result = make_choice_program(2).solve()
+    next(iter(result))
+    result.close()
+    with pytest.raises(RuntimeError, match="already consumed"):
+        list(result)
+
+
+def test_break_and_resume_still_works() -> None:
+    # Partial consumption is a legitimate streaming pattern: breaking out of
+    # a loop and iterating again continues the same stream
+    result = make_choice_program(3).solve(models=0)  # 8 models
+    seen = 0
+    for _model in result:
+        seen += 1
+        if seen == 3:
+            break
+    remaining = len(list(result))
+    assert seen + remaining == 8
+
+
+def test_closing_before_any_iteration_still_marks_consumed() -> None:
+    result = make_choice_program(2).solve()
+    result.close()
+    with pytest.raises(RuntimeError, match="already consumed"):
+        list(result)

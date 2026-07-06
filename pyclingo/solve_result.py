@@ -76,14 +76,25 @@ class SolveResult:
         self._predicate_types = predicate_types
         self._timeout = timeout
         self._tic = tic
+        self._finished = False
         self._iterator = self._solve_generator()
 
     def __iter__(self) -> Iterator[Model]:
+        # Iterating a finished stream would silently yield nothing, which reads
+        # as "no models"; partial consumption may resume, but a finished result
+        # fails loudly instead
+        if self._finished:
+            raise RuntimeError(
+                "This SolveResult is already consumed (exhausted or closed); call solve() again for a fresh search"
+            )
         return self._iterator
 
     def close(self) -> None:
         """Stop solving early; flags and statistics are finalized."""
         self._iterator.close()
+        # Closing a never-started generator skips its finally, so mark
+        # finished here as well
+        self._finished = True
 
     def __enter__(self) -> Self:
         return self
@@ -149,6 +160,7 @@ class SolveResult:
                     self.exhausted = False if timed_out else outcome.exhausted
                     final = outcome
         finally:
+            self._finished = True
             if final is not None:
                 # Skipped if the result was closed before solving began. clingo
                 # raises if statistics aren't ready (e.g. finalized during garbage
