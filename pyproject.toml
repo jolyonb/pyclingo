@@ -63,5 +63,8 @@ section-order = ["future", "standard-library", "third-party", "first-party", "lo
 [tool.pytest.ini_options]
 testpaths = ["tests", "pyclingo"]
 addopts = "--doctest-modules"
+markers = [
+    "allow_invalid_render: opt this test out of the suite-wide render parse-check (for tests exercising invalid-program error handling)",
+]
 python_files = "test_*.py"
 python_functions = "test_*"
