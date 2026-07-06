@@ -57,4 +57,4 @@ def test_negated_pool_comparison_rejected() -> None:
     with pytest.raises(ValueError, match="disjunctively"):
         Not(X.in_([2, 3]))
     with pytest.raises(ValueError, match="disjunctively"):
-        ~X.in_([2, 3])
+        _ = ~X.in_([2, 3])

@@ -9,7 +9,6 @@ from typing import Any, Self, overload
 
 import clingo
 
-from pyclingo.core import Number, String
 from pyclingo.predicate import Predicate
 from pyclingo.statistics import format_statistics_clingo_style
 
@@ -177,12 +176,12 @@ def convert_symbol_to_predicate(symbol: clingo.Symbol, predicate_types: PREDICAT
     pred_class = predicate_types[key]
     field_names = [f.name for f in pred_class.argument_fields()]
 
-    kwargs: dict[str, Predicate | Number | String] = {}
+    kwargs: dict[str, Predicate | int | str] = {}
     for i, (arg, field_name) in enumerate(zip(symbol.arguments, field_names, strict=True)):
         if arg.type == clingo.SymbolType.Number:
-            kwargs[field_name] = Number(arg.number)
+            kwargs[field_name] = arg.number
         elif arg.type == clingo.SymbolType.String:
-            kwargs[field_name] = String(arg.string)
+            kwargs[field_name] = arg.string
         elif arg.type == clingo.SymbolType.Function:
             # Recursively convert nested predicates; bare atoms are nullary predicates
             kwargs[field_name] = convert_symbol_to_predicate(arg, predicate_types)

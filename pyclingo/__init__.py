@@ -29,6 +29,6 @@ from .core import (
     create_variables,
     pool,
 )
-from .predicate import Predicate, PredicateField
+from .predicate import Field, Predicate, PredicateField
 from .solve_result import Model, SolveResult
 from .solver import ASPProgram

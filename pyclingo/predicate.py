@@ -1,11 +1,13 @@
 import keyword
 import re
 import types
-from dataclasses import Field, dataclass, fields
-from typing import Any, ClassVar, dataclass_transform
+from dataclasses import Field as DataclassField
+from dataclasses import dataclass, fields
+from typing import Any, ClassVar, cast, dataclass_transform, get_args, get_origin, overload
 
 from pyclingo.core import (
     BasicTerm,
+    DefinedConstant,
     Expression,
     Negatable,
     Number,
@@ -13,13 +15,103 @@ from pyclingo.core import (
     RenderingContext,
     String,
     Value,
+    Variable,
 )
 
 # Type aliases. PredicateField is any argument a predicate accepts, and doubles
 # as the field annotation for class-syntax predicates
 type PredicateField = int | str | Value | Predicate | Expression | Pool
-type PREDICATE_FIELD_TYPE = Value | Predicate | Expression | Pool
+# The Term view of a stored field: primitives are wrapped by read_as_term,
+# so int/str never appear here (unlike PredicateField, the write union)
+type FIELD_AS_TERM_TYPE = Value | Predicate | Expression | Pool
 type PREDICATE_CLASS_TYPE = type[Predicate]
+
+
+class Field[T]:
+    """
+    A typed predicate field: annotate class-syntax fields as Field[int],
+    Field[str], or Field[SomePredicate].
+
+    A data descriptor with different read and write types. Writing accepts the
+    ground type OR the rule-authoring terms (Variable, Expression, Pool,
+    DefinedConstant), so Person(age=N) works in rules; reading is typed as the
+    ground type, so model.atoms(Person)[0].age is an int to type checkers.
+    Ground values are stored as plain Python values (a Number written here is
+    unwrapped), and writes are validated against the ground type.
+
+    Note the read-type contract: fields are typed by their ground schema. A
+    rule atom like Person(age=N) transiently holds the Variable, which a type
+    checker will still call int — reads of non-ground atoms are the one place
+    the static types overpromise.
+    """
+
+    __slots__ = ("_ground_type", "_name")
+
+    def __init__(self) -> None:
+        self._name = ""
+        self._ground_type: type = object
+
+    def _configure(self, name: str, ground_type: type) -> None:
+        self._name = name
+        self._ground_type = ground_type
+
+    @overload
+    def __get__(self, obj: None, owner: Any) -> Field[T]: ...
+
+    @overload
+    def __get__(self, obj: object, owner: Any) -> T: ...
+
+    def __get__(self, obj: object | None, owner: Any = None) -> Any:
+        if obj is None:
+            return self
+        try:
+            return obj.__dict__[self._name]
+        except KeyError:
+            raise AttributeError(self._name) from None
+
+    def __set__(self, obj: Any, value: T | Variable | Expression | Pool | DefinedConstant) -> None:
+        # The frozen dataclass __init__ writes via object.__setattr__, which
+        # routes through this data descriptor; storing in the instance dict
+        # keeps the descriptor authoritative for reads
+        obj.__dict__[self._name] = self._validated(value)
+
+    def _validated(self, value: Any) -> Any:
+        """Normalize a write to the ground type's plain value, or pass rule terms through."""
+        if isinstance(value, (Variable, Expression, Pool, DefinedConstant)):
+            return value
+        ground = self._ground_type
+        if ground is int:
+            if isinstance(value, Number):
+                return value.value
+            if isinstance(value, bool) or not isinstance(value, int):
+                raise TypeError(f"Field '{self._name}' expects int, got {type(value).__name__}")
+            return Number(value).value  # reuses Number's range validation
+        if ground is str:
+            if isinstance(value, String):
+                return value.value
+            if not isinstance(value, str):
+                raise TypeError(f"Field '{self._name}' expects str, got {type(value).__name__}")
+            return String(value).value  # reuses String's content validation
+        # Ground type is a Predicate subclass
+        if isinstance(value, ground):
+            return value
+        raise TypeError(f"Field '{self._name}' expects {ground.__name__}, got {type(value).__name__}")
+
+
+def _field_ground_types(cls: type) -> dict[str, type]:
+    """Map field names annotated as Field[...] to their ground types, raising on bad ones."""
+    ground_types: dict[str, type] = {}
+    for field_name, annotation in (cls.__annotations__ or {}).items():
+        if get_origin(annotation) is Field:
+            (ground,) = get_args(annotation)
+            if (
+                ground is not int
+                and ground is not str
+                and not (isinstance(ground, type) and issubclass(ground, Predicate))
+            ):
+                raise TypeError(f"Field[...] ground type must be int, str, or a Predicate subclass, got {ground!r}")
+            ground_types[field_name] = ground
+    return ground_types
 
 
 def _validate_schema(name: str, namespace: str, field_names: list[str]) -> None:
@@ -94,6 +186,9 @@ class Predicate(BasicTerm, Negatable):
     # Default visibility, fixed at class creation. Per-program overrides live in
     # ASPProgram (show/hide/show_when); nothing may mutate this after creation.
     _show: ClassVar[bool] = True
+    # Names of Field[...]-typed slots, whose descriptors validate and store
+    # plain Python values; __post_init__ leaves them alone
+    _descriptor_fields: ClassVar[frozenset[str]] = frozenset()
 
     def __init__(self, *args: PredicateField, **kwargs: PredicateField) -> None:
         # Satisfies the type checker for dynamically defined classes (type[Predicate]),
@@ -117,19 +212,45 @@ class Predicate(BasicTerm, Negatable):
         cls._predicate_name = name if name is not None else re.sub(r"(?<!^)(?=[A-Z])", "_", cls.__name__).lower()
         cls._namespace = namespace
         cls._show = show
-        _validate_schema(cls._predicate_name, namespace, list(cls.__annotations__ or {}))
+        # ClassVar annotations are class-level helpers, not fields: dataclass
+        # excludes them, and so does schema validation
+        declared_fields = [
+            field_name
+            for field_name, annotation in (cls.__annotations__ or {}).items()
+            if get_origin(annotation) is not ClassVar and annotation is not ClassVar
+        ]
+        _validate_schema(cls._predicate_name, namespace, declared_fields)
+        ground_types = _field_ground_types(cls)
         # dataclass() mutates cls in place (adding __init__ etc.) and returns it;
         # no reassignment is needed
         dataclass(frozen=True, eq=False)(cls)
+        # Install the Field descriptors only after dataclass() has run, so it
+        # treats these as required fields rather than defaulted ones. Inherited
+        # descriptor fields stay registered so __post_init__ keeps skipping them.
+        for field_name, ground in ground_types.items():
+            descriptor: Field[Any] = Field()
+            descriptor._configure(field_name, ground)
+            setattr(cls, field_name, descriptor)
+        cls._descriptor_fields = getattr(cls, "_descriptor_fields", frozenset()) | frozenset(ground_types)
 
     @classmethod
-    def define(cls, name: str, field_names: list[str], namespace: str = "", show: bool = True) -> type[Predicate]:
+    def define(
+        cls,
+        name: str,
+        field_names: list[str] | dict[str, type],
+        namespace: str = "",
+        show: bool = True,
+    ) -> type[Predicate]:
         """
         Dynamically create a new Predicate subclass.
 
         Args:
             name: The name of the predicate in ASP.
-            field_names: Names for the predicate's argument slots.
+            field_names: Names for the predicate's argument slots. Pass a dict
+                mapping names to int, str, or a Predicate subclass to get
+                runtime-typed slots: writes are validated per field (a solution
+                atom carrying the wrong type fails loudly at load) and
+                attribute reads return plain Python values.
             namespace: Optional namespace prefix for the predicate.
             show: Whether this predicate should be included in the show directive.
 
@@ -141,6 +262,11 @@ class Predicate(BasicTerm, Negatable):
             >>> john = Person(name="john", age=30)
             >>> john.render()
             'person("john", 30)'
+            >>> Clue = Predicate.define("clue", {"loc": str, "value": int})
+            >>> Clue(loc="a1", value="7")
+            Traceback (most recent call last):
+                ...
+            TypeError: Field 'value' expects int, got str
 
         Note that Python strings become quoted ASP string constants. For an unquoted
         atom argument like person(john), define john as a nullary predicate:
@@ -149,10 +275,23 @@ class Predicate(BasicTerm, Negatable):
 
         # Validate the raw list here: the annotations dict would silently
         # collapse duplicates before __init_subclass__ could see them
-        _validate_schema(name, namespace, field_names)
+        _validate_schema(name, namespace, list(field_names))
+
+        # Typed slots become Field[...] annotations, riding the same wiring as
+        # class-syntax predicates; a plain list means every slot accepts anything
+        annotations: dict[str, Any]
+        if isinstance(field_names, dict):
+            annotations = {
+                # Subscripting with a runtime value is meaningless to mypy but is
+                # exactly what __class_getitem__ does at runtime
+                field_name: Field[ground]  # type: ignore[valid-type]
+                for field_name, ground in field_names.items()
+            }
+        else:
+            annotations = dict.fromkeys(field_names, "PredicateField")
 
         def set_annotations(class_namespace: dict[str, Any]) -> None:
-            class_namespace["__annotations__"] = dict.fromkeys(field_names, "PredicateField")
+            class_namespace["__annotations__"] = annotations
 
         new_class = types.new_class(
             name,
@@ -167,7 +306,9 @@ class Predicate(BasicTerm, Negatable):
         """Validate all field values and convert literals to appropriate terms."""
         # Use object.__setattr__ since the dataclass is frozen
         for field_info in self.argument_fields():
-            value = self[field_info.name]
+            if field_info.name in type(self)._descriptor_fields:
+                continue  # the Field descriptor already validated and stored this one
+            value = getattr(self, field_info.name)
 
             # Convert literals to appropriate Value objects
             if isinstance(value, int):
@@ -181,7 +322,7 @@ class Predicate(BasicTerm, Negatable):
                 )
 
     @classmethod
-    def argument_fields(cls) -> list[Field]:
+    def argument_fields(cls) -> list[DataclassField]:
         """Get fields that represent predicate arguments (not starting with _)."""
         return [f for f in fields(cls) if not f.name.startswith("_")]
 
@@ -190,20 +331,36 @@ class Predicate(BasicTerm, Negatable):
         """Get field names that represent predicate arguments (not starting with _)."""
         return [f.name for f in fields(cls) if not f.name.startswith("_")]
 
+    def read_as_term(self, field_name: str) -> FIELD_AS_TERM_TYPE:
+        """
+        Read a field as a Term: the plain int/str values that Field[...]-typed
+        slots store are wrapped back into Number/String (cached, so this is
+        cheap). All internal machinery and square-bracket access (pred["x"])
+        read through here, keeping everything downstream polymorphic over
+        Term; attribute access (pred.x) on Field-typed slots is the
+        plain-Python view.
+        """
+        value = getattr(self, field_name)
+        if isinstance(value, int):
+            return Number(value)
+        if isinstance(value, str):
+            return String(value)
+        return cast(FIELD_AS_TERM_TYPE, value)
+
     @property
-    def arguments(self) -> list[PREDICATE_FIELD_TYPE]:
-        """Get the values of all argument fields."""
-        return [self[f.name] for f in self.argument_fields()]
+    def arguments(self) -> list[FIELD_AS_TERM_TYPE]:
+        """Get the values of all argument fields, as Terms."""
+        return [self.read_as_term(f.name) for f in self.argument_fields()]
 
     def __getitem__(self, key: str) -> Any:
-        """Access field values by name; raises KeyError for unknown fields."""
+        """Access field values by name, as Terms; raises KeyError for unknown fields."""
         if key not in self.field_names():
             raise KeyError(f"Predicate has no field named '{key}'")
-        return getattr(self, key)
+        return self.read_as_term(key)
 
-    def items(self) -> list[tuple[str, PREDICATE_FIELD_TYPE]]:
-        """Return (field_name, field_value) tuples for all argument fields."""
-        return [(f.name, self[f.name]) for f in self.argument_fields()]
+    def items(self) -> list[tuple[str, FIELD_AS_TERM_TYPE]]:
+        """Return (field_name, field_value) tuples for all argument fields, values as Terms."""
+        return [(f.name, self.read_as_term(f.name)) for f in self.argument_fields()]
 
     @classmethod
     def get_name(cls) -> str:

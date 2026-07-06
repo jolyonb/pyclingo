@@ -70,6 +70,25 @@ dynamically:
 Edge = Predicate.define("edge", ["a", "b"])
 ```
 
+For fully typed fields, annotate them as `Field[int]`, `Field[str]`, or
+`Field[SomePredicate]`. Writes accept rule terms (Variables, Expressions) as
+well as ground values, and are validated per field; reads are plain Python
+values, statically typed — so solution atoms come back as real ints and strs:
+
+```python
+from pyclingo import ASPProgram, Field, Predicate
+
+class Score(Predicate):
+    player: Field[str]
+    points: Field[int]
+
+program = ASPProgram()
+program.fact(Score(player="ada", points=3), Score(player="ben", points=5))
+model = next(iter(program.solve()))
+total = sum(score.points for score in model.atoms(Score))  # plain ints
+assert total == 8
+```
+
 ### Rules
 
 Build rules with clear syntax:

@@ -62,6 +62,10 @@ Key features:
 ### 2. Predicates (`predicate.py`)
 Core building blocks for ASP facts and rules:
 - **Predicate**: Base class using dataclass pattern
+- Class-syntax declaration with statically checked fields; `Field[int]`,
+  `Field[str]`, and `Field[SomePredicate]` annotations add per-field write
+  validation and plain-Python typed reads (solution atoms return real
+  ints/strs). Rule terms (Variables, Expressions) are always accepted on write.
 - Dynamic predicate creation via `Predicate.define()`
 - Support for namespacing
 - Show directive management
