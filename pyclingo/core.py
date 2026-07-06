@@ -1180,6 +1180,10 @@ class Comparison(Negatable):
         """Whether this comparison uses = (the only operator that binds variables)."""
         return self.operator == ComparisonOperator.EQUAL
 
+    def inverse(self) -> Comparison:
+        """The complementary comparison: X == N inverts to X != N, X < N to X >= N."""
+        return Comparison(self._left_term, self.operator.inverse, self._right_term)
+
     def collect_defined_constants(self) -> set[str]:
         constants = set()
 

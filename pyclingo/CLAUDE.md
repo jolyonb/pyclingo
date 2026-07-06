@@ -186,11 +186,6 @@ Comprehensive error message processing:
 - Source code highlighting for errors
 - Configurable stopping thresholds
 
-#### Utilities (`utils.py`)
-Helper functions:
-- `collect_variables()`: Gather variables from terms
-- `create_unique_variable_name()`: Generate unique variable names
-
 ## Key Design Principles
 
 1. **Type Safety**: Extensive use of type hints and runtime validation

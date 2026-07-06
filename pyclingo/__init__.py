@@ -33,6 +33,7 @@ from .core import (
     create_variables,
     pool,
 )
+from .operators import ComparisonOperator
 from .predicate import Field, Predicate, PredicateField
 from .solve_result import Model, SolveResult
 from .solver import ASPProgram
@@ -73,6 +74,7 @@ __all__ = [  # noqa: RUF022 (categorized deliberately, not sorted)
     "Value",
     "Expression",
     "Comparison",
+    "ComparisonOperator",
     "DefaultNegation",
     "DefinedConstant",
     "Aggregate",

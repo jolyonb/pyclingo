@@ -70,3 +70,22 @@ class ComparisonOperator(Enum):
     LESS_EQUAL = "<="
     GREATER_THAN = ">"
     GREATER_EQUAL = ">="
+
+    @property
+    def inverse(self) -> ComparisonOperator:
+        """
+        The complementary operator: = and != swap, < pairs with >=, > with
+        <=. Exact because clingo's term order is total — every ground
+        comparison is either true or its inverse is.
+        """
+        return _INVERSE[self]
+
+
+_INVERSE = {
+    ComparisonOperator.EQUAL: ComparisonOperator.NOT_EQUAL,
+    ComparisonOperator.NOT_EQUAL: ComparisonOperator.EQUAL,
+    ComparisonOperator.LESS_THAN: ComparisonOperator.GREATER_EQUAL,
+    ComparisonOperator.GREATER_EQUAL: ComparisonOperator.LESS_THAN,
+    ComparisonOperator.GREATER_THAN: ComparisonOperator.LESS_EQUAL,
+    ComparisonOperator.LESS_EQUAL: ComparisonOperator.GREATER_THAN,
+}

@@ -20,7 +20,7 @@ def test_builder_methods_reject_wrong_types() -> None:
     P = Predicate.define("p", ["x"])
     with pytest.raises(TypeError, match="must be Predicate or Choice instances, got str"):
         program.fact("p(1).")  # type: ignore[arg-type]
-    with pytest.raises(TypeError, match="not a string"):
+    with pytest.raises(TypeError, match="must be Terms, got str"):
         program.when("p(X)", let=P(x=1))  # type: ignore[arg-type]
     with pytest.raises(TypeError, match="raw_asp\\(\\) text must be a string"):
         program.raw_asp(42)  # type: ignore[arg-type]

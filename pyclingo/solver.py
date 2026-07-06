@@ -7,7 +7,7 @@ import clingo
 from pyclingo.choice import Choice
 from pyclingo.clingo_handler import ClingoMessageHandler, LogLevel
 from pyclingo.conditional_literal import ConditionalLiteral
-from pyclingo.core import AtomSign, DefinedConstant, Term
+from pyclingo.core import AtomSign, Comparison, DefinedConstant, Pool, Term
 from pyclingo.predicate import Predicate
 from pyclingo.program_elements import BlankLine, Comment, ProgramElement, RawASP, Rule
 from pyclingo.scoping import validate_rule
@@ -73,8 +73,6 @@ class ASPProgram:
 
     def when(self, conditions: Term | Sequence[Term], let: Term, segment: str | None = None) -> None:
         """Create a clingo rule which sets the let term when all conditions are satisfied."""
-        if isinstance(conditions, str):
-            raise TypeError("when() conditions must be Terms, not a string")
         condition_list = list(conditions) if isinstance(conditions, Sequence) else [conditions]
         if not condition_list:
             raise ValueError("when() requires at least one condition; use fact() for unconditional statements")
@@ -95,6 +93,39 @@ class ASPProgram:
                 raise TypeError(f"forbid() conditions must be Terms, got {type(condition).__name__}")
         segment_key = (segment or self.default_segment).lower()
         self._segments[segment_key].append(Rule(body=list(conditions)))
+
+    def require(
+        self, target: Comparison, when: Term | Sequence[Term] | None = None, segment: str | None = None
+    ) -> None:
+        """
+        Require that a comparison holds (whenever the when conditions hold).
+
+        This is pure syntactic sugar for readability: require(C, when=W) is
+        entirely equivalent to forbid(*W, C.inverse()) — a constraint on the
+        inverse comparison. Note that unlike when, it checks the relation,
+        but never derives. E.g.
+
+            require(Count(Adj, condition=...) == N, when=Clue(num=N))
+
+        renders ":- clue(N), #count{Adj : ...} != N."
+        """
+        if not isinstance(target, Comparison):
+            raise TypeError(
+                f"require() takes a Comparison, got {type(target).__name__}. To make a "
+                f"predicate hold, derive it with when(conditions, let=...); to check one "
+                f"holds, use forbid(..., Not(predicate))."
+            )
+        if isinstance(target.right_term, Pool):
+            raise ValueError(
+                "require() cannot invert a pool comparison: pools expand disjunctively, "
+                "so 'X != (2;3)' is true for every X. Write the domain restriction as a "
+                "positive body condition instead."
+            )
+        conditions: list[Term] = [] if when is None else list(when) if isinstance(when, Sequence) else [when]
+        for condition in conditions:
+            if not isinstance(condition, Term):
+                raise TypeError(f"require() when conditions must be Terms, got {type(condition).__name__}")
+        self.forbid(*conditions, target.inverse(), segment=segment)
 
     def raw_asp(self, text: str, segment: str | None = None, predicates: Sequence[type[Predicate]] = ()) -> None:
         """
