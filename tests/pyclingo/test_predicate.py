@@ -62,3 +62,8 @@ def test_keyword_and_reserved_names_rejected() -> None:
         Predicate.define("k", ["class"])
     with pytest.raises(ValueError, match="reserved"):
         Predicate.define("not", ["a"])
+
+
+def test_base_predicate_cannot_be_instantiated() -> None:
+    with pytest.raises(TypeError, match="cannot be instantiated directly"):
+        Predicate()

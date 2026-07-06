@@ -4,6 +4,7 @@ plain-Python values on read, rule authoring unimpeded.
 """
 
 import dataclasses
+import types
 from typing import ClassVar
 
 import pytest
@@ -162,3 +163,14 @@ def test_define_mixed_schema_with_untyped_slots() -> None:
     assert isinstance(m["anything"], Number)  # untyped slot behaves classically
     with pytest.raises(TypeError, match="Field 'tag' expects str"):
         Mixed(tag=1, anything=5)
+
+
+def test_stringified_field_annotations_rejected() -> None:
+    # "from __future__ import annotations" stringifies annotations; silently
+    # skipping descriptor installation would drop validation and typed reads
+    with pytest.raises(TypeError, match="from __future__ import annotations"):
+        types.new_class(
+            "StringAnnotated",
+            bases=(Predicate,),
+            exec_body=lambda ns: ns.__setitem__("__annotations__", {"points": "Field[int]"}),
+        )

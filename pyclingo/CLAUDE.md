@@ -177,7 +177,7 @@ and serves as the isinstance marker for comparison operands.
 
 #### Statistics (`statistics.py`)
 Formats a solve's raw statistics dict in clingo's native output style;
-ASPProgram.format_statistics_clingo_style() delegates here.
+SolveResult.format_statistics() delegates here.
 
 #### Error Handling (`clingo_handler.py`)
 Comprehensive error message processing:

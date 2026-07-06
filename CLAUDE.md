@@ -1,5 +1,11 @@
 # PyClingo Project: Logic Puzzle Solver Framework
 
+## Terminology
+
+Do not call pyclingo a "DSL" (in code, comments, docs, or conversation) — it
+is a Python library that builds ASP programs. Describe it in those plain
+terms.
+
 ## Mental Model
 
 This project implements a **layered architecture** for solving logic puzzles using Answer Set Programming (ASP):

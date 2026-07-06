@@ -59,3 +59,31 @@ def test_aggregate_comparisons_cannot_be_heads() -> None:
     X = Variable("X")
     with pytest.raises(ValueError, match="cannot be rule heads"):
         program.when(P(x=1), let=(Count(X, condition=P(x=X)) == 1))
+
+
+def test_const_nullary_predicate_collision_rejected() -> None:
+    # gringo substitutes a #const into every occurrence of a same-named atom
+    program = ASPProgram()
+    program.define_constant("north", 5)
+    North = Predicate.define("north", [], show=False)
+    Dir = Predicate.define("dir", ["d"])
+    program.fact(Dir(d=North()))
+    with pytest.raises(ValueError, match="both a #const and a nullary predicate"):
+        program.render()
+
+
+def test_multiline_header_rejected() -> None:
+    with pytest.raises(ValueError, match="single line"):
+        ASPProgram(header="a\nb")
+
+
+def test_multiline_segment_name_rejected() -> None:
+    program = ASPProgram()
+    with pytest.raises(ValueError, match="single-line"):
+        program.add_segment("a\nb")
+
+
+def test_not_reserved_as_constant_name() -> None:
+    program = ASPProgram()
+    with pytest.raises(ValueError, match="reserved"):
+        program.define_constant("not", 1)

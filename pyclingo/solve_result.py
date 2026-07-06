@@ -69,7 +69,7 @@ class SolveResult:
         self,
         control: clingo.Control,
         predicate_types: PREDICATE_TYPES,
-        timeout: int,
+        timeout: float,
         tic: float,
     ) -> None:
         self.satisfiable: bool | None = None
@@ -187,7 +187,10 @@ def convert_symbol_to_predicate(symbol: clingo.Symbol, predicate_types: PREDICAT
     key = (pred_name, len(symbol.arguments))
 
     if key not in predicate_types:
-        raise ValueError(f"Unknown predicate type: {pred_name}/{len(symbol.arguments)}")
+        raise ValueError(
+            f"Unknown predicate type: {pred_name}/{len(symbol.arguments)}. If this atom is "
+            f"produced by a raw_asp() block, declare its class via raw_asp(..., predicates=[...])."
+        )
 
     pred_class = predicate_types[key]
     field_names = [f.name for f in pred_class.argument_fields()]

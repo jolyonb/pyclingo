@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from pyclingo.aggregates import Aggregate
 from pyclingo.choice import Choice
 from pyclingo.conditional_literal import ConditionalLiteral
-from pyclingo.core import Comparison, DefaultNegation, Term, Variable
+from pyclingo.core import AggregateBase, Comparison, DefaultNegation, ExplicitPool, Expression, Term, Variable
 from pyclingo.predicate import Predicate
 
 # An equality edge: if every variable on one side is bound, the other side
@@ -65,12 +65,38 @@ def _variables_of(term: Term) -> set[str]:
     return {name for name in term.collect_variables() if name != "_"}
 
 
+def _occurrences(term: Term) -> Counter[str]:
+    """
+    Count every occurrence of each named variable — edge(X, X) counts X
+    twice, so it is correctly not a singleton. Aggregates never reach here;
+    callers route them to _analyze_aggregate for local-scope treatment.
+    """
+    counts: Counter[str] = Counter()
+    if isinstance(term, Variable):
+        if not term.is_anonymous:
+            counts[term.name] += 1
+    elif isinstance(term, Predicate):
+        for arg in term.arguments:
+            counts.update(_occurrences(arg))
+    elif isinstance(term, Expression):
+        if term.first_term is not None:
+            counts.update(_occurrences(term.first_term))
+        counts.update(_occurrences(term.second_term))
+    elif isinstance(term, Comparison):
+        for side in (term.left_term, term.right_term):
+            if not isinstance(side, AggregateBase):
+                counts.update(_occurrences(side))
+    elif isinstance(term, DefaultNegation):
+        counts.update(_occurrences(term.term))
+    elif isinstance(term, ExplicitPool):
+        for element in term.elements:
+            counts.update(_occurrences(element))
+    # Constants and range pools (grounded bounds) contain no variables
+    return counts
+
+
 def _count_variables(term: Term, counts: Counter[str]) -> None:
-    # collect_variables returns a set, so a variable used twice in one term
-    # counts once there; occurrence counting is per-term, which is enough for
-    # singleton detection (a true singleton appears in exactly one term)
-    for name in _variables_of(term):
-        counts[name] += 1
+    counts.update(_occurrences(term))
 
 
 def _bind_fixpoint(binders: set[str], edges: list[EqualityEdge]) -> set[str]:
@@ -106,18 +132,16 @@ def _analyze_comparison(comparison: Comparison, scopes: RuleScopes, counts: Coun
     side_vars: list[frozenset[str]] = []
     for term in (comparison.left_term, comparison.right_term):
         if isinstance(term, Aggregate):
-            side_vars.append(frozenset(_analyze_aggregate(term, scopes, counts)))
+            side_vars.append(frozenset(_analyze_aggregate(term, scopes)))
         else:
-            names = _variables_of(term)
-            for name in names:
-                counts[name] += 1
-            side_vars.append(frozenset(names))
+            _count_variables(term, counts)
+            side_vars.append(frozenset(_variables_of(term)))
 
     if comparison.is_equality:
         scopes.equality_edges.append((side_vars[0], side_vars[1]))
 
 
-def _analyze_aggregate(aggregate: Aggregate, scopes: RuleScopes, counts: Counter[str]) -> set[str]:
+def _analyze_aggregate(aggregate: Aggregate, scopes: RuleScopes) -> set[str]:
     """
     Analyze an aggregate's elements as local scopes. Returns the aggregate's
     GLOBAL variables (those also occurring outside constructs are resolved
@@ -136,23 +160,39 @@ def _analyze_aggregate(aggregate: Aggregate, scopes: RuleScopes, counts: Counter
 def _analyze_local_condition(condition: Term, scope: LocalScope) -> None:
     """A condition inside an aggregate/choice element or conditional literal."""
     if isinstance(condition, Predicate):
-        names = _variables_of(condition)
-        scope.binders |= names
-        for name in names:
-            scope.condition_counts[name] += 1
+        scope.binders |= _variables_of(condition)
+        _count_variables(condition, scope.condition_counts)
     elif isinstance(condition, DefaultNegation):
         _count_variables(condition, scope.condition_counts)
     elif isinstance(condition, Comparison):
         sides = []
         for term in (condition.left_term, condition.right_term):
-            names = _variables_of(term)
-            for name in names:
-                scope.condition_counts[name] += 1
-            sides.append(frozenset(names))
+            _count_variables(term, scope.condition_counts)
+            sides.append(frozenset(_variables_of(term)))
         if condition.is_equality:
             scope.equality_edges.append((sides[0], sides[1]))
     else:  # pragma: no cover - construction-time validation prevents this
         _count_variables(condition, scope.condition_counts)
+
+
+def _analyze_negated_body_term(negation: DefaultNegation, scopes: RuleScopes) -> None:
+    """
+    A negated body literal: its variables count globally and bind nothing;
+    an aggregate inside a negated comparison keeps its own local scopes
+    (its element variables are not the rule's problem). No equality edges:
+    a negated equality does not bind (probed).
+    """
+    inner = negation.term
+    if isinstance(inner, DefaultNegation):  # not not X
+        _analyze_negated_body_term(inner, scopes)
+    elif isinstance(inner, Comparison):
+        for side in (inner.left_term, inner.right_term):
+            if isinstance(side, Aggregate):
+                _analyze_aggregate(side, scopes)
+            else:
+                _count_variables(side, scopes.body_counts)
+    else:
+        _count_variables(inner, scopes.body_counts)
 
 
 def analyze(head: Term | None, body: list[Term]) -> RuleScopes:
@@ -188,13 +228,11 @@ def analyze(head: Term | None, body: list[Term]) -> RuleScopes:
     # --- body ---
     for term in body:
         if isinstance(term, Predicate):
-            names = _variables_of(term)
-            scopes.global_binders |= names
-            for name in names:
-                scopes.body_counts[name] += 1
+            scopes.global_binders |= _variables_of(term)
+            _count_variables(term, scopes.body_counts)
         elif isinstance(term, DefaultNegation):
             # Negated literals count globally and bind nothing (probed)
-            _count_variables(term, scopes.body_counts)
+            _analyze_negated_body_term(term, scopes)
         elif isinstance(term, Comparison):
             _analyze_comparison(term, scopes, scopes.body_counts)
         elif isinstance(term, ConditionalLiteral):

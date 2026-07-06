@@ -4,7 +4,7 @@ Tests for Choice construction guards.
 
 import pytest
 
-from pyclingo import ASPProgram, Choice, Count, Predicate, Variable
+from pyclingo import ASPProgram, Choice, Count, Not, Number, Predicate, Variable
 
 
 def test_impossible_cardinality_rejected() -> None:
@@ -55,3 +55,22 @@ def test_choice_builds_freely_before_capture_and_shares_after() -> None:
     program.when(Q(x=X), let=choice)
     program.when(R(x=X), let=choice)  # sharing a built choice is fine
     assert program.render().count("{ p(X) : q(X); r(X) } = 1") == 2
+
+
+def test_negative_cardinality_rejected_for_number_too() -> None:
+    # The int path and the Number path validate identically
+    P = Predicate.define("p9", ["x"])
+    X = Variable("X")
+    with pytest.raises(ValueError, match="non-negative"):
+        Choice(P(x=X)).exactly(-1)
+    with pytest.raises(ValueError, match="non-negative"):
+        Choice(P(x=X)).exactly(Number(-1))
+
+
+def test_negation_wrapped_aggregate_condition_rejected() -> None:
+    # Not(...) wrapping must not smuggle an aggregate past the guard
+    P = Predicate.define("p10", ["x"])
+    Q = Predicate.define("q10", ["x"])
+    X, C = Variable("X"), Variable("C")
+    with pytest.raises(ValueError, match="separate rule"):
+        Choice(P(x=X), condition=Not(Count(C, condition=Q(x=C)) > 3))

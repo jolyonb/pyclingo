@@ -1,11 +1,11 @@
 """
 Tests for equality, hashing, and value-caching semantics.
 
-The DSL overloads == on Values/Expressions/Aggregates to build ASP Comparison terms
+pyclingo overloads == on Values/Expressions/Aggregates to build ASP Comparison terms
 (SQLAlchemy-style). These tests pin down the hardening around that design:
 - Comparisons refuse boolean coercion (no silent `if x == y:` bugs)
 - Equal Values are cached as shared objects, so identity hashing gives value semantics
-- Predicates have ordinary value equality/hashing (they are data, not DSL terms)
+- Predicates have ordinary value equality/hashing (they are data, not comparison builders)
 """
 
 import pytest

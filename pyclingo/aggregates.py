@@ -2,7 +2,7 @@ from abc import ABC
 from enum import StrEnum
 from typing import ClassVar, Self
 
-from pyclingo.core import AggregateBase, AtomSign, Comparison, DefaultNegation, RenderingContext, Value
+from pyclingo.core import AggregateBase, AtomSign, Comparison, DefaultNegation, RenderingContext, Term, Value
 from pyclingo.predicate import Predicate
 
 type AGGREGATE_ELEMENT_TYPE = Value | Predicate
@@ -89,8 +89,11 @@ class Aggregate(AggregateBase, ABC):
                     f"Aggregate condition must be a Predicate, DefaultNegation, or Comparison, "
                     f"got {type(cond).__name__}"
                 )
-            if isinstance(cond, Comparison) and any(
-                isinstance(term, Aggregate) for term in (cond.left_term, cond.right_term)
+            inner: Term = cond
+            while isinstance(inner, DefaultNegation):
+                inner = inner.term
+            if isinstance(inner, Comparison) and any(
+                isinstance(term, Aggregate) for term in (inner.left_term, inner.right_term)
             ):
                 raise ValueError(
                     "Aggregates cannot be nested inside aggregate conditions (clingo syntax "

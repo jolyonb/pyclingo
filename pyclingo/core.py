@@ -335,9 +335,10 @@ class Variable(Value):
     Represents a variable in an ASP program.
 
     Variables in ASP start with an uppercase letter or can be an underscore '_'
-    for anonymous variables. A variable can bind to any term: a number (4), a
-    string ("john"), or a compound term like cell(1, 2) — including nullary
-    atoms like n, which pyclingo models as zero-arity predicates.
+    for anonymous variables. During solving a variable ranges over all ground
+    terms — numbers, strings, and compound terms alike. In Python, comparison
+    operators accept values and expressions; to bind a variable to specific
+    compound terms, use a pool: X.in_((Cell(1, 2), Cell(3, 4))).
     """
 
     def __init__(self, name: str):
@@ -538,6 +539,8 @@ class DefinedConstant(ConstantBase):
         """value is the constant's name: lowercase first letter, then letters, digits, and underscores."""
         if not value or not value[0].islower():
             raise ValueError(f"Defined constant must start with a lowercase letter: {value}")
+        if value == "not":
+            raise ValueError("'not' is reserved in ASP and cannot be a constant name")
 
         if not all(c.isalnum() or c == "_" for c in value):
             raise ValueError(f"Defined constant can only contain letters, digits, and underscores: {value}")
@@ -675,7 +678,9 @@ class ExplicitPool(Pool):
                 element = String(element)
             elif isinstance(element, int):
                 element = Number(element)
-            elif isinstance(element, BasicTerm) and not isinstance(element, Pool):
+            elif isinstance(element, Pool):
+                raise TypeError("Pools cannot be nested inside pools")
+            elif isinstance(element, BasicTerm):
                 if not element.is_grounded:
                     raise ValueError(f"Pool elements must be grounded: {element.render()}")
             else:
@@ -770,7 +775,9 @@ def pool(elements: range | Sequence[int | str | BasicTerm] | Pool) -> Pool:
                 pool_elements.append(Number(element))
             elif isinstance(element, str):
                 pool_elements.append(String(element))
-            elif isinstance(element, BasicTerm) and not isinstance(element, Pool):
+            elif isinstance(element, Pool):
+                raise TypeError("Pools cannot be nested inside pools")
+            elif isinstance(element, BasicTerm):
                 # Ensure the element is grounded
                 if not element.is_grounded:
                     raise ValueError(f"Pool elements must be grounded: {element.render()}")

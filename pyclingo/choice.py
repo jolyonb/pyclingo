@@ -88,8 +88,11 @@ class Choice(Term):
                 raise TypeError(
                     f"Choice condition must be a Predicate, DefaultNegation, or Comparison, got {type(cond).__name__}"
                 )
-            if isinstance(cond, Comparison) and any(
-                isinstance(term, AggregateBase) for term in (cond.left_term, cond.right_term)
+            inner: Term = cond
+            while isinstance(inner, DefaultNegation):
+                inner = inner.term
+            if isinstance(inner, Comparison) and any(
+                isinstance(term, AggregateBase) for term in (inner.left_term, inner.right_term)
             ):
                 raise ValueError(
                     "Aggregates cannot appear inside choice conditions (clingo syntax error); "
@@ -120,10 +123,12 @@ class Choice(Term):
         if isinstance(count, String):
             raise TypeError(f"{description} cannot be a String")
 
-        if isinstance(count, int) and count < 0:
-            raise ValueError(f"{description} must be a non-negative integer, got {count}")
+        count = Number(count) if isinstance(count, int) else count
+        # Checked after coercion so Number(-1) is caught the same as -1
+        if isinstance(count, Number) and count.value < 0:
+            raise ValueError(f"{description} must be non-negative, got {count.value}")
 
-        return Number(count) if isinstance(count, int) else count
+        return count
 
     @staticmethod
     def _check_cardinality_possible(minimum: Value | None, maximum: Value | None) -> None:

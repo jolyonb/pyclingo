@@ -52,8 +52,10 @@ class ClingoMessageHandler:
 
     def on_message(self, code: clingo.MessageCode, message: str) -> None:
         """Callback for Clingo messages."""
-        # Location spans may be single-line (L:C-C) or multi-line (L:C-L:C)
-        if location_match := re.match(r"<(.+?)>:(\d+):(\d+)-(?:\d+:)?(\d+):\s*(.+?):\s*(.+)", message):
+        # Location spans may be single-line (L:C-C) or multi-line (L:C-L:C).
+        # DOTALL: the message payload itself may span lines (e.g. "no atoms
+        # over signature occur in program:\n  -p/1")
+        if location_match := re.match(r"<(.+?)>:(\d+):(\d+)-(?:\d+:)?(\d+):\s*(.+?):\s*(.+)", message, re.DOTALL):
             level = location_match[5]
             parsed_msg = ClingoMessage(
                 filename=location_match[1],

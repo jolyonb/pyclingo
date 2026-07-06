@@ -104,6 +104,16 @@ def _field_ground_types(cls: type) -> dict[str, type]:
     """Map field names annotated as Field[...] to their ground types, raising on bad ones."""
     ground_types: dict[str, type] = {}
     for field_name, annotation in (cls.__annotations__ or {}).items():
+        if isinstance(annotation, str) and annotation.replace(" ", "").startswith("Field["):
+            # "from __future__ import annotations" stringifies annotations, which
+            # would silently skip descriptor installation — no validation, no
+            # plain-Python reads. Refuse loudly; the future import is unnecessary
+            # on Python 3.14
+            raise TypeError(
+                f"Field[...] annotation on {cls.__name__}.{field_name} is a string — "
+                f"remove 'from __future__ import annotations' from the defining module "
+                f"(typed fields cannot be wired from stringified annotations)"
+            )
         if get_origin(annotation) is Field:
             (ground,) = get_args(annotation)
             if (
@@ -199,8 +209,10 @@ class Predicate(BasicTerm, Negatable):
         # Satisfies the type checker for dynamically defined classes (type[Predicate]),
         # whose fields checkers cannot know. Never runs for concrete subclasses:
         # the dataclass transform generates their real __init__ (and dataclass()
-        # does not clobber an explicitly defined one, so this survives on the base).
-        super().__init__(*args, **kwargs)
+        # does not clobber an explicitly defined one, so this survives on the base) —
+        # so anything that reaches it is a direct Predicate() instantiation, which
+        # would construct a broken instance (no name, no fields)
+        raise TypeError("Predicate cannot be instantiated directly; declare a subclass or use Predicate.define()")
 
     def __init_subclass__(cls, name: str | None = None, namespace: str = "", show: bool = True, **kwargs: Any) -> None:
         """

@@ -39,8 +39,11 @@ class ConditionalLiteral(Term):
         for cond in self._condition:
             if not isinstance(cond, (Predicate, Comparison, DefaultNegation)):
                 raise TypeError("Conditions in a conditional literal must be predicates, comparisons, or negated terms")
-            if isinstance(cond, Comparison) and any(
-                isinstance(term, AggregateBase) for term in (cond.left_term, cond.right_term)
+            inner: Term = cond
+            while isinstance(inner, DefaultNegation):
+                inner = inner.term
+            if isinstance(inner, Comparison) and any(
+                isinstance(term, AggregateBase) for term in (inner.left_term, inner.right_term)
             ):
                 raise ValueError(
                     "Aggregates cannot appear inside conditional literal conditions (clingo "

@@ -14,6 +14,7 @@ from .aggregates import (
     SumPlus,
 )
 from .choice import Choice
+from .clingo_handler import LogLevel
 from .conditional_literal import ConditionalLiteral, key_for_each_lock
 from .core import (
     ANY,

@@ -26,6 +26,8 @@ class ASPProgram:
 
     def __init__(self, header: str | None = None, default_segment: str = "Rules") -> None:
         """Initialize an empty ASP program."""
+        if header is not None and ("\n" in header or "\r" in header):
+            raise ValueError("Program header must be a single line (it renders as one % comment)")
         self._segments: defaultdict[str, list[ProgramElement]] = defaultdict(list)
         self._defined_constants: dict[str, int | str] = {}
         self._show_overrides: dict[type[Predicate], bool | ConditionalLiteral] = {}
@@ -42,6 +44,8 @@ class ASPProgram:
         and the request can't be honored.
         """
         # Normalize segment name to lowercase for case-insensitive handling
+        if "\n" in segment or "\r" in segment:
+            raise ValueError("Segment names must be single-line (they render as section comments)")
         normalized_segment = segment.lower()
         if normalized_segment in self._segments:
             raise ValueError(f"Segment '{segment}' already exists")
@@ -136,6 +140,8 @@ class ASPProgram:
             )
         if not name or not name[0].islower():
             raise ValueError(f"Constant name must start with a lowercase letter: {name}")
+        if name == "not":
+            raise ValueError("'not' is reserved in ASP and cannot be a constant name")
 
         if not all(c.isalnum() or c == "_" for c in name):
             raise ValueError(f"Constant name can only contain letters, digits, and underscores: {name}")
@@ -207,10 +213,18 @@ class ASPProgram:
 
         - two distinct predicate classes sharing (name, arity): solutions could not
           be reconstructed unambiguously
+        - a nullary predicate sharing its name with a #const: gringo substitutes
+          the constant's value into the atom, silently corrupting round-trips
         """
         by_signature: dict[tuple[str, int], type[Predicate]] = {}
         for pred in self._collect_predicates():
             key = (pred.get_name(), pred.get_arity())
+            if pred.get_arity() == 0 and key[0] in self._defined_constants:
+                raise ValueError(
+                    f"'{key[0]}' is both a #const and a nullary predicate: gringo would "
+                    f"silently substitute the constant's value into every occurrence of "
+                    f"the atom. Rename one of them."
+                )
             other = by_signature.get(key)
             if other is not None and other is not pred:
                 raise ValueError(
@@ -311,7 +325,7 @@ class ASPProgram:
         if unregistered := used_constants - set(self._defined_constants.keys()):
             raise ValueError(f"Undefined constants used in program: {', '.join(sorted(unregistered))}")
 
-    def solve(self, models: int = 1000, timeout: int = 0, stop_on_log_level: LogLevel = LogLevel.INFO) -> SolveResult:
+    def solve(self, models: int = 1000, timeout: float = 0, stop_on_log_level: LogLevel = LogLevel.INFO) -> SolveResult:
         """
         Solve the ASP program, returning a SolveResult that yields Models lazily.
 
