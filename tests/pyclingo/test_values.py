@@ -4,7 +4,7 @@ Tests for the content rules of Number, String, and pools.
 
 import pytest
 
-from pyclingo.core import Number, RangePool, String, Value, Variable, pool
+from pyclingo import Number, RangePool, String, Value, Variable, pool
 
 
 def test_number_range_matches_clingo() -> None:

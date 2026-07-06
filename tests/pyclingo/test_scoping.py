@@ -8,9 +8,7 @@ from collections.abc import Sequence
 
 import pytest
 
-from pyclingo import ANY, Choice, Count, Not, Predicate, Sum, Variable, create_variables
-from pyclingo.conditional_literal import ConditionalLiteral
-from pyclingo.core import Term
+from pyclingo import ANY, Choice, ConditionalLiteral, Count, Not, Predicate, Sum, Term, Variable, create_variables
 from pyclingo.scoping import validate_rule
 
 P = Predicate.define("p", ["x"])

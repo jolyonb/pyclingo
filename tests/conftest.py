@@ -18,9 +18,18 @@ from typing import Any
 import clingo.ast
 import pytest
 
-from pyclingo import ASPProgram, Choice, Comparison, ConditionalLiteral, DefaultNegation, Predicate
-from pyclingo.aggregates import Aggregate
-from pyclingo.core import Expression, Pool, Value
+from pyclingo import (
+    Aggregate,
+    ASPProgram,
+    Choice,
+    Comparison,
+    ConditionalLiteral,
+    DefaultNegation,
+    Expression,
+    Pool,
+    Predicate,
+    Value,
+)
 
 
 def assert_clingo_accepts(program_text: str) -> None:

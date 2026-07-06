@@ -4,7 +4,8 @@ Tests for clingo message parsing and severity handling.
 
 import clingo
 
-from pyclingo.clingo_handler import ClingoMessageHandler, LogLevel
+from pyclingo import LogLevel
+from pyclingo.clingo_handler import ClingoMessageHandler
 
 
 def test_multiline_location_span_parses() -> None:

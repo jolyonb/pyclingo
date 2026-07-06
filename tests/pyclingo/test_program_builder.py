@@ -5,8 +5,7 @@ define_constant, and the guards on their inputs.
 
 import pytest
 
-from pyclingo import ASPProgram, Choice, Count, Predicate, Variable
-from pyclingo.core import RangePool
+from pyclingo import ASPProgram, Choice, Count, Predicate, RangePool, Variable
 
 
 def test_facts_must_be_grounded() -> None:

@@ -6,8 +6,7 @@ import time
 
 import pytest
 
-from pyclingo import ASPProgram, Choice, RangePool, Variable
-from pyclingo.predicate import Predicate
+from pyclingo import ASPProgram, Choice, Predicate, RangePool, Variable
 
 
 def make_choice_program(n: int) -> ASPProgram:

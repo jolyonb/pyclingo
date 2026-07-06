@@ -12,8 +12,7 @@ from typing import cast
 
 import pytest
 
-from pyclingo import Comparison, Predicate, Variable
-from pyclingo.core import DefinedConstant, Number, String
+from pyclingo import Comparison, DefinedConstant, Number, Predicate, String, Variable
 
 
 class TestComparisonBool:

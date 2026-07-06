@@ -20,8 +20,7 @@ from typing import Any
 
 import pytest
 
-from pyclingo import ASPProgram, Predicate
-from pyclingo.core import Number
+from pyclingo import ASPProgram, Number, Predicate
 
 CASES = [
     # The hard-fought classics

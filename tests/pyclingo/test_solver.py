@@ -1,7 +1,6 @@
 import pytest
 
-from pyclingo import ASPProgram
-from pyclingo.predicate import Predicate
+from pyclingo import ASPProgram, Predicate
 
 
 def test_case_insensitive_segments() -> None:

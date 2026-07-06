@@ -9,9 +9,7 @@ from typing import ClassVar
 
 import pytest
 
-from pyclingo import ASPProgram, Field, Predicate, Variable
-from pyclingo.core import Number, String
-from pyclingo.predicate import PredicateField
+from pyclingo import ASPProgram, Field, Number, Predicate, PredicateField, String, Variable
 
 
 class Clue(Predicate):
