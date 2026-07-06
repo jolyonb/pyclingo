@@ -1,10 +1,31 @@
 """
 Solve results: the streaming SolveResult handle returned by ASPProgram.solve()
 and the typed Model (answer set) objects it yields.
+
+A note on object lifetimes, which shape this module's design. clingo's
+Control frees its native object in __del__, and native calls on a freed
+control crash rather than raise. That is fatal in a reference cycle: the
+garbage collector finalizes a cycle's members in undefined order, so a
+Control could be freed before a generator whose cleanup still calls into
+it — observed as a segfault. This module therefore keeps SolveResult
+cycle-free, so an abandoned result tears down by refcount in a
+deterministic order: the generator closes first (its frame's `control`
+reference keeps the native object alive through the cleanup calls and the
+statistics copy), and the Control is freed last. Concretely:
+
+- The solve generator is a free function, not a SolveResult method — a
+  method generator's frame would hold self, closing the cycle
+  (self -> iterator -> frame -> self).
+- Generator and SolveResult share a _SolveState holder for bookkeeping;
+  both hold it strongly, it references neither.
+- The native solver thread (async solving) exists only when a wall-clock
+  timeout demands it; without one, solving is synchronous and there is no
+  second thread to race during teardown.
 """
 
 import time
 from collections.abc import Generator, Iterator
+from dataclasses import dataclass
 from typing import Any, Self, overload
 
 import clingo
@@ -54,6 +75,22 @@ class Model:
         return f"Model({counts})"
 
 
+@dataclass
+class _SolveState:
+    """
+    Mutable solve bookkeeping, shared by a SolveResult and its generator.
+
+    Both hold it strongly and it references neither, keeping SolveResult
+    cycle-free (see the module docstring for why that matters).
+    """
+
+    satisfiable: bool | None = None
+    exhausted: bool = False
+    solution_count: int = 0
+    statistics: dict[str, Any] | None = None
+    finished: bool = False
+
+
 class SolveResult:
     """
     The handle for one solve: iterate it to receive Models lazily.
@@ -72,22 +109,29 @@ class SolveResult:
         timeout: float,
         tic: float,
     ) -> None:
-        self.satisfiable: bool | None = None
-        self.exhausted: bool = False
-        self.solution_count: int = 0
-        self._statistics: dict[str, Any] | None = None
-        self._control = control
-        self._predicate_types = predicate_types
-        self._timeout = timeout
-        self._tic = tic
-        self._finished = False
-        self._iterator = self._solve_generator()
+        self._state = _SolveState()
+        self._iterator = _solve_generator(control, predicate_types, timeout, tic, self._state)
+
+    @property
+    def satisfiable(self) -> bool | None:
+        """True/False once known; None if nothing has been learned yet."""
+        return self._state.satisfiable
+
+    @property
+    def exhausted(self) -> bool:
+        """Whether the search space was fully explored."""
+        return self._state.exhausted
+
+    @property
+    def solution_count(self) -> int:
+        """Models yielded so far."""
+        return self._state.solution_count
 
     def __iter__(self) -> Iterator[Model]:
         # Iterating a finished stream would silently yield nothing, which reads
         # as "no models"; partial consumption may resume, but a finished result
         # fails loudly instead
-        if self._finished:
+        if self._state.finished:
             raise RuntimeError(
                 "This SolveResult is already consumed (exhausted or closed); call solve() again for a fresh search"
             )
@@ -98,7 +142,7 @@ class SolveResult:
         self._iterator.close()
         # Closing a never-started generator skips its finally, so mark
         # finished here as well
-        self._finished = True
+        self._state.finished = True
 
     def __enter__(self) -> Self:
         return self
@@ -115,71 +159,84 @@ class SolveResult:
         includes any time the caller spends between models; clingo's own
         solving clocks live under summary.times.
         """
-        return self._statistics
+        return self._state.statistics
 
     def format_statistics(self) -> str:
         """The last solve's statistics in clingo's native output style."""
-        if self._statistics is None:
+        if self._state.statistics is None:
             return "No statistics available"
-        return format_statistics_clingo_style(self._statistics)
+        return format_statistics_clingo_style(self._state.statistics)
 
-    def _solve_generator(self) -> Generator[Model]:
-        """Yields models and finalizes bookkeeping on every exit path."""
-        # The timeout clock starts here — at first iteration — not at solve():
-        # time between constructing the result and consuming it belongs to the
-        # caller, and clingo does no work until we resume the handle
-        deadline = time.monotonic() + self._timeout if self._timeout > 0 else None
-        timed_out = False
-        final: clingo.SolveResult | None = None
-        try:
-            # Wall-clock timeouts require async solving: clingo has no timeout
-            # configuration key; instead we wait on the handle and cancel at the deadline.
-            with self._control.solve(yield_=True, async_=True) as handle:
-                try:
-                    while True:
-                        handle.resume()
-                        # Clamp to zero: wait() treats a negative timeout as "block forever",
-                        # but a passed deadline should poll and cancel instead
-                        remaining = None if deadline is None else max(0.0, deadline - time.monotonic())
+
+def _solve_generator(
+    control: clingo.Control,
+    predicate_types: PREDICATE_TYPES,
+    timeout: float,
+    tic: float,
+    state: _SolveState,
+) -> Generator[Model]:
+    """
+    Yields models and finalizes bookkeeping on every exit path.
+
+    A free function rather than a SolveResult method so that its frame never
+    references the result (see the module docstring).
+    """
+    # The timeout clock starts here — at first iteration — not at solve():
+    # time between constructing the result and consuming it belongs to the
+    # caller, and clingo does no work until we resume the handle
+    deadline = time.monotonic() + timeout if timeout > 0 else None
+    timed_out = False
+    final: clingo.SolveResult | None = None
+    try:
+        # Async only when a wall-clock timeout demands it (see module
+        # docstring): clingo has no timeout configuration key, so we wait on
+        # the handle and cancel at the deadline.
+        with control.solve(yield_=True, async_=deadline is not None) as handle:
+            try:
+                while True:
+                    handle.resume()
+                    if deadline is not None:
+                        # Clamp to zero: wait() treats a negative timeout as
+                        # "block forever", but a passed deadline should poll
+                        # and cancel instead
+                        remaining = max(0.0, deadline - time.monotonic())
                         if not handle.wait(remaining):
                             # The deadline passed before the next model was found
                             timed_out = True
                             break
-                        model = handle.model()
-                        if model is None:
-                            break
-                        self.solution_count += 1
-                        self.satisfiable = True
-                        yield Model(
-                            [
-                                convert_symbol_to_predicate(symbol, self._predicate_types)
-                                for symbol in model.symbols(shown=True)
-                            ]
-                        )
-                finally:
-                    # Also reached when the caller close()s mid-iteration. Cancelling a
-                    # finished search is a no-op, so this is safe on every path.
-                    handle.cancel()
-                    # After a cancelled solve, satisfiability may be unknown (None);
-                    # keep what we learned from any yielded models.
-                    outcome: clingo.SolveResult = handle.get()
-                    if outcome.satisfiable is not None:
-                        self.satisfiable = outcome.satisfiable
-                    # A fast search can finish between resume() and the deadline
-                    # check; a timed-out solve must never claim exhaustion
-                    self.exhausted = False if timed_out else outcome.exhausted
-                    final = outcome
-        finally:
-            self._finished = True
-            if final is not None:
-                # Skipped if the result was closed before solving began. clingo
-                # raises if statistics aren't ready (e.g. finalized during garbage
-                # collection mid-search); reporting none is better than raising there.
-                try:
-                    self._statistics = dict(self._control.statistics)
-                    self._statistics["wall_time"] = time.perf_counter() - self._tic
-                except RuntimeError:
-                    self._statistics = None
+                    model = handle.model()
+                    if model is None:
+                        break
+                    state.solution_count += 1
+                    state.satisfiable = True
+                    yield Model(
+                        [convert_symbol_to_predicate(symbol, predicate_types) for symbol in model.symbols(shown=True)]
+                    )
+            finally:
+                # Also reached when the caller close()s mid-iteration and when
+                # an abandoned result is torn down by refcount. Cancelling a
+                # finished search is a no-op.
+                handle.cancel()
+                # After a cancelled solve, satisfiability may be unknown (None);
+                # keep what we learned from any yielded models.
+                outcome: clingo.SolveResult = handle.get()
+                if outcome.satisfiable is not None:
+                    state.satisfiable = outcome.satisfiable
+                # A fast search can finish between resume() and the deadline
+                # check; a timed-out solve must never claim exhaustion
+                state.exhausted = False if timed_out else outcome.exhausted
+                final = outcome
+    finally:
+        state.finished = True
+        if final is not None:
+            # Skipped if the result was closed before solving began. clingo
+            # raises if statistics are not ready; none is better than raising.
+            try:
+                statistics = dict(control.statistics)
+                statistics["wall_time"] = time.perf_counter() - tic
+                state.statistics = statistics
+            except RuntimeError:
+                pass
 
 
 def convert_symbol_to_predicate(symbol: clingo.Symbol, predicate_types: PREDICATE_TYPES) -> Predicate:
