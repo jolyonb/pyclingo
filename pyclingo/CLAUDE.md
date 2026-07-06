@@ -115,8 +115,10 @@ All support multiple elements and conditions via `add()` method.
 - **DefaultNegation**: `not p(X)` (negation as failure), via `Not()` or `~` on
   any Negatable (predicates and comparisons alike)
 - Automatic simplification of nested negations
-- Classical negation (`-p`) is deliberately unsupported: model explicit falsity
-  as a complementary predicate
+- Classical negation (`-p`): unary minus on a Predicate instance flips its
+  sign — the sign is part of the atom, as in clingo's own symbol model. A
+  negated predicate is just a predicate (same class, both signs in atoms());
+  deriving p and -p together is UNSAT
 
 #### Conditional Literals (`conditional_literal.py`)
 Conditional structures: `p(X) : q(X)`

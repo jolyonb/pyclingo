@@ -1167,9 +1167,9 @@ class DefaultNegation(Negatable):
     Represents default negation ('not') in ASP programs.
 
     Default negation expresses that a literal cannot be proven true (it may be
-    either false or unknown). Classical negation ('-p') is deliberately
-    unsupported: model explicit falsity as a complementary predicate instead
-    (e.g. hitori's black/white).
+    either false or unknown). It is distinct from classical negation (-p),
+    which asserts explicit falsity and lives on the atom itself: unary minus
+    on a Predicate instance flips its sign.
     """
 
     def __init__(self, term: Negatable):
