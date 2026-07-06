@@ -108,7 +108,13 @@ class SolveResult:
 
     @property
     def statistics(self) -> dict[str, Any] | None:
-        """Raw clingo statistics plus 'total_time', or None if solving never ran."""
+        """
+        Raw clingo statistics plus 'wall_time', or None if solving never ran.
+
+        wall_time spans the solve() call to the end of iteration, so it
+        includes any time the caller spends between models; clingo's own
+        solving clocks live under summary.times.
+        """
         return self._statistics
 
     def format_statistics(self) -> str:
@@ -171,7 +177,7 @@ class SolveResult:
                 # collection mid-search); reporting none is better than raising there.
                 try:
                     self._statistics = dict(self._control.statistics)
-                    self._statistics["total_time"] = time.perf_counter() - self._tic
+                    self._statistics["wall_time"] = time.perf_counter() - self._tic
                 except RuntimeError:
                     self._statistics = None
 

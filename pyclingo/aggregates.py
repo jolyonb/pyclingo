@@ -2,10 +2,19 @@ from abc import ABC
 from enum import StrEnum
 from typing import ClassVar, Self
 
-from pyclingo.core import AggregateBase, AtomSign, Comparison, DefaultNegation, RenderingContext, Term, Value
+from pyclingo.core import (
+    AggregateBase,
+    AtomSign,
+    Comparison,
+    DefaultNegation,
+    Expression,
+    RenderingContext,
+    Term,
+    Value,
+)
 from pyclingo.predicate import Predicate
 
-type AGGREGATE_ELEMENT_TYPE = Value | Predicate
+type AGGREGATE_ELEMENT_TYPE = Value | Expression | Predicate
 type AGGREGATE_CONDITION_TYPE = Predicate | DefaultNegation | Comparison
 
 
@@ -74,8 +83,10 @@ class Aggregate(AggregateBase, ABC):
             )
         element_tuple = element if isinstance(element, tuple) else (element,)
         for item in element_tuple:
-            if not isinstance(item, (Value, Predicate)):
-                raise TypeError(f"Aggregate element items must be Values or Predicates, got {type(item).__name__}")
+            if not isinstance(item, (Value, Expression, Predicate)):
+                raise TypeError(
+                    f"Aggregate element items must be Values, Expressions, or Predicates, got {type(item).__name__}"
+                )
 
         if condition is None:
             conditions = []

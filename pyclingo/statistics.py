@@ -21,7 +21,7 @@ def format_statistics_clingo_style(stats: dict[str, Any]) -> str:
     ]
 
     # Time information
-    total_time = stats["total_time"]
+    wall_time = stats["wall_time"]
     solving_time = stats["summary"]["times"]["solve"]
     sat_time = stats["summary"]["times"].get("sat", 0)
     unsat_time = stats["summary"]["times"].get("unsat", 0)
@@ -29,7 +29,7 @@ def format_statistics_clingo_style(stats: dict[str, Any]) -> str:
 
     lines.extend(
         (
-            f"Time         : {total_time:.3f}s (Solving: {solving_time:.3f}s "
+            f"Time         : {wall_time:.3f}s (Solving: {solving_time:.3f}s "
             f"1st Model: {sat_time:.3f}s Unsat: {unsat_time:.3f}s)",
             f"CPU Time     : {cpu_time:.3f}s",
             "",

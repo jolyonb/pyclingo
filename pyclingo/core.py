@@ -128,6 +128,15 @@ class BasicTerm(Term, ABC):
     """
 
 
+class PredicateBase(BasicTerm, ABC):
+    """
+    Marker base for Predicate, which is defined in predicate.py. It exists so
+    code here can recognize predicates with isinstance (e.g. as comparison
+    operands): predicate.py imports downward from core, so core cannot import
+    the Predicate class itself.
+    """
+
+
 class ComparableTerm(Term, ABC):
     """
     Abstract base for terms that can appear in comparisons: Value, Expression, Aggregate.
@@ -145,32 +154,32 @@ class ComparableTerm(Term, ABC):
     __hash__ = object.__hash__
 
     def __lt__(self, other: Any) -> Comparison:
-        if not isinstance(other, (ComparableTerm, int, str)):
+        if not isinstance(other, (ComparableTerm, PredicateBase, int, str)):
             raise ValueError(f"Cannot compare {type(self).__name__} with {type(other).__name__}")
         return Comparison(self, ComparisonOperator.LESS_THAN, other)
 
     def __le__(self, other: Any) -> Comparison:
-        if not isinstance(other, (ComparableTerm, int, str)):
+        if not isinstance(other, (ComparableTerm, PredicateBase, int, str)):
             raise ValueError(f"Cannot compare {type(self).__name__} with {type(other).__name__}")
         return Comparison(self, ComparisonOperator.LESS_EQUAL, other)
 
     def __gt__(self, other: Any) -> Comparison:
-        if not isinstance(other, (ComparableTerm, int, str)):
+        if not isinstance(other, (ComparableTerm, PredicateBase, int, str)):
             raise ValueError(f"Cannot compare {type(self).__name__} with {type(other).__name__}")
         return Comparison(self, ComparisonOperator.GREATER_THAN, other)
 
     def __ge__(self, other: Any) -> Comparison:
-        if not isinstance(other, (ComparableTerm, int, str)):
+        if not isinstance(other, (ComparableTerm, PredicateBase, int, str)):
             raise ValueError(f"Cannot compare {type(self).__name__} with {type(other).__name__}")
         return Comparison(self, ComparisonOperator.GREATER_EQUAL, other)
 
     def __eq__(self, other: Any) -> Comparison:  # type: ignore[override]
-        if not isinstance(other, (ComparableTerm, int, str)):
+        if not isinstance(other, (ComparableTerm, PredicateBase, int, str)):
             raise ValueError(f"Cannot compare {type(self).__name__} with {type(other).__name__}")
         return Comparison(self, ComparisonOperator.EQUAL, other)
 
     def __ne__(self, other: Any) -> Comparison:  # type: ignore[override]
-        if not isinstance(other, (ComparableTerm, int, str)):
+        if not isinstance(other, (ComparableTerm, PredicateBase, int, str)):
             raise ValueError(f"Cannot compare {type(self).__name__} with {type(other).__name__}")
         return Comparison(self, ComparisonOperator.NOT_EQUAL, other)
 
@@ -336,9 +345,10 @@ class Variable(Value):
 
     Variables in ASP start with an uppercase letter or can be an underscore '_'
     for anonymous variables. During solving a variable ranges over all ground
-    terms — numbers, strings, and compound terms alike. In Python, comparison
-    operators accept values and expressions; to bind a variable to specific
-    compound terms, use a pool: X.in_((Cell(1, 2), Cell(3, 4))).
+    terms — numbers, strings, and compound terms alike: X == 4 compares against
+    a number, X == Cell(1, 2) against a compound term (and C == Cell(X, ANY)
+    destructures a bound compound). For several alternatives at once, use a
+    pool: X.in_((Cell(1, 2), Cell(3, 4))).
     """
 
     def __init__(self, name: str):
@@ -1028,7 +1038,7 @@ class Comparison(Negatable):
     """
 
     _left_term: ComparableTerm
-    _right_term: ComparableTerm | Pool
+    _right_term: ComparableTerm | Pool | PredicateBase
 
     def __init__(
         self,
@@ -1040,6 +1050,9 @@ class Comparison(Negatable):
         int and str operands are coerced to Number and String.
 
         A Pool may only appear on the right, compared by equality against a variable.
+        A Predicate (compound term) may appear on the right against a Variable on
+        the left — X == Cell(1, 2) binds, C == Cell(X, ANY) destructures; Python's
+        reflection normalizes Cell(...) == X to the same shape.
         """
         # Convert Python literals to ASP values
         if isinstance(left_term, int):
@@ -1058,12 +1071,12 @@ class Comparison(Negatable):
             self._right_term = Number(right_term)
         elif isinstance(right_term, str):
             self._right_term = String(right_term)
-        elif isinstance(right_term, (ComparableTerm, Pool)):
+        elif isinstance(right_term, (ComparableTerm, Pool, PredicateBase)):
             self._right_term = right_term
         else:
             raise TypeError(
-                f"Right term must be an int, str, comparable term (Value, Expression, or Aggregate), or Pool, "
-                f"got {type(right_term).__name__}"
+                f"Right term must be an int, str, comparable term (Value, Expression, or Aggregate), "
+                f"Pool, or Predicate, got {type(right_term).__name__}"
             )
 
         if not isinstance(operator, ComparisonOperator):
@@ -1082,6 +1095,13 @@ class Comparison(Negatable):
         if isinstance(right_term, Pool) and not isinstance(left_term, Variable):
             raise ValueError("A comparison involving a pool must have a variable on the left")
 
+        if isinstance(self._right_term, PredicateBase) and not isinstance(self._left_term, Variable):
+            raise ValueError(
+                "A comparison with a compound term must have a Variable on the other side: "
+                "clingo orders terms by type, so comparing a number or expression against a "
+                "compound term is vacuously true or false, never what you meant"
+            )
+
     @property
     def left_term(self) -> ComparableTerm:
         return self._left_term
@@ -1091,7 +1111,7 @@ class Comparison(Negatable):
         return self._operator
 
     @property
-    def right_term(self) -> ComparableTerm | Pool:
+    def right_term(self) -> ComparableTerm | Pool | PredicateBase:
         return self._right_term
 
     def freeze(self) -> None:
@@ -1099,7 +1119,15 @@ class Comparison(Negatable):
         self.right_term.freeze()
 
     def collect_predicate_signs(self) -> set[AtomSign]:
-        return self.left_term.collect_predicate_signs() | self.right_term.collect_predicate_signs()
+        signs: set[AtomSign] = set()
+        for side in (self.left_term, self.right_term):
+            side_signs = side.collect_predicate_signs()
+            if isinstance(side, PredicateBase):
+                # A predicate used as a comparison operand is a compound TERM
+                # (data), not an atom: no show signature of its own
+                side_signs = {(predicate, negated, False) for predicate, negated, _ in side_signs}
+            signs |= side_signs
+        return signs
 
     def __bool__(self) -> bool:
         """

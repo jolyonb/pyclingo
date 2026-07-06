@@ -57,3 +57,23 @@ def test_show_when_validates_its_condition() -> None:
     X, Y = Variable("X"), Variable("Y")
     with pytest.raises(ValueError, match="Unsafe"):
         program.show_when(P, ConditionalLiteral(P(x=X), Q(x=Y)))
+
+
+def test_show_of_underived_predicate_raises_at_render() -> None:
+    # No raw_asp blocks: an uncollected show target is provably absent
+    program = ASPProgram()
+    P = Predicate.define("p_shown", ["x"])
+    Ghost = Predicate.define("ghost", ["x"])
+    program.fact(P(x=1))
+    program.show(Ghost)
+    with pytest.raises(ValueError, match="nothing derives it"):
+        program.render()
+
+
+def test_show_with_raw_asp_present_is_not_validated() -> None:
+    # Raw text is invisible to walkers; the override must still emit
+    program = ASPProgram()
+    Q = Predicate.define("q_raw", ["x"])
+    program.raw_asp("q_raw(1).")
+    program.show(Q)
+    assert "#show q_raw/1." in program.render()

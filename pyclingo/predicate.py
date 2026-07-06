@@ -8,12 +8,12 @@ from typing import Any, ClassVar, Self, cast, dataclass_transform, get_args, get
 
 from pyclingo.core import (
     AtomSign,
-    BasicTerm,
     DefinedConstant,
     Expression,
     Negatable,
     Number,
     Pool,
+    PredicateBase,
     RenderingContext,
     String,
     Value,
@@ -164,7 +164,7 @@ def _validate_schema(name: str, namespace: str, field_names: list[str]) -> None:
 # dataclass() to every subclass; the two must agree on the settings.
 @dataclass_transform(frozen_default=True, eq_default=False, field_specifiers=())
 @dataclass(frozen=True, eq=False)
-class Predicate(BasicTerm, Negatable):
+class Predicate(PredicateBase, Negatable):
     """
     This is a base class that represents a predicate in an ASP program.
 

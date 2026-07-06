@@ -31,10 +31,11 @@ def test_zero_means_enumerate_all() -> None:
     assert result.satisfiable is True
 
 
-def test_default_limit_does_not_truncate_small_spaces() -> None:
-    result = make_choice_program(3).solve()  # 8 models, well under the default of 1000
-    assert len(list(result)) == 8
-    assert result.exhausted is True
+def test_default_is_a_single_model() -> None:
+    # clingo's own default: one model; enumeration is an explicit ask
+    result = make_choice_program(3).solve()  # 8 models exist
+    assert len(list(result)) == 1
+    assert result.exhausted is False
 
 
 def test_timeout_yields_partial_results() -> None:
@@ -50,7 +51,7 @@ def test_timeout_yields_partial_results() -> None:
 
 
 def test_no_timeout_unaffected() -> None:
-    result = make_choice_program(2).solve(timeout=60)  # 4 models
+    result = make_choice_program(2).solve(models=0, timeout=60)  # 4 models
     assert len(list(result)) == 4
     assert result.exhausted is True
 
@@ -76,8 +77,8 @@ def test_context_manager_closes() -> None:
 def test_repeated_solves_are_independent() -> None:
     # Each solve() returns its own SolveResult; nothing is shared or locked
     program = make_choice_program(2)
-    first = program.solve()
-    second = program.solve()
+    first = program.solve(models=0)
+    second = program.solve(models=0)
     assert len(list(second)) == 4
     assert len(list(first)) == 4
     assert first.exhausted and second.exhausted
@@ -129,7 +130,7 @@ def test_timeout_anchors_at_first_iteration() -> None:
 
 
 def test_iterating_a_consumed_result_raises() -> None:
-    result = make_choice_program(2).solve()
+    result = make_choice_program(2).solve(models=0)
     assert len(list(result)) == 4
     with pytest.raises(RuntimeError, match="already consumed"):
         list(result)

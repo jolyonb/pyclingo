@@ -8,9 +8,11 @@ pyclingo overloads == on Values/Expressions/Aggregates to build ASP Comparison t
 - Predicates have ordinary value equality/hashing (they are data, not comparison builders)
 """
 
+from typing import cast
+
 import pytest
 
-from pyclingo import Predicate, Variable
+from pyclingo import Comparison, Predicate, Variable
 from pyclingo.core import DefinedConstant, Number, String
 
 
@@ -100,10 +102,13 @@ class TestPredicateEquality:
         assert P(x=Variable("X")) == P(x=Variable("X"))
         assert P(x=Variable("X")) != P(x=Variable("Y"))
 
-    def test_variable_on_left_still_builds_comparison(self) -> None:
-        # Predicate.__eq__ returns NotImplemented for non-predicates; the Variable side
-        # takes over and (correctly) rejects a predicate operand.
+    def test_predicate_vs_variable_builds_comparison(self) -> None:
+        # Predicate.__eq__ returns NotImplemented for non-predicates; the Variable
+        # side takes over and builds the comparison — written in either order
         X = Variable("X")
         P = Predicate.define("p", ["x"])
-        with pytest.raises(ValueError, match="Cannot compare"):
-            _ = P(x=1) == X
+        assert (X == P(x=1)).render() == "X = p(1)"
+        # Reflection normalizes: Predicate.__eq__ returns NotImplemented, so
+        # this is the same Comparison — statically typed bool, hence the cast
+        reflected = cast(Comparison, P(x=1) == X)
+        assert reflected.render() == "X = p(1)"
