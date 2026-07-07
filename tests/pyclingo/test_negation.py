@@ -35,7 +35,7 @@ def test_negated_comparison_solves_correctly() -> None:
     Q = Predicate.define("q", ["x"])
     X = Variable("X")
     program.fact(*[P(x=i) for i in range(1, 6)])
-    program.when([P(x=X), Not(X < 3)], let=Q(x=X))
+    program.when(P(x=X), Not(X < 3), let=Q(x=X))
     model = next(iter(program.solve()))
     assert sorted(atom["x"].value for atom in model.atoms(Q)) == [3, 4, 5]
 
@@ -46,7 +46,7 @@ def test_double_negated_comparison_solves() -> None:
     Q = Predicate.define("q", ["x"])
     X = Variable("X")
     program.fact(*[P(x=i) for i in range(1, 4)])
-    program.when([P(x=X), Not(Not(X == 2))], let=Q(x=X))
+    program.when(P(x=X), Not(Not(X == 2)), let=Q(x=X))
     model = next(iter(program.solve()))
     assert [atom["x"].value for atom in model.atoms(Q)] == [2]
 

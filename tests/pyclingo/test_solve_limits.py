@@ -99,7 +99,7 @@ def test_unsafe_rules_raise_at_construction() -> None:
     Q = Predicate.define("q", ["x"])
     X, Y = Variable("X"), Variable("Y")
     with pytest.raises(ValueError, match="Unsafe variable"):
-        program.when(conditions=P(x=X), let=Q(x=Y))
+        program.when(P(x=X), let=Q(x=Y))
 
 
 def test_grounding_diagnostics_ride_in_the_error() -> None:
@@ -108,7 +108,7 @@ def test_grounding_diagnostics_ride_in_the_error() -> None:
     program = ASPProgram()
     P = Predicate.define("p", ["x"])
     Q = Predicate.define("q", ["x"])
-    program.when(conditions=Q(x=1), let=P(x=1))
+    program.when(Q(x=1), let=P(x=1))
     with pytest.raises(RuntimeError, match="does not occur"):
         program.solve()
 

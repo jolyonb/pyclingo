@@ -30,7 +30,7 @@ def test_construction_binds() -> None:
     C, X, Y = Variable("C"), Variable("X"), Variable("Y")
     program = ASPProgram()
     program.fact(P(x=1), P(x=2))
-    program.when([P(x=X), P(x=Y), X < Y, C == Cell(row=X, col=Y)], let=Q(c=C))
+    program.when(P(x=X), P(x=Y), X < Y, C == Cell(row=X, col=Y), let=Q(c=C))
     model = next(iter(program.solve()))
     assert [str(atom["c"]) for atom in model.atoms(Q)] == ["cell(1, 2)"]
 
@@ -41,7 +41,7 @@ def test_destructuring_binds() -> None:
     C, X = Variable("C"), Variable("X")
     program = ASPProgram()
     program.fact(Holds(c=Cell(row=3, col=4)))
-    program.when([Holds(c=C), C == Cell(row=X, col=ANY)], let=R(x=X))
+    program.when(Holds(c=C), C == Cell(row=X, col=ANY), let=R(x=X))
     model = next(iter(program.solve()))
     assert [atom["x"].value for atom in model.atoms(R)] == [3]
 
@@ -51,7 +51,7 @@ def test_not_equal_excludes() -> None:
     C = Variable("C")
     program = ASPProgram()
     program.fact(Holds(c=Cell(row=1, col=1)), Holds(c=Cell(row=1, col=2)))
-    program.when([Holds(c=C), C != Cell(row=1, col=1)], let=T(c=C))
+    program.when(Holds(c=C), C != Cell(row=1, col=1), let=T(c=C))
     model = next(iter(program.solve()))
     assert [str(atom["c"]) for atom in model.atoms(T)] == ["cell(1, 2)"]
 
@@ -72,7 +72,7 @@ def test_comparison_operand_has_no_show_signature() -> None:
     C = Variable("C")
     program = ASPProgram()
     program.fact(Holds(c=Cell(row=1, col=1)))
-    program.when([Holds(c=C), C != Cell(row=9, col=9)], let=Q(c=C))
+    program.when(Holds(c=C), C != Cell(row=9, col=9), let=Q(c=C))
     rendered = program.render()
     assert "#show cell/2." not in rendered
     assert "#show q2/1." in rendered

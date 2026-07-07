@@ -32,9 +32,9 @@ def test_empty_conditions_are_rejected() -> None:
     with pytest.raises(ValueError, match="forbid\\(\\) requires at least one"):
         program.forbid()
     with pytest.raises(ValueError, match="use fact\\(\\)"):
-        program.when([], let=P(x=1))
+        program.when(let=P(x=1))
     with pytest.raises(ValueError, match="use fact\\(\\)"):
-        program.when([], let=Choice(P(x=RangePool(1, 3))))
+        program.when(let=Choice(P(x=RangePool(1, 3))))
 
 
 def test_bare_choice_rules_are_facts() -> None:

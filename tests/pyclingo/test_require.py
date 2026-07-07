@@ -1,6 +1,7 @@
 """
-Tests for require(): forbid stated positively. require(C, when=W) renders a
-constraint on the inverse comparison — it checks, it never derives.
+Tests for require(): forbid stated positively. require(*W, implies=C) renders
+a constraint on the inverse comparison (the implication W -> C) — it checks,
+it never derives.
 """
 
 import pytest
@@ -32,7 +33,7 @@ def test_require_renders_the_inverse_constraint() -> None:
     P = Predicate.define("p", ["x"], show=False)
     N, C = Variable("N"), Variable("C")
     program.fact(Clue(num=1), P(x=1))
-    program.require(Count(C, condition=P(x=C)) == N, when=Clue(num=N))
+    program.require(Clue(num=N), implies=Count(C, condition=P(x=C)) == N)
     assert ":- clue(N), #count{ C : p(C) } != N." in program.render()
 
 
@@ -44,7 +45,7 @@ def test_require_solves_correctly() -> None:
         P = Predicate.define("p2", ["x"], show=False)
         N, C = Variable("N"), Variable("C")
         program.fact(Clue(num=clue), P(x=1), P(x=2))
-        program.require(Count(C, condition=P(x=C)) == N, when=Clue(num=N))
+        program.require(Clue(num=N), implies=Count(C, condition=P(x=C)) == N)
         return program
 
     assert next(iter(build(2).solve()), None) is not None
@@ -53,7 +54,7 @@ def test_require_solves_correctly() -> None:
     assert result.satisfiable is False
 
 
-def test_require_without_when() -> None:
+def test_require_without_conditions() -> None:
     # A global requirement: at least 2 atoms chosen
     program = ASPProgram()
     P = Predicate.define("p3", ["x"], show=False)
@@ -87,3 +88,13 @@ def test_require_checks_rather_than_derives() -> None:
     result = program.solve()
     assert list(result) == []
     assert result.satisfiable is False
+
+
+def test_conditions_without_implies_rejected() -> None:
+    # A lone comparison is the unconditional form; anything else without
+    # implies= is an incomplete thought
+    program = ASPProgram()
+    P = Predicate.define("p11", ["x"])
+    C = Variable("C")
+    with pytest.raises(TypeError, match="exactly one Comparison"):
+        program.require(P(x=C), C > 0)  # type: ignore[call-arg]

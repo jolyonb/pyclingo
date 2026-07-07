@@ -71,18 +71,17 @@ class ASPProgram:
             segment_key = (segment or self.default_segment).lower()
             self._segments[segment_key].append(Rule(head=statement))
 
-    def when(self, conditions: Term | Sequence[Term], let: Term, segment: str | None = None) -> None:
+    def when(self, *conditions: Term, let: Term, segment: str | None = None) -> None:
         """Create a clingo rule which sets the let term when all conditions are satisfied."""
-        condition_list = list(conditions) if isinstance(conditions, Sequence) else [conditions]
-        if not condition_list:
+        if not conditions:
             raise ValueError("when() requires at least one condition; use fact() for unconditional statements")
-        for condition in condition_list:
+        for condition in conditions:
             if not isinstance(condition, Term):
                 raise TypeError(f"when() conditions must be Terms, got {type(condition).__name__}")
         if not isinstance(let, Term):
             raise TypeError(f"when() let must be a Term, got {type(let).__name__}")
         segment_key = (segment or self.default_segment).lower()
-        self._segments[segment_key].append(Rule(head=let, body=condition_list))
+        self._segments[segment_key].append(Rule(head=let, body=list(conditions)))
 
     def forbid(self, *conditions: Term, segment: str | None = None) -> None:
         """Creates a clingo constraint which forbids the specified combination of conditions."""
@@ -94,26 +93,40 @@ class ASPProgram:
         segment_key = (segment or self.default_segment).lower()
         self._segments[segment_key].append(Rule(body=list(conditions)))
 
-    def require(
-        self, target: Comparison, when: Term | Sequence[Term] | None = None, segment: str | None = None
-    ) -> None:
+    def require(self, *terms: Term, implies: Comparison | None = None, segment: str | None = None) -> None:
         """
-        Require that a comparison holds (whenever the when conditions hold).
+        Require that a comparison holds: unconditionally, or as an implication.
 
-        This is pure syntactic sugar for readability: require(C, when=W) is
-        entirely equivalent to forbid(*W, C.inverse()) — a constraint on the
-        inverse comparison. Note that unlike when, it checks the relation,
-        but never derives. E.g.
+        Two forms, both pure syntactic sugar for a forbid constraint on the
+        inverse comparison:
 
-            require(Count(Adj, condition=...) == N, when=Clue(num=N))
+            require(Count(C, condition=...) >= 2)                # must hold, always
+            require(Clue(num=N), implies=Count(...) == N)        # conditions imply it
 
-        renders ":- clue(N), #count{ Adj : ... } != N."
+        The second is the material implication W -> C, entirely equivalent to
+        forbid(*W, C.inverse()). Note that unlike when(), require() checks the
+        relation but never derives. The implication example renders
+        ":- clue(N), #count{ Adj : ... } != N."
         """
+        target: Term
+        conditions: tuple[Term, ...]
+        if implies is None:
+            if len(terms) != 1:
+                raise TypeError(
+                    "require() without implies= takes exactly one Comparison (the unconditional "
+                    "form); to require a comparison under conditions, pass it as "
+                    "require(*conditions, implies=comparison)."
+                )
+            # A single non-Comparison falls through to the teaching error below
+            target = terms[0]
+            conditions = ()
+        else:
+            target = implies
+            conditions = terms
         if not isinstance(target, Comparison):
             raise TypeError(
-                f"require() takes a Comparison, got {type(target).__name__}. To make a "
-                f"predicate hold, derive it with when(conditions, let=...); to check one "
-                f"holds, use forbid(..., Not(predicate))."
+                f"require() implies must be a Comparison, got {type(target).__name__}. To make "
+                f"a predicate hold, derive it with when(*conditions, let=...)."
             )
         if isinstance(target.right_term, Pool):
             raise ValueError(
@@ -121,10 +134,9 @@ class ASPProgram:
                 "so 'X != (2;3)' is true for every X. Write the domain restriction as a "
                 "positive body condition instead."
             )
-        conditions: list[Term] = [] if when is None else list(when) if isinstance(when, Sequence) else [when]
         for condition in conditions:
             if not isinstance(condition, Term):
-                raise TypeError(f"require() when conditions must be Terms, got {type(condition).__name__}")
+                raise TypeError(f"require() conditions must be Terms, got {type(condition).__name__}")
         self.forbid(*conditions, target.inverse(), segment=segment)
 
     def raw_asp(self, text: str, segment: str | None = None, predicates: Sequence[type[Predicate]] = ()) -> None:
