@@ -72,9 +72,10 @@ def test_one_shot_solve_unchanged() -> None:
 
 
 def test_messages_window_per_solve_on_shared_handler() -> None:
-    # The handler is shared across a grounding's solves; each result sees
-    # only messages arriving within its own window (index snapshots, not
-    # clearing). Injection stands in for solve-phase messages.
+    # The handler is shared across a grounding's solves; each solve clears
+    # the list at start (the sequential guard proves nobody is mid-window),
+    # and each result sees only messages arriving within its own window.
+    # Injection stands in for solve-phase messages.
     grounded = make_program().ground()
 
     first = grounded.solve(models=0)
@@ -87,7 +88,8 @@ def test_messages_window_per_solve_on_shared_handler() -> None:
 
     second = grounded.solve(models=0)
     list(second)
-    assert second.messages == []  # the first solve's message is outside its window
+    assert second.messages == []  # the first solve's message was cleared
+    assert grounded._message_handler.messages == []  # nothing accumulates across solves
 
 
 def test_abandon_frees_the_grounding() -> None:

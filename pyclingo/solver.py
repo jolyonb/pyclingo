@@ -681,6 +681,10 @@ class GroundedProgram:
                 "overlapping searches. Consume the previous SolveResult, close() it, leave "
                 "its with-block, or call abandon() on this grounding."
             )
+        # The sequential guard above proves no generator is mid-flight holding
+        # a window index into this list, so clearing here is safe — each solve
+        # starts with an empty message list instead of accumulating forever
+        self._message_handler.messages.clear()
         assert isinstance(self._control.configuration.solve, clingo.Configuration)
         self._control.configuration.solve.models = models
         result = SolveResult(
