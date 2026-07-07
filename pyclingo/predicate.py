@@ -128,6 +128,8 @@ def _field_ground_types(cls: type) -> dict[str, type]:
 
 def _validate_schema(name: str, namespace: str, field_names: list[str]) -> None:
     """Validate a predicate's ASP name, namespace, and field names, raising on any problem."""
+    if not name.isascii():
+        raise ValueError(f"Predicate name must be ASCII (gringo's lexer is ASCII-only): {name!r}")
     if not name or not name[0].islower():
         raise ValueError(f"Predicate name must start with a lowercase letter: {name}")
 
@@ -137,6 +139,8 @@ def _validate_schema(name: str, namespace: str, field_names: list[str]) -> None:
     if name == "not":
         raise ValueError("'not' is reserved in ASP and cannot be a predicate name")
 
+    if not namespace.isascii():
+        raise ValueError(f"Namespace must be ASCII (gringo's lexer is ASCII-only): {namespace!r}")
     if namespace and (not namespace[0].islower() or not all(c.isalnum() or c == "_" for c in namespace)):
         raise ValueError(
             f"Namespace must start with a lowercase letter and contain only letters, "
@@ -149,9 +153,15 @@ def _validate_schema(name: str, namespace: str, field_names: list[str]) -> None:
 
     reserved = _RESERVED_FIELD_NAMES
     for field_name in field_names:
-        if not field_name.isidentifier() or field_name.startswith("_") or keyword.iskeyword(field_name):
+        if (
+            not field_name.isascii()
+            or not field_name.isidentifier()
+            or field_name.startswith("_")
+            or keyword.iskeyword(field_name)
+        ):
             raise ValueError(
-                f"Field name must be a valid non-keyword identifier not starting with an underscore: {field_name!r}"
+                f"Field name must be a valid ASCII non-keyword identifier not starting "
+                f"with an underscore: {field_name!r}"
             )
         if field_name in reserved:
             raise ValueError(f"Field name {field_name!r} would shadow a Predicate attribute")

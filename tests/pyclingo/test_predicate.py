@@ -66,3 +66,14 @@ def test_keyword_and_reserved_names_rejected() -> None:
 def test_base_predicate_cannot_be_instantiated() -> None:
     with pytest.raises(TypeError, match="cannot be instantiated directly"):
         Predicate()
+
+
+def test_non_ascii_names_rejected() -> None:
+    # gringo's lexer is ASCII-only; its error path crashes on multi-byte
+    # identifiers, so they must die at definition
+    with pytest.raises(ValueError, match="ASCII"):
+        Predicate.define("ärger", ["x"])
+    with pytest.raises(ValueError, match="ASCII"):
+        Predicate.define("p", ["fëld"])
+    with pytest.raises(ValueError, match="ASCII"):
+        Predicate.define("p", ["x"], namespace="ünter")

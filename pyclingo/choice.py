@@ -3,17 +3,17 @@ from typing import Self
 from pyclingo.conditioned_element import CONDITION_TYPE, ConditionedElement
 from pyclingo.core import (
     AtomSign,
+    Expression,
     Number,
     RenderingContext,
     String,
     Term,
     Value,
-    Variable,
 )
 from pyclingo.predicate import Predicate
 
 type CHOICE_ELEMENT_TYPE = Predicate
-type CARDINALITY_TYPE = int | Value
+type CARDINALITY_TYPE = int | Value | Expression
 
 
 class Choice(Term):
@@ -43,8 +43,8 @@ class Choice(Term):
                       If None, it's an unconditional choice
         """
         self._elements: list[ConditionedElement] = []
-        self._min_cardinality: None | Value = None
-        self._max_cardinality: None | Value = None
+        self._min_cardinality: None | Value | Expression = None
+        self._max_cardinality: None | Value | Expression = None
         self._frozen = False
 
         self.add(element, condition)
@@ -88,10 +88,10 @@ class Choice(Term):
         self._frozen = True
 
     @staticmethod
-    def _validate_cardinality(count: int | Value, description: str) -> Value:
+    def _validate_cardinality(count: int | Value | Expression, description: str) -> Value | Expression:
         """Validate a cardinality value, coercing ints to Number; raises on bad type or negative int."""
-        if not isinstance(count, (int, Value)):
-            raise TypeError(f"{description} must be an integer or Value, got {type(count).__name__}")
+        if not isinstance(count, (int, Value, Expression)):
+            raise TypeError(f"{description} must be an integer, Value, or Expression, got {type(count).__name__}")
 
         # Reject string constants which don't make sense for cardinality
         if isinstance(count, String):
@@ -105,7 +105,7 @@ class Choice(Term):
         return count
 
     @staticmethod
-    def _check_cardinality_possible(minimum: Value | None, maximum: Value | None) -> None:
+    def _check_cardinality_possible(minimum: Value | Expression | None, maximum: Value | Expression | None) -> None:
         """Reject statically impossible bounds; renders fine but is silently UNSAT."""
         if isinstance(minimum, Number) and isinstance(maximum, Number) and minimum.value > maximum.value:
             raise ValueError(f"Choice cardinality is impossible: at_least({minimum.value}) > at_most({maximum.value})")
@@ -167,12 +167,12 @@ class Choice(Term):
         return self._elements.copy()
 
     @property
-    def min_cardinality(self) -> Value | None:
+    def min_cardinality(self) -> Value | Expression | None:
         """The minimum cardinality constraint, or None if not set."""
         return self._min_cardinality
 
     @property
-    def max_cardinality(self) -> Value | None:
+    def max_cardinality(self) -> Value | Expression | None:
         """The maximum cardinality constraint, or None if not set."""
         return self._max_cardinality
 
@@ -256,11 +256,11 @@ class Choice(Term):
         for element in self._elements:
             variables.update(element.collect_variables())
 
-        if isinstance(self.min_cardinality, Variable):
-            variables.add(self.min_cardinality.name)
+        if self.min_cardinality is not None:
+            variables.update(self.min_cardinality.collect_variables())
 
-        if isinstance(self.max_cardinality, Variable):
-            variables.add(self.max_cardinality.name)
+        if self.max_cardinality is not None:
+            variables.update(self.max_cardinality.collect_variables())
 
         return variables
 

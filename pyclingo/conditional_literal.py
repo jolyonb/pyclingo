@@ -33,6 +33,13 @@ class ConditionalLiteral(Term):
         """
         if not isinstance(head, (Predicate, Comparison, DefaultNegation)):
             raise TypeError("The head of a conditional literal must be a predicate, comparison, or negated term")
+        if isinstance(condition, list) and not condition:
+            # A conditionless conditional literal renders as a plain positive
+            # literal with entirely different (binding) semantics — reject the
+            # category error rather than analyze it wrongly
+            raise ValueError(
+                "A conditional literal needs at least one condition; for an unconditional literal, use the term itself"
+            )
 
         self._element = ConditionedElement((head,), condition, "conditional literal")
 

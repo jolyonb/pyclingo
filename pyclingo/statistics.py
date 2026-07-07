@@ -72,7 +72,7 @@ def format_statistics_clingo_style(stats: dict[str, Any]) -> str:
     avg_length = guiding_path_lits / problems if problems > 0 else 0.0
     lines.append(f"Problems     : {problems:<8} (Average Length: {avg_length:.2f} Splits: {splits})")
 
-    # Enhanced Lemmas section (replace your current lemma section with this):
+    # Lemmas section
     if "lemmas" in extra:
         lemmas_total = int(extra["lemmas"])
         lemmas_conflict = int(extra.get("lemmas_conflict", 0))

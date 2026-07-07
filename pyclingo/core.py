@@ -357,6 +357,8 @@ class Variable(Value):
     """
 
     def __init__(self, name: str):
+        if not name.isascii():
+            raise ValueError(f"Variable name must be ASCII (gringo's lexer is ASCII-only): {name!r}")
         if not name or (name != "_" and not name[0].isupper()):
             raise ValueError(f"Variable name must start with an uppercase letter or be '_': {name}")
         if not all(c.isalnum() or c == "_" for c in name):
@@ -552,6 +554,8 @@ class DefinedConstant(ConstantBase):
 
     def __init__(self, value: str):
         """value is the constant's name: lowercase first letter, then letters, digits, and underscores."""
+        if not value.isascii():
+            raise ValueError(f"Defined constant name must be ASCII (gringo's lexer is ASCII-only): {value!r}")
         if not value or not value[0].islower():
             raise ValueError(f"Defined constant must start with a lowercase letter: {value}")
         if value == "not":

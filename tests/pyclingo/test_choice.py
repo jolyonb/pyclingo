@@ -74,3 +74,27 @@ def test_negation_wrapped_aggregate_condition_rejected() -> None:
     X, C = Variable("X"), Variable("C")
     with pytest.raises(ValueError, match="separate rule"):
         Choice(P(x=X), condition=Not(Count(C, condition=Q(x=C)) > 3))
+
+
+def test_expression_cardinality_bounds() -> None:
+    # { pick(X) : c(X) } = N + 1 :- size(N).  — gringo-legal, probed
+    program = ASPProgram()
+    Size = Predicate.define("size", ["n"], show=False)
+    C = Predicate.define("c", ["x"], show=False)
+    Pick = Predicate.define("pick", ["x"])
+    N, X = Variable("N"), Variable("X")
+    program.fact(Size(n=2), *[C(x=i) for i in range(1, 5)])
+    program.when(Size(n=N), let=Choice(Pick(x=X), condition=C(x=X)).exactly(N + 1))
+    models = list(program.solve(models=0))
+    assert len(models) == 4  # C(4, 3) ways to pick 3 of 4
+    assert all(len(m.atoms(Pick)) == 3 for m in models)
+
+
+def test_expression_bound_variables_must_bind() -> None:
+    # The bound's variables are global: unbound ones are rejected
+    program = ASPProgram()
+    P = Predicate.define("p_eb", ["x"])
+    Q = Predicate.define("q_eb", ["x"])
+    N, X = Variable("N"), Variable("X")
+    with pytest.raises(ValueError, match="Unsafe variable"):
+        program.when(Q(x=1), let=Choice(P(x=X), condition=Q(x=X)).exactly(N + 1))

@@ -113,17 +113,13 @@ class Rule(ProgramElement):
 
         if head is not None:
             head.validate_in_context(is_in_head=True)
-            head.freeze()
         self.head = head
 
-        # Convert body to list and validate; captured terms freeze so later
-        # mutation of a shared builder cannot silently rewrite this rule
         body_terms = []
         if body is not None:
             body_terms = [body] if isinstance(body, Term) else list(body)
             for term in body_terms:
                 term.validate_in_context(is_in_head=False)
-                term.freeze()
 
         self.body = body_terms
 
@@ -131,6 +127,13 @@ class Rule(ProgramElement):
         # the solver author's line, not in clingo's grounding output. The rule
         # itself is passed for error text, rendered only if an error needs it
         validate_rule(self.head, self.body, self, check_singletons=check_singletons)
+
+        # Freeze only now, after ALL validation: a rejected rule must not
+        # leave a shared builder locked by a rule that never existed
+        if self.head is not None:
+            self.head.freeze()
+        for term in self.body:
+            term.freeze()
 
     def render(self) -> str:
         result = ""

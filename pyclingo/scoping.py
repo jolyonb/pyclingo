@@ -5,10 +5,15 @@ and singleton-variable validation.
 The "binds" relation here deliberately OVER-APPROXIMATES gringo's: positive
 literals bind all their variables under any operator, and an equality binds
 one whole side once the other side is fully bound, regardless of the
-expression's shape. Every rejection is therefore a certain gringo rejection
-(no false positives); the cost is a few false negatives (e.g. X**2 = 9,
-which gringo cannot invert) that fall back to clingo's own grounding error.
-The probe-derived ground truth lives in tests/pyclingo/test_scoping.py.
+expression's shape. Every UNSAFE-VARIABLE rejection is therefore a certain
+gringo rejection (no false positives); the cost is a few false negatives
+(e.g. X**2 = 9, which gringo cannot invert) that fall back to clingo's own
+grounding error. Two further checks are deliberate lints BEYOND gringo,
+which accepts what they reject: singleton variables (gringo is silent;
+switchable via ASPProgram(allow_singletons=True)) and aggregate tuples
+sharing a rule-global variable (gringo emits only an info, with collapsed
+semantics). The probe-derived ground truth lives in
+tests/pyclingo/test_scoping.py.
 """
 
 from collections import Counter
@@ -227,10 +232,13 @@ def analyze(head: Term | None, body: list[Term]) -> RuleScopes:
             for condition in element.conditions:
                 _analyze_local_condition(condition, scope)
             scopes.local_scopes.append(scope)
-        # Cardinality bound variables are global and need binding (probed)
+        # Cardinality bound variables are global and need binding (probed);
+        # bounds may be Variables or Expressions over them
         for bound in (head.min_cardinality, head.max_cardinality):
-            if isinstance(bound, Variable) and not bound.is_anonymous:
-                scopes.head_counts[bound.name] += 1
+            if bound is not None:
+                for name in bound.collect_variables():
+                    if name != "_":
+                        scopes.head_counts[name] += 1
 
     # --- body ---
     for term in body:

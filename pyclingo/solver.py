@@ -40,7 +40,11 @@ class ASPProgram:
         self._check_singletons = not allow_singletons
         self._segments: defaultdict[str, list[ProgramElement]] = defaultdict(list)
         self._defined_constants: dict[str, int | str] = {}
-        self._show_overrides: dict[type[Predicate], bool | ConditionalLiteral] = {}
+        self._show_overrides: dict[type[Predicate], bool] = {}
+        # Conditional shows are per SIGN: (class, negated) -> the directive's
+        # conditional literal. Each sign's visibility resolves independently:
+        # its conditional override, else the class's bool override/default.
+        self._show_when_overrides: dict[tuple[type[Predicate], bool], ConditionalLiteral] = {}
         self.header: str | None = header
         self.default_segment: str = default_segment.lower()
 
@@ -73,6 +77,8 @@ class ASPProgram:
         Add unconditional statements to the program: grounded facts, or bare
         choice rules like { a(1..3) } (whose element variables are local).
         """
+        if not facts:
+            raise ValueError("fact() requires at least one statement")
         for statement in facts:
             if not isinstance(statement, (Predicate, Choice)):
                 raise TypeError(
@@ -200,6 +206,8 @@ class ASPProgram:
                 f"Constant value {value} is outside clingo's integer range "
                 f"[-2147483648, 2147483647]; clingo would silently wrap it"
             )
+        if not name.isascii():
+            raise ValueError(f"Constant name must be ASCII (gringo's lexer is ASCII-only): {name!r}")
         if not name or not name[0].islower():
             raise ValueError(f"Constant name must start with a lowercase letter: {name}")
         if name == "not":
@@ -211,7 +219,8 @@ class ASPProgram:
         if name in self._defined_constants:
             raise ValueError(f"Defined constant '{name}' is already registered")
 
-        if not isinstance(value, (int, str)):
+        if isinstance(value, bool) or not isinstance(value, (int, str)):
+            # bool subclasses int, and a boolean is never a valid ASP term
             raise TypeError(f"Constant value must be an integer or string, got {type(value).__name__}")
         if isinstance(value, str) and any(c in value for c in ('"', "\\", "\n", "\r")):
             raise ValueError(f"Constant string value cannot contain quotes, backslashes, or newlines: {value!r}")
@@ -243,6 +252,11 @@ class ASPProgram:
             show_when(ConditionalLiteral(p(C), [p(C), ~outside(C)]))
 
         renders as "#show p(C) : p(C), not outside(C)."
+
+        The directive covers the head's SIGN only: a positive head governs
+        positive atoms, a classically negated head (-p(...)) governs the
+        negated atoms, and the two may be registered independently — the
+        other sign falls back to the class's show()/hide()/default.
         """
         if not isinstance(condition, ConditionalLiteral):
             raise TypeError(f"show_when condition must be a ConditionalLiteral, got {type(condition).__name__}")
@@ -258,7 +272,7 @@ class ASPProgram:
         # inside the conditional literal itself)
         validate_rule(None, [condition], f"#show {condition.render()}.", check_singletons=self._check_singletons)
         condition.freeze()
-        self._show_overrides[type(head)] = condition
+        self._show_when_overrides[(type(head), head.negated)] = condition
 
     def _collect_predicates(self) -> set[type[Predicate]]:
         """Collect all predicate classes used anywhere in the program, show_when conditions included."""
@@ -268,9 +282,8 @@ class ASPProgram:
             for element in elements:
                 predicates.update(element.collect_predicates())
 
-        for visibility in self._show_overrides.values():
-            if isinstance(visibility, ConditionalLiteral):
-                predicates.update(visibility.collect_predicates())
+        for condition in self._show_when_overrides.values():
+            predicates.update(condition.collect_predicates())
 
         return predicates
 
@@ -280,28 +293,43 @@ class ASPProgram:
         for elements in self._segments.values():
             for element in elements:
                 signs.update(element.collect_predicate_signs())
-        for visibility in self._show_overrides.values():
-            if isinstance(visibility, ConditionalLiteral):
-                signs.update(visibility.collect_predicate_signs())
+        for condition in self._show_when_overrides.values():
+            signs.update(condition.collect_predicate_signs())
         return signs
 
     def _validate_shown_predicates(self) -> None:
         """
-        Raise for show() of a predicate with no atom occurrences — but only
-        when the program has no raw_asp blocks: raw text is invisible to the
+        Raise for show()/show_when() of atoms nothing derives — but only when
+        the program has no raw_asp blocks: raw text is invisible to the
         walkers, so with raw blocks present an uncollected predicate may
         still be derived (that is what raw_asp's predicates= is for).
         """
         has_raw = any(isinstance(element, RawASP) for elements in self._segments.values() for element in elements)
         if has_raw:
             return
-        atom_classes = {cls for cls, _negated, is_atom in self._collect_predicate_signs() if is_atom}
+        # Derivation evidence comes from the program's own rules: a show_when
+        # condition's atoms must not vouch for themselves
+        segment_signs = {
+            (cls, negated)
+            for elements in self._segments.values()
+            for element in elements
+            for cls, negated, is_atom in element.collect_predicate_signs()
+            if is_atom
+        }
+        atom_classes = {cls for cls, _negated in segment_signs}
         for pred, visibility in self._show_overrides.items():
             if visibility is True and pred not in atom_classes:
                 raise ValueError(
                     f"show({pred.__name__}) was called, but no {pred.get_name()}/{pred.get_arity()} "
                     f"atoms occur anywhere in the program — nothing derives it. (If it were "
                     f"emitted, gringo would reject the dangling #show directive.)"
+                )
+        for pred, negated in self._show_when_overrides:
+            if (pred, negated) not in segment_signs:
+                sign = "-" if negated else ""
+                raise ValueError(
+                    f"show_when was registered for {sign}{pred.get_name()}/{pred.get_arity()}, "
+                    f"but no such atoms occur anywhere in the program — nothing derives them."
                 )
 
     def _validate_names(self) -> None:
@@ -376,12 +404,12 @@ class ASPProgram:
         # nothing is shown — without it, clingo defaults to showing every atom.
         show_statements: set[str] = set()
         any_hidden = False
-        # Each sign has its own show signature, and a directive for an absent
-        # signature draws a gringo info — so emit per present sign. An
-        # explicit show() override counts as positive presence only where a
-        # positive atom could exist: either the walkers saw one, or raw text
-        # (which they cannot see) might provide one. A predicate occurring
-        # ONLY classically negated gets no dangling positive directive.
+        # Visibility resolves PER SIGN: a sign's conditional override wins,
+        # else the class's bool override/default. Signature directives are
+        # emitted only for present signs (a directive for an absent signature
+        # draws a gringo info); an explicit show() counts as positive
+        # presence only where a positive atom could exist — walked, or
+        # possibly hiding in raw text.
         signs = self._collect_predicate_signs()
         walked_positive = {cls for cls, negated, is_atom in signs if is_atom and not negated}
         has_raw = any(isinstance(element, RawASP) for elements in self._segments.values() for element in elements)
@@ -392,17 +420,21 @@ class ASPProgram:
         }
         positive_classes = walked_positive | override_positive
         negated_classes = {cls for cls, negated, is_atom in signs if is_atom and negated}
-        for pred in self._collect_predicates() | set(self._show_overrides):
-            visibility = self._show_overrides.get(pred, pred.shown_by_default())
-            if visibility is True:
-                if pred in positive_classes:
-                    show_statements.add(f"#show {pred.get_name()}/{pred.get_arity()}.")
-                if pred in negated_classes:
-                    show_statements.add(f"#show -{pred.get_name()}/{pred.get_arity()}.")
-            elif isinstance(visibility, ConditionalLiteral):
-                show_statements.add(f"#show {visibility.render()}.")
-            else:
-                any_hidden = True
+        all_classes = (
+            self._collect_predicates() | set(self._show_overrides) | {cls for cls, _ in self._show_when_overrides}
+        )
+        for pred in all_classes:
+            bool_visibility = self._show_overrides.get(pred, pred.shown_by_default())
+            for negated, present_set in ((False, positive_classes), (True, negated_classes)):
+                conditional = self._show_when_overrides.get((pred, negated))
+                if conditional is not None:
+                    show_statements.add(f"#show {conditional.render()}.")
+                elif bool_visibility:
+                    if pred in present_set:
+                        sign = "-" if negated else ""
+                        show_statements.add(f"#show {sign}{pred.get_name()}/{pred.get_arity()}.")
+                else:
+                    any_hidden = True
         if show_statements or any_hidden:
             lines.extend(("", "#show."))
             lines.extend(sorted(show_statements))
@@ -417,9 +449,8 @@ class ASPProgram:
             for element in elements:
                 constants.update(element.collect_defined_constants())
 
-        for visibility in self._show_overrides.values():
-            if isinstance(visibility, ConditionalLiteral):
-                constants.update(visibility.collect_defined_constants())
+        for condition in self._show_when_overrides.values():
+            constants.update(condition.collect_defined_constants())
 
         return constants
 
@@ -590,9 +621,10 @@ class GroundedProgram:
                 inner = literal
                 truth = True
             if not isinstance(inner, Predicate):
-                raise TypeError(
-                    f"Assumptions must be grounded predicate atoms or their ~negations, got {type(literal).__name__}"
+                described = (
+                    f"~{type(inner).__name__}" if isinstance(literal, DefaultNegation) else type(literal).__name__
                 )
+                raise TypeError(f"Assumptions must be grounded predicate atoms or their ~negations, got {described}")
             if not inner.is_grounded:
                 raise ValueError(f"Assumptions must be grounded: {inner.render()} contains variables")
             symbol = convert_predicate_to_symbol(inner, self._defined_constants)

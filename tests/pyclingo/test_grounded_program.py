@@ -170,3 +170,10 @@ def test_expression_assumptions_rejected_with_teaching() -> None:
     grounded = make_program().ground()
     with pytest.raises(ValueError, match="pass the computed value"):
         grounded.solve(assumptions=[A(value=Number(1) + 1)])
+
+
+def test_assumption_rejection_names_the_inner_term() -> None:
+    grounded = make_program().ground()
+    X = Variable("X")
+    with pytest.raises(TypeError, match="got ~Comparison"):
+        grounded.solve(assumptions=[~(X == 3)])

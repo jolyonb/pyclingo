@@ -66,6 +66,11 @@ class Model:
         All atoms in the model, or all of the given predicate class — BOTH
         signs: classically negated atoms (-p) are instances of the same class,
         so filter on .negated if your program uses classical negation.
+
+        Lookup is by EXACT class, and in_namespace() clones are distinct
+        classes: query with the clone you built the program with (atoms(Base)
+        is empty if the model holds only clone atoms). When in doubt,
+        atoms() with no argument returns everything.
         """
         if predicate is None:
             return list(self._atoms)

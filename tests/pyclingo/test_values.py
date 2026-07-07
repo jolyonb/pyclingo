@@ -4,7 +4,7 @@ Tests for the content rules of Number, String, and pools.
 
 import pytest
 
-from pyclingo import Number, RangePool, String, Value, Variable, pool
+from pyclingo import DefinedConstant, Number, RangePool, String, Value, Variable, pool
 
 
 def test_number_range_matches_clingo() -> None:
@@ -60,3 +60,10 @@ def test_failed_construction_does_not_poison_the_cache() -> None:
 def test_inverted_range_rejected() -> None:
     with pytest.raises(ValueError, match="empty"):
         RangePool(5, 1)
+
+
+def test_non_ascii_variable_and_constant_names_rejected() -> None:
+    with pytest.raises(ValueError, match="ASCII"):
+        Variable("Ärger")
+    with pytest.raises(ValueError, match="ASCII"):
+        DefinedConstant("größe")

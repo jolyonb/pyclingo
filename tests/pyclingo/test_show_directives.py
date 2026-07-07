@@ -100,3 +100,46 @@ def test_show_when_head_must_be_a_predicate() -> None:
     X = Variable("X")
     with pytest.raises(ValueError, match="head is a predicate atom"):
         program.show_when(ConditionalLiteral(X == 1, Q(x=X)))
+
+
+def test_show_when_covers_its_sign_only() -> None:
+    # A positive-head conditional governs positive atoms; the negated atoms
+    # fall back to their sign's default (here: shown via the signature form)
+    program = ASPProgram()
+    P = Predicate.define("p_mix", ["x"])
+    D = Predicate.define("d_mix", ["x"], show=False)
+    X = Variable("X")
+    program.fact(P(x=1), P(x=3), -P(x=2), D(x=1))
+    program.show_when(ConditionalLiteral(P(x=X), [P(x=X), D(x=X)]))
+    rendered = program.render()
+    assert "#show p_mix(X) : p_mix(X), d_mix(X)." in rendered
+    assert "#show -p_mix/1." in rendered
+    assert "#show p_mix/1." not in rendered  # positive sign is conditional now
+    model = next(iter(program.solve()))
+    shown = sorted(str(a) for a in model.atoms())
+    assert shown == ["-p_mix(2)", "p_mix(1)"]  # p_mix(3) filtered by the condition
+
+
+def test_show_when_both_signs_independently() -> None:
+    # Sign-specific conditionals coexist: each governs its own atoms (probed)
+    program = ASPProgram()
+    P = Predicate.define("p_both", ["x"])
+    D = Predicate.define("d_both", ["x"], show=False)
+    X = Variable("X")
+    program.fact(P(x=1), P(x=3), -P(x=2), -P(x=4), D(x=1), D(x=2))
+    program.show_when(ConditionalLiteral(P(x=X), [P(x=X), D(x=X)]))
+    program.show_when(ConditionalLiteral(-P(x=X), [-P(x=X), D(x=X)]))
+    model = next(iter(program.solve()))
+    shown = sorted(str(a) for a in model.atoms())
+    assert shown == ["-p_both(2)", "p_both(1)"]
+
+
+def test_show_when_on_underived_predicate_rejected_at_render() -> None:
+    program = ASPProgram()
+    P = Predicate.define("p_und", ["x"])
+    Ghost = Predicate.define("ghost_sw", ["x"])
+    X = Variable("X")
+    program.fact(P(x=1))
+    program.show_when(ConditionalLiteral(Ghost(x=X), Ghost(x=X)))
+    with pytest.raises(ValueError, match="nothing derives them"):
+        program.render()

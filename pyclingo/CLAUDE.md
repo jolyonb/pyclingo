@@ -122,7 +122,8 @@ All support multiple elements and conditions via `add()` method.
 
 #### Conditional Literals (`conditional_literal.py`)
 Conditional structures: `p(X) : q(X)`
-- Used in aggregates and choice rules, and directly in rule bodies
+- Used directly in rule bodies and in show_when() (aggregates and choices
+  build their own elements via add(); see ConditionedElement)
 - Intuition: the head is a "key", the condition a "lock" — the literal
   holds when every lock has a matching key
 

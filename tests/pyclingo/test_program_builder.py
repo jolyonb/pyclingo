@@ -5,7 +5,7 @@ define_constant, and the guards on their inputs.
 
 import pytest
 
-from pyclingo import ASPProgram, Choice, Count, Predicate, RangePool, Variable
+from pyclingo import ASPProgram, Choice, ConditionalLiteral, Count, Predicate, RangePool, Variable
 
 
 def test_facts_must_be_grounded() -> None:
@@ -103,3 +103,40 @@ def test_snake_case_segment_headers_render_as_words() -> None:
     program.fact(P(x=1), segment="grid_stuff")
     program.fact(P(x=2))  # second segment so headers render
     assert "% ===== Grid Stuff =====" in program.render()
+
+
+def test_define_constant_rejects_bool_and_non_ascii() -> None:
+    program = ASPProgram()
+    with pytest.raises(TypeError, match="got bool"):
+        program.define_constant("flag", True)
+    with pytest.raises(ValueError, match="ASCII"):
+        program.define_constant("größe", 3)
+
+
+def test_empty_fact_rejected() -> None:
+    program = ASPProgram()
+    with pytest.raises(ValueError, match="at least one statement"):
+        program.fact()
+
+
+def test_empty_conditional_literal_condition_rejected() -> None:
+    # A conditionless CL renders as a plain (binding) literal — a category
+    # error caught at construction
+    P = Predicate.define("p_cl", ["x"])
+    X = Variable("X")
+    with pytest.raises(ValueError, match="at least one condition"):
+        ConditionalLiteral(P(x=X), [])
+
+
+def test_failed_rule_leaves_builders_unfrozen() -> None:
+    # A rejected rule never existed; the builder must remain repairable
+    program = ASPProgram()
+    P = Predicate.define("p_uf", ["x"])
+    Q = Predicate.define("q_uf", ["x"])
+    X, Y = Variable("X"), Variable("Y")
+    choice = Choice(P(x=X), condition=Q(x=X))
+    with pytest.raises(ValueError, match="Singleton variable"):
+        program.when(Q(x=Y), let=choice)  # Y is a singleton — rule rejected
+    choice.add(P(x=X + 1), Q(x=X))  # still mutable: the rule never captured it
+    program.fact(choice)
+    assert "{ p_uf(X) : q_uf(X); p_uf(X + 1) : q_uf(X) }" in program.render()
