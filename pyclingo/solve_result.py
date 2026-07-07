@@ -40,17 +40,16 @@ from pyclingo.statistics import format_statistics_clingo_style
 type PREDICATE_TYPES = dict[tuple[str, int], type[Predicate]]
 
 
-class Model:
+class AtomCollection:
     """
-    One answer set: the atoms clingo found true, as typed Predicate instances.
-
-    (Clingo calls this a model; the paradigm's own name for it is an answer set.)
+    A set of atoms as typed Predicate instances: the claim-free reading
+    surface shared by everything that hands atoms back. Subclasses say what
+    their atoms MEAN — a Model's are one answer set, a Consequences' are a
+    statement about every answer set — this class only provides the access.
     """
 
-    def __init__(self, atoms: list[Predicate], messages: list[ClingoMessage] | None = None) -> None:
+    def __init__(self, atoms: list[Predicate]) -> None:
         self._atoms = atoms
-        # Diagnostics clingo emitted while searching for this model (usually empty)
-        self.messages = messages if messages is not None else []
         self._by_class: dict[type[Predicate], list[Predicate]] = {}
         for atom in atoms:
             self._by_class.setdefault(type(atom), []).append(atom)
@@ -63,13 +62,13 @@ class Model:
 
     def atoms(self, predicate: type[Predicate] | None = None) -> list[Any]:
         """
-        All atoms in the model, or all of the given predicate class — BOTH
-        signs: classically negated atoms (-p) are instances of the same class,
+        All atoms, or all of the given predicate class — BOTH signs:
+        classically negated atoms (-p) are instances of the same class,
         so filter on .negated if your program uses classical negation.
 
         Lookup is by EXACT class, and in_namespace() clones are distinct
         classes: query with the clone you built the program with (atoms(Base)
-        is empty if the model holds only clone atoms). When in doubt,
+        is empty if the collection holds only clone atoms). When in doubt,
         atoms() with no argument returns everything.
         """
         if predicate is None:
@@ -81,7 +80,20 @@ class Model:
 
     def __repr__(self) -> str:
         counts = ", ".join(f"{cls.get_name()}: {len(atoms)}" for cls, atoms in self._by_class.items())
-        return f"Model({counts})"
+        return f"{type(self).__name__}({counts})"
+
+
+class Model(AtomCollection):
+    """
+    One answer set: the atoms clingo found true, as typed Predicate instances.
+
+    (Clingo calls this a model; the paradigm's own name for it is an answer set.)
+    """
+
+    def __init__(self, atoms: list[Predicate], messages: list[ClingoMessage] | None = None) -> None:
+        super().__init__(atoms)
+        # Diagnostics clingo emitted while searching for this model (usually empty)
+        self.messages = messages if messages is not None else []
 
 
 @dataclass
