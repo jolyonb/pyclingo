@@ -6,10 +6,12 @@ import clingo
 from pyclingo.choice import Choice
 from pyclingo.clingo_handler import ClingoMessageHandler, LogLevel
 from pyclingo.conditional_literal import ConditionalLiteral
+from pyclingo.conditioned_element import CONDITION_TYPE
 from pyclingo.core import AtomSign, Comparison, DefaultNegation, DefinedConstant, Pool, Term
+from pyclingo.optimization import OPTIMIZATION_TERM_TYPE, Optimization, OptimizationDirective
 from pyclingo.predicate import Predicate
 from pyclingo.program_elements import BlankLine, Comment, ProgramElement, RawASP, Rule
-from pyclingo.scoping import validate_rule
+from pyclingo.scoping import validate_optimization_element, validate_rule
 from pyclingo.solve_result import (
     AtomCollection,
     BraveConsequences,
@@ -177,6 +179,65 @@ class ASPProgram:
             if not isinstance(condition, Term):
                 raise TypeError(f"require() conditions must be Terms, got {type(condition).__name__}")
         self.forbid(*conditions, target.inverse(), segment=segment)
+
+    def minimize(
+        self,
+        weight: int | OPTIMIZATION_TERM_TYPE,
+        *tuple_terms: OPTIMIZATION_TERM_TYPE,
+        condition: CONDITION_TYPE | list[CONDITION_TYPE] | None = None,
+        priority: int = 0,
+        segment: str | None = None,
+    ) -> None:
+        """
+        Add a #minimize statement: among the answer sets, prefer those
+        where the total weight is smallest. The weight is summed over
+        DISTINCT ground tuples, so include identifying terms after it
+        exactly as in a #sum tuple:
+
+            minimize(Size, C, condition=island(loc=C, size=Size))
+
+        renders "#minimize{ Size, C : island(C, Size) }." — without C, two
+        same-sized islands would collapse to one contribution. priority
+        stacks objectives lexicographically (higher decided first,
+        rendered W@P); priorities are ordinal keys and gaps are free.
+        All statements at a priority share ONE tuple set: duplicate
+        tuples count once, distinct tuples sum.
+
+        Every variable must be bound by the element's own conditions — this
+        directive has no rule body. Optimization changes how the program
+        must be solved; see optimize().
+        """
+        self._add_optimization(Optimization.MINIMIZE, weight, tuple_terms, condition, priority, segment)
+
+    def maximize(
+        self,
+        weight: int | OPTIMIZATION_TERM_TYPE,
+        *tuple_terms: OPTIMIZATION_TERM_TYPE,
+        condition: CONDITION_TYPE | list[CONDITION_TYPE] | None = None,
+        priority: int = 0,
+        segment: str | None = None,
+    ) -> None:
+        """
+        Add a #maximize statement: prefer answer sets with the LARGEST
+        total weight. Exactly minimize() with the preference flipped
+        (clingo reports the cost of a maximization as a negated sum). See
+        minimize() for the tuple-distinctness and priority rules.
+        """
+        self._add_optimization(Optimization.MAXIMIZE, weight, tuple_terms, condition, priority, segment)
+
+    def _add_optimization(
+        self,
+        sense: Optimization,
+        weight: int | OPTIMIZATION_TERM_TYPE,
+        tuple_terms: tuple[OPTIMIZATION_TERM_TYPE, ...],
+        condition: CONDITION_TYPE | list[CONDITION_TYPE] | None,
+        priority: int,
+        segment: str | None,
+    ) -> None:
+        directive = OptimizationDirective(sense, weight, tuple_terms, condition, priority)
+        validate_optimization_element(directive.element, directive.render(), check_singletons=self._check_singletons)
+        directive.element.freeze()
+        self._segments[self._segment_key(segment)].append(directive)
 
     def raw_asp(self, text: str, segment: str | None = None, predicates: Sequence[type[Predicate]] = ()) -> None:
         """

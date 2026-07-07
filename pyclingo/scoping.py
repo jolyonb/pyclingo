@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING
 from pyclingo.aggregates import Aggregate
 from pyclingo.choice import Choice
 from pyclingo.conditional_literal import ConditionalLiteral
+from pyclingo.conditioned_element import ConditionedElement
 from pyclingo.core import (
     AggregateBase,
     Comparison,
@@ -173,7 +174,7 @@ def _analyze_comparison(comparison: Comparison, scopes: RuleScopes, counts: Coun
             side_vars.append(frozenset(_variables_of(term)))
 
     if isinstance(comparison.right_term, Pool):
-        # X = 1..N binds X once N is bound; the range never inverts (probed),
+        # X = 1..N binds X once N is bound; the range never inverts,
         # so the edge is one-way: bound(bounds) -> bound(X)
         scopes.directed_edges.append((side_vars[1], side_vars[0]))
     elif comparison.is_equality:
@@ -221,7 +222,7 @@ def _analyze_negated_body_term(negation: DefaultNegation, scopes: RuleScopes) ->
     A negated body literal: its variables count globally and bind nothing;
     an aggregate inside a negated comparison keeps its own local scopes
     (its element variables are not the rule's problem). No equality edges:
-    a negated equality does not bind (probed).
+    a negated equality does not bind.
     """
     inner = negation.term
     if isinstance(inner, DefaultNegation):  # not not X
@@ -247,7 +248,7 @@ def analyze(head: Term | None, body: list[Term]) -> RuleScopes:
         _count_variables(head, scopes.head_counts)
     elif isinstance(head, Comparison):
         # A comparison head forces the equality; all its variables are global
-        # and need body binding (probed)
+        # and need body binding
         for side in (head.left_term, head.right_term):
             if "_" in side.collect_variables():
                 scopes.anonymous_in_head = True
@@ -262,7 +263,7 @@ def analyze(head: Term | None, body: list[Term]) -> RuleScopes:
             for condition in element.conditions:
                 _analyze_local_condition(condition, scope)
             scopes.local_scopes.append(scope)
-        # Cardinality bound variables are global and need binding (probed);
+        # Cardinality bound variables are global and need binding;
         # bounds may be Variables or Expressions over them
         for bound in (head.min_cardinality, head.max_cardinality):
             if bound is not None:
@@ -276,7 +277,7 @@ def analyze(head: Term | None, body: list[Term]) -> RuleScopes:
             scopes.global_binders |= _variables_of(term)
             _count_variables(term, scopes.body_counts)
         elif isinstance(term, DefaultNegation):
-            # Negated literals count globally and bind nothing (probed)
+            # Negated literals count globally and bind nothing
             _analyze_negated_body_term(term, scopes)
         elif isinstance(term, Comparison):
             _analyze_comparison(term, scopes, scopes.body_counts)
@@ -293,11 +294,11 @@ def analyze(head: Term | None, body: list[Term]) -> RuleScopes:
 def _resolve_localities(scopes: RuleScopes) -> None:
     """
     A construct variable is local only if it does not occur at rule level
-    outside constructs; otherwise its occurrences count globally (probed:
-    the Size == Count(Cell, condition=Region(loc=Cell, anchor=AnchorCell))
+    outside constructs; otherwise its occurrences count globally (the
+    Size == Count(Cell, condition=Region(loc=Cell, anchor=AnchorCell))
     pattern — Cell is local, AnchorCell is global). Construct targets with
     no supporting condition are global for choice elements and conditional
-    literals (probed), but a safety error for aggregate elements — that
+    literals, but a safety error for aggregate elements — that
     case is left in the local scope for the safety check to catch.
     """
     global_names = set(scopes.global_occurrences())
@@ -318,6 +319,39 @@ def _resolve_localities(scopes: RuleScopes) -> None:
             condition_names = set(scope.condition_counts)
             for name in [n for n in scope.target_counts if n not in condition_names]:
                 scopes.body_counts[name] += scope.target_counts.pop(name)
+
+
+def validate_optimization_element(element: ConditionedElement, rule_text: str, check_singletons: bool = True) -> None:
+    """
+    Validate an optimization directive's element: the weight and tuple
+    terms must be bound by the element's own conditions (a directive has
+    no rule body to bind from), with the same local-scope treatment as an
+    aggregate element.
+    """
+    scope = LocalScope(description="optimization element")
+    for target in element.targets:
+        _count_variables(target, scope.target_counts)
+    for condition in element.conditions:
+        _analyze_local_condition(condition, scope)
+    bound = _bind_fixpoint(scope.binders, scope.equality_edges, scope.directed_edges)
+    unsafe = sorted((set(scope.target_counts) | set(scope.condition_counts)) - bound)
+    if unsafe:
+        names = ", ".join(unsafe)
+        raise ValueError(
+            f"Unsafe variable(s) {names} in optimization element: {rule_text}\n"
+            f"Every variable must be bound by a positive condition inside the element "
+            f"(a directive has no rule body)."
+        )
+    if not check_singletons:
+        return
+    singletons = sorted(name for name, count in (scope.target_counts + scope.condition_counts).items() if count == 1)
+    if singletons:
+        names = ", ".join(singletons)
+        raise ValueError(
+            f"Singleton variable(s) {names} in optimization element: {rule_text}\n"
+            f"A variable used exactly once is usually a typo; use ANY for an "
+            f"intentional don't-care."
+        )
 
 
 def validate_rule(head: Term | None, body: list[Term], rule: str | Rule, check_singletons: bool = True) -> None:
