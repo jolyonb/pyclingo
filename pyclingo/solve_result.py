@@ -118,6 +118,31 @@ class Model(AtomCollection):
         self.messages = messages if messages is not None else []
 
 
+class CostedModel(Model):
+    """
+    An answer set found during an optimization descent, carrying its cost.
+
+    cost has one entry per declared priority level, highest priority
+    first (priorities are ordinal keys — gaps do not pad the tuple). A
+    maximization's cost is reported negated: clasp minimizes the negated
+    weights, so maximizing a total of 9 reads cost=(-9,). Lower is better
+    at every level, in every sense.
+    """
+
+    def __init__(
+        self,
+        atoms: list[Predicate],
+        cost: tuple[int, ...],
+        messages: list[ClingoMessage] | None = None,
+    ) -> None:
+        super().__init__(atoms, messages)
+        self.cost = cost
+
+    def __repr__(self) -> str:
+        counts = ", ".join(f"{cls.get_name()}: {len(atoms)}" for cls, atoms in self._by_class.items())
+        return f"{type(self).__name__}(cost={list(self.cost)}, {counts})"
+
+
 class Consequences(AtomCollection):
     """
     The product of one brave/cautious refinement: a statement about the
