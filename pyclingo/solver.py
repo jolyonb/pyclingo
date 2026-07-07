@@ -1,4 +1,3 @@
-import time
 from collections import defaultdict
 from collections.abc import Sequence
 
@@ -431,9 +430,73 @@ class ASPProgram:
         if unregistered := used_constants - set(self._defined_constants.keys()):
             raise ValueError(f"Undefined constants used in program: {', '.join(sorted(unregistered))}")
 
+    def ground(self, stop_on_log_level: LogLevel = LogLevel.INFO) -> GroundedProgram:
+        """
+        Render and ground the program once, returning a handle that can be
+        solved repeatedly — the re.compile() of this API. solve() is sugar
+        for ground().solve(); use ground() directly when the same program
+        will be solved many times (grounding is the expensive step).
+
+        The handle is an independent snapshot — it holds the rendered text
+        and solves exactly that program forever, like a compiled regex holds
+        its pattern. Mutating this ASPProgram afterwards does not affect
+        existing handles; ground() again for the updated program (keeping
+        both handles is fine, e.g. to compare a program with and without a
+        rule).
+
+        Raises:
+            ValueError: For render-time validation failures (undeclared
+                constants, name collisions, shows of underived predicates)
+            RuntimeError: If an error occurs during parsing or grounding, or
+                the log level threshold is exceeded
+        """
+        asp_source = self.render()
+
+        message_handler = ClingoMessageHandler(asp_source, stop_on_level=stop_on_log_level)
+        control = clingo.Control(logger=message_handler.on_message, arguments=["--stats"])
+
+        try:
+            control.add("base", [], asp_source)
+        except RuntimeError as e:
+            error_msg = str(e)
+            if formatted_messages := message_handler.format_all_messages(verb="parsing"):
+                error_msg += "\n\n" + formatted_messages
+            raise RuntimeError(error_msg) from e
+
+        try:
+            control.ground([("base", [])])
+        except RuntimeError as e:
+            error_msg = f"Grounding failed: {e}\n\n"
+            if formatted_messages := message_handler.format_all_messages(verb="grounding"):
+                error_msg += formatted_messages
+            raise RuntimeError(error_msg) from e
+
+        # Messages below the stop threshold are tolerated silently; at or above
+        # it, the full formatted diagnostics ride along in the raised error
+        if message_handler.should_halt:
+            assert message_handler.highest_level is not None
+            raise RuntimeError(
+                f"Grounding produced {message_handler.highest_level.name} level messages "
+                f"(stop threshold: {stop_on_log_level.name}).\n\n"
+                f"{message_handler.format_all_messages(verb='grounding')}"
+            )
+
+        predicate_types = {(pred.get_name(), pred.get_arity()): pred for pred in self._collect_predicates()}
+
+        # Raw text is invisible to the walkers, so with raw blocks present
+        # every model's full atom set is checked against declared signatures
+        # (the raw_asp contract: exhaustive declaration)
+        has_raw = any(isinstance(element, RawASP) for elements in self._segments.values() for element in elements)
+
+        return GroundedProgram(asp_source, control, predicate_types, message_handler, check_all_atoms=has_raw)
+
     def solve(self, models: int = 1, timeout: float = 0, stop_on_log_level: LogLevel = LogLevel.INFO) -> SolveResult:
         """
         Solve the ASP program, returning a SolveResult that yields Models lazily.
+
+        Sugar for ground().solve(): renders and grounds a fresh Control every
+        call. For solving one program many times, call ground() once and
+        solve the returned handle repeatedly.
 
         Args:
             models: Maximum number of models to compute; defaults to 1, matching
@@ -463,58 +526,88 @@ class ASPProgram:
             model enumeration is lazy. Every call returns an independent SolveResult,
             so repeated solves on one program never interfere.
         """
+        return self.ground(stop_on_log_level=stop_on_log_level).solve(models=models, timeout=timeout)
+
+
+class GroundedProgram:
+    """
+    A program rendered and grounded once, solvable many times.
+
+    Obtained from ASPProgram.ground(). The handle is an independent
+    snapshot: it holds the rendered text (the .text property) and solves
+    exactly that program, unaffected by later mutation of the ASPProgram it
+    came from — like a compiled regex and its pattern. Each solve() returns
+    an independent SolveResult sharing this handle's single grounding, so
+    the expensive step is paid once.
+
+    One contract, enforced loudly: solves are sequential. A Control cannot
+    run overlapping searches, so solve() raises while a previous result is
+    unconsumed (consume it, close() it, or leave its with-block first).
+
+    clingo's statistics reflect the most recent solve on the shared Control;
+    each SolveResult snapshots them (plus its own wall_time) as it finishes.
+    """
+
+    def __init__(
+        self,
+        text: str,
+        control: clingo.Control,
+        predicate_types: dict[tuple[str, int], type[Predicate]],
+        message_handler: ClingoMessageHandler,
+        check_all_atoms: bool,
+    ) -> None:
+        self._text = text
+        self._control = control
+        self._predicate_types = predicate_types
+        self._message_handler = message_handler
+        self._check_all_atoms = check_all_atoms
+        self._active: SolveResult | None = None
+
+    @property
+    def text(self) -> str:
+        """The rendered ASP program this grounding solves."""
+        return self._text
+
+    def abandon(self) -> None:
+        """
+        Close the previous solve's result if it is still open, freeing this
+        grounding for the next solve() — useful when the old result is no
+        longer in hand. Idempotent; a no-op if nothing is open.
+        """
+        if self._active is not None:
+            self._active.close()
+            self._active = None
+
+    def solve(self, models: int = 1, timeout: float = 0) -> SolveResult:
+        """
+        Solve this grounding, returning a SolveResult that yields Models lazily.
+
+        models and timeout behave exactly as on ASPProgram.solve(); they are
+        per-solve settings on the shared grounding.
+
+        Args:
+            models: Maximum number of models to compute (0 enumerates all).
+            timeout: Wall-clock limit in seconds (0 for no limit), counted
+                from the start of iteration.
+        """
         if timeout < 0:
             raise ValueError(f"timeout must be non-negative, got {timeout}")
         if models < 0:
             raise ValueError(f"models must be non-negative (0 enumerates all), got {models}")
-
-        tic = time.perf_counter()
-
-        # Render the ASP program first
-        asp_source = self.render()
-
-        # Create message handler with the ASP source and specified stop level
-        message_handler = ClingoMessageHandler(asp_source, stop_on_level=stop_on_log_level)
-
-        # Configure and prepare the control object
-        control = clingo.Control(logger=message_handler.on_message, arguments=["--stats"])
-        assert isinstance(control.configuration.solve, clingo.Configuration)
-        control.configuration.solve.models = models
-
-        # Add and ground the program
-        try:
-            control.add("base", [], asp_source)
-        except RuntimeError as e:
-            # Handle parsing errors
-            error_msg = str(e)
-            if formatted_messages := message_handler.format_all_messages(verb="parsing"):
-                error_msg += "\n\n" + formatted_messages
-            raise RuntimeError(error_msg) from e
-
-        try:
-            control.ground([("base", [])])
-        except RuntimeError as e:
-            # Handle grounding errors
-            error_msg = f"Grounding failed: {e}\n\n"
-            if formatted_messages := message_handler.format_all_messages(verb="grounding"):
-                error_msg += formatted_messages
-            raise RuntimeError(error_msg) from e
-
-        # Messages below the stop threshold are tolerated silently; at or above
-        # it, the full formatted diagnostics ride along in the raised error
-        if message_handler.should_halt:
-            assert message_handler.highest_level is not None
+        if self._active is not None and not self._active.finished:
             raise RuntimeError(
-                f"Grounding produced {message_handler.highest_level.name} level messages "
-                f"(stop threshold: {stop_on_log_level.name}).\n\n"
-                f"{message_handler.format_all_messages(verb='grounding')}"
+                "The previous solve on this grounding is still open; a Control cannot run "
+                "overlapping searches. Consume the previous SolveResult, close() it, leave "
+                "its with-block, or call abandon() on this grounding."
             )
-
-        predicate_types = {(pred.get_name(), pred.get_arity()): pred for pred in self._collect_predicates()}
-
-        # Raw text is invisible to the walkers, so with raw blocks present
-        # every model's full atom set is checked against declared signatures
-        # (the raw_asp contract: exhaustive declaration)
-        has_raw = any(isinstance(element, RawASP) for elements in self._segments.values() for element in elements)
-
-        return SolveResult(control, predicate_types, timeout, tic, message_handler, check_all_atoms=has_raw)
+        assert isinstance(self._control.configuration.solve, clingo.Configuration)
+        self._control.configuration.solve.models = models
+        result = SolveResult(
+            self._control,
+            self._predicate_types,
+            timeout,
+            self._message_handler,
+            check_all_atoms=self._check_all_atoms,
+        )
+        self._active = result
+        return result

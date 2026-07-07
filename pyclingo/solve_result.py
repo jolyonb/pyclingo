@@ -111,13 +111,12 @@ class SolveResult:
         control: clingo.Control,
         predicate_types: PREDICATE_TYPES,
         timeout: float,
-        tic: float,
         message_handler: ClingoMessageHandler,
         check_all_atoms: bool = False,
     ) -> None:
         self._state = _SolveState()
         self._iterator = _solve_generator(
-            control, predicate_types, timeout, tic, self._state, message_handler, check_all_atoms
+            control, predicate_types, timeout, time.perf_counter(), self._state, message_handler, check_all_atoms
         )
 
     @property
@@ -159,6 +158,11 @@ class SolveResult:
         self.close()
 
     @property
+    def finished(self) -> bool:
+        """Whether this result's stream has ended (exhausted or closed)."""
+        return self._state.finished
+
+    @property
     def messages(self) -> list[ClingoMessage]:
         """
         Diagnostics clingo emitted during the solve phase (after grounding).
@@ -174,9 +178,10 @@ class SolveResult:
         """
         Raw clingo statistics plus 'wall_time', or None if solving never ran.
 
-        wall_time spans the solve() call to the end of iteration, so it
-        includes any time the caller spends between models; clingo's own
-        solving clocks live under summary.times.
+        wall_time spans this result's creation (the solve() call) to the end
+        of iteration — it includes any time the caller spends between models,
+        and excludes rendering and grounding. clingo's own solving clocks
+        live under summary.times.
         """
         return self._state.statistics
 

@@ -38,12 +38,13 @@ from .core import (
 from .operators import ComparisonOperator
 from .predicate import Field, Predicate, PredicateField
 from .solve_result import Model, SolveResult
-from .solver import ASPProgram
+from .solver import ASPProgram, GroundedProgram
 from .version import __version__
 
 __all__ = [  # noqa: RUF022 (categorized deliberately, not sorted)
     # The program and its results
     "ASPProgram",
+    "GroundedProgram",
     "SolveResult",
     "Model",
     "LogLevel",
