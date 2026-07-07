@@ -33,7 +33,7 @@ def test_require_renders_the_inverse_constraint() -> None:
     N, C = Variable("N"), Variable("C")
     program.fact(Clue(num=1), P(x=1))
     program.require(Count(C, condition=P(x=C)) == N, when=Clue(num=N))
-    assert ":- clue(N), #count{C : p(C)} != N." in program.render()
+    assert ":- clue(N), #count{ C : p(C) } != N." in program.render()
 
 
 def test_require_solves_correctly() -> None:
@@ -60,7 +60,7 @@ def test_require_without_when() -> None:
     C = Variable("C")
     program.fact(P(x=1), P(x=2), P(x=3))
     program.require(Count(C, condition=P(x=C)) >= 2)
-    assert ":- #count{C : p3(C)} < 2." in program.render()
+    assert ":- #count{ C : p3(C) } < 2." in program.render()
 
 
 def test_require_rejects_predicates_with_teaching() -> None:

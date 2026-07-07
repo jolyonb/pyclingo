@@ -2,20 +2,17 @@ from abc import ABC
 from enum import StrEnum
 from typing import ClassVar, Self
 
+from pyclingo.conditioned_element import CONDITION_TYPE, ConditionedElement
 from pyclingo.core import (
     AggregateBase,
     AtomSign,
-    Comparison,
-    DefaultNegation,
     Expression,
     RenderingContext,
-    Term,
     Value,
 )
 from pyclingo.predicate import Predicate
 
 type AGGREGATE_ELEMENT_TYPE = Value | Expression | Predicate
-type AGGREGATE_CONDITION_TYPE = Predicate | DefaultNegation | Comparison
 
 
 class AggregateType(StrEnum):
@@ -33,7 +30,7 @@ class Aggregate(AggregateBase, ABC):
     Abstract base class for aggregates in ASP programs.
 
     Aggregates calculate values over sets of elements, used in expressions like
-    #count{X : p(X)} = 3 or #sum{W,X : p(X,W)} > 10.
+    #count{ X : p(X) } = 3 or #sum{ W,X : p(X,W) } > 10.
     """
 
     # Set by subclasses to specify which aggregate function to use
@@ -42,7 +39,7 @@ class Aggregate(AggregateBase, ABC):
     def __init__(
         self,
         element: AGGREGATE_ELEMENT_TYPE | tuple[AGGREGATE_ELEMENT_TYPE, ...],
-        condition: AGGREGATE_CONDITION_TYPE | list[AGGREGATE_CONDITION_TYPE] | None = None,
+        condition: CONDITION_TYPE | list[CONDITION_TYPE] | None = None,
     ):
         """
         Create an aggregate with an initial element; see add() for further elements.
@@ -52,14 +49,14 @@ class Aggregate(AggregateBase, ABC):
             condition: Condition(s) determining when the element is included
                       If None, it's an unconditional element
         """
-        self._elements: list[tuple[tuple[AGGREGATE_ELEMENT_TYPE, ...], list[AGGREGATE_CONDITION_TYPE]]] = []
+        self._elements: list[ConditionedElement] = []
         self._frozen = False
         self.add(element, condition)
 
     def add(
         self,
         element: AGGREGATE_ELEMENT_TYPE | tuple[AGGREGATE_ELEMENT_TYPE, ...],
-        condition: AGGREGATE_CONDITION_TYPE | list[AGGREGATE_CONDITION_TYPE] | None = None,
+        condition: CONDITION_TYPE | list[CONDITION_TYPE] | None = None,
     ) -> Self:
         """
         Add an element with optional condition(s); returns self for chaining.
@@ -74,7 +71,7 @@ class Aggregate(AggregateBase, ABC):
             >>> X, Y, Z, W = create_variables("X", "Y", "Z", "W")
             >>> p, q, r = (Predicate.define(name, ["x"]) for name in "pqr")
             >>> Count(X).add(Y, p(x=Y)).add((Z, W), [q(x=Z), r(x=W)]).render()
-            '#count{X; Y : p(Y); Z, W : q(Z), r(W)}'
+            '#count{ X; Y : p(Y); Z, W : q(Z), r(W) }'
         """
         if self._frozen:
             raise RuntimeError(
@@ -88,30 +85,7 @@ class Aggregate(AggregateBase, ABC):
                     f"Aggregate element items must be Values, Expressions, or Predicates, got {type(item).__name__}"
                 )
 
-        if condition is None:
-            conditions = []
-        elif not isinstance(condition, list):
-            conditions = [condition]
-        else:
-            conditions = list(condition)  # copy: the caller's list must not alias rule internals
-        for cond in conditions:
-            if not isinstance(cond, (Predicate, DefaultNegation, Comparison)):
-                raise TypeError(
-                    f"Aggregate condition must be a Predicate, DefaultNegation, or Comparison, "
-                    f"got {type(cond).__name__}"
-                )
-            inner: Term = cond
-            while isinstance(inner, DefaultNegation):
-                inner = inner.term
-            if isinstance(inner, Comparison) and any(
-                isinstance(term, Aggregate) for term in (inner.left_term, inner.right_term)
-            ):
-                raise ValueError(
-                    "Aggregates cannot be nested inside aggregate conditions (clingo syntax "
-                    "error); compute the inner aggregate in a separate rule"
-                )
-
-        self._elements.append((element_tuple, conditions))
+        self._elements.append(ConditionedElement(element_tuple, condition, "aggregate"))
 
         return self
 
@@ -119,10 +93,8 @@ class Aggregate(AggregateBase, ABC):
         self._frozen = True
 
     @property
-    def elements(
-        self,
-    ) -> list[tuple[tuple[AGGREGATE_ELEMENT_TYPE, ...], list[AGGREGATE_CONDITION_TYPE]]]:
-        """The element-condition pairs in this aggregate (a defensive copy)."""
+    def elements(self) -> list[ConditionedElement]:
+        """The elements of this aggregate (a defensive copy of the list)."""
         return self._elements.copy()
 
     @property
@@ -132,35 +104,17 @@ class Aggregate(AggregateBase, ABC):
 
         Note: This property strictly checks all variables, including those that would be
         considered "local" to the aggregate in ASP semantics. For example, in
-        #count{X : p(X)}, the variable X is local to the aggregate but this property
+        #count{ X : p(X) }, the variable X is local to the aggregate but this property
         will still report False because X is ungrounded. This approach ensures
         consistency with how other Term classes handle groundedness.
         We may later add a separate property to check that no global variables are used if needed.
         """
-        for element_tuple, conditions in self._elements:
-            for element in element_tuple:
-                if not element.is_grounded:
-                    return False
-
-            for condition in conditions:
-                if not condition.is_grounded:
-                    return False
-
-        return True
+        return all(element.is_grounded for element in self._elements)
 
     def render(self, context: RenderingContext = RenderingContext.DEFAULT) -> str:
-        elements_str = []
+        elements_str = "; ".join(element.render() for element in self._elements)
 
-        for element_tuple, conditions in self._elements:
-            element_str = ", ".join(elem.render() for elem in element_tuple)
-
-            if conditions:
-                conditions_str = ", ".join(cond.render() for cond in conditions)
-                elements_str.append(f"{element_str} : {conditions_str}")
-            else:
-                elements_str.append(element_str)
-
-        return f"{self.AGGREGATE_TYPE.value}{{{'; '.join(elements_str)}}}"
+        return f"{self.AGGREGATE_TYPE.value}{{ {elements_str} }}"
 
     def __str__(self) -> str:
         return self.render()
@@ -171,53 +125,42 @@ class Aggregate(AggregateBase, ABC):
     def validate_in_context(self, is_in_head: bool) -> None:
         """Aggregates are only valid inside comparisons: always raises."""
         raise ValueError(
-            "Aggregates must be used in comparisons (e.g., #count{...} > 0) "
+            "Aggregates must be used in comparisons (e.g., #count{ ... } > 0) "
             "and cannot appear directly in rule heads or bodies"
         )
 
     def collect_defined_constants(self) -> set[str]:
-        constants = set()
+        constants: set[str] = set()
 
-        for element_tuple, conditions in self._elements:
-            for element in element_tuple:
-                constants.update(element.collect_defined_constants())
-
-            for condition in conditions:
-                constants.update(condition.collect_defined_constants())
+        for element in self._elements:
+            constants.update(element.collect_defined_constants())
 
         return constants
 
     def collect_variables(self) -> set[str]:
-        variables = set()
+        variables: set[str] = set()
 
-        for element_tuple, conditions in self._elements:
-            for element in element_tuple:
-                variables.update(element.collect_variables())
-
-            for condition in conditions:
-                variables.update(condition.collect_variables())
+        for element in self._elements:
+            variables.update(element.collect_variables())
 
         return variables
 
     def collect_predicate_signs(self) -> set[AtomSign]:
         signs: set[AtomSign] = set()
-        for element_tuple, conditions in self._elements:
-            for element in element_tuple:
-                signs.update(element.collect_predicate_signs())
-            for condition in conditions:
-                signs.update(condition.collect_predicate_signs())
+        for element in self._elements:
+            signs.update(element.collect_predicate_signs())
         return signs
 
 
 class Count(Aggregate):
-    """#count: the number of distinct matching tuples, e.g. #count{X : p(X)} = 3."""
+    """#count: the number of distinct matching tuples, e.g. #count{ X : p(X) } = 3."""
 
     AGGREGATE_TYPE = AggregateType.COUNT
 
 
 class Sum(Aggregate):
     """
-    #sum: the sum of weights over distinct matching tuples, e.g. #sum{W,X : p(X,W)} > 10.
+    #sum: the sum of weights over distinct matching tuples, e.g. #sum{ W,X : p(X,W) } > 10.
 
     The first element in each tuple is the weight.
     """
@@ -237,7 +180,7 @@ class SumPlus(Aggregate):
 
 class Min(Aggregate):
     """
-    #min: the minimum value over distinct matching tuples, e.g. #min{W,X : p(X,W)} < 5.
+    #min: the minimum value over distinct matching tuples, e.g. #min{ W,X : p(X,W) } < 5.
 
     The first element in each tuple is the value.
     """
@@ -247,7 +190,7 @@ class Min(Aggregate):
 
 class Max(Aggregate):
     """
-    #max: the maximum value over distinct matching tuples, e.g. #max{W,X : p(X,W)} < 100.
+    #max: the maximum value over distinct matching tuples, e.g. #max{ W,X : p(X,W) } < 100.
 
     The first element in each tuple is the value.
     """

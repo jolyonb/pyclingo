@@ -1,4 +1,5 @@
-from pyclingo.core import AggregateBase, AtomSign, Comparison, DefaultNegation, RenderingContext, Term
+from pyclingo.conditioned_element import ConditionedElement
+from pyclingo.core import AtomSign, Comparison, DefaultNegation, RenderingContext, Term
 from pyclingo.predicate import Predicate
 
 # Terms that can be used in a conditional literal
@@ -28,53 +29,30 @@ class ConditionalLiteral(Term):
         if not isinstance(head, (Predicate, Comparison, DefaultNegation)):
             raise TypeError("The head of a conditional literal must be a predicate, comparison, or negated term")
 
-        self._head = head
-
-        # Convert single condition to list
-        if isinstance(condition, Term):
-            self._condition = [condition]
-        else:
-            self._condition = list(condition)
-
-        for cond in self._condition:
-            if not isinstance(cond, (Predicate, Comparison, DefaultNegation)):
-                raise TypeError("Conditions in a conditional literal must be predicates, comparisons, or negated terms")
-            inner: Term = cond
-            while isinstance(inner, DefaultNegation):
-                inner = inner.term
-            if isinstance(inner, Comparison) and any(
-                isinstance(term, AggregateBase) for term in (inner.left_term, inner.right_term)
-            ):
-                raise ValueError(
-                    "Aggregates cannot appear inside conditional literal conditions (clingo "
-                    "syntax error); compute the aggregate in a separate rule"
-                )
+        self._element = ConditionedElement((head,), condition, "conditional literal")
 
     @property
     def head(self) -> CONDITIONAL_TERM_TYPE:
         """Gets the head term of the conditional literal."""
-        return self._head
+        head = self._element.targets[0]
+        assert isinstance(head, (Predicate, Comparison, DefaultNegation))
+        return head
 
     @property
     def condition(self) -> list[CONDITIONAL_TERM_TYPE]:
         """Gets the conditions of the conditional literal (a defensive copy)."""
-        return self._condition.copy()
+        return self._element.conditions
 
     @property
     def is_grounded(self) -> bool:
         """A conditional literal is grounded if the head and all conditions are grounded."""
-        return self.head.is_grounded and all(cond.is_grounded for cond in self.condition)
+        return self._element.is_grounded
 
     def freeze(self) -> None:
-        self.head.freeze()
-        for cond in self._condition:
-            cond.freeze()
+        self._element.freeze()
 
     def render(self, context: RenderingContext = RenderingContext.DEFAULT) -> str:
-        head_str = self.head.render()
-        condition_str = ", ".join(cond.render() for cond in self.condition)
-
-        return f"{head_str} : {condition_str}"
+        return self._element.render()
 
     def __str__(self) -> str:
         return self.render()
@@ -88,30 +66,13 @@ class ConditionalLiteral(Term):
             raise ValueError("Conditional literals cannot be used in rule heads")
 
     def collect_defined_constants(self) -> set[str]:
-        constants = set()
-
-        constants.update(self.head.collect_defined_constants())
-
-        for cond in self.condition:
-            constants.update(cond.collect_defined_constants())
-
-        return constants
+        return self._element.collect_defined_constants()
 
     def collect_variables(self) -> set[str]:
-        variables = set()
-
-        variables.update(self.head.collect_variables())
-
-        for cond in self.condition:
-            variables.update(cond.collect_variables())
-
-        return variables
+        return self._element.collect_variables()
 
     def collect_predicate_signs(self) -> set[AtomSign]:
-        signs = set(self.head.collect_predicate_signs())
-        for cond in self.condition:
-            signs.update(cond.collect_predicate_signs())
-        return signs
+        return self._element.collect_predicate_signs()
 
 
 def key_for_each_lock(

@@ -184,7 +184,7 @@ def test_choice_element_sharing_a_global_stays_legal() -> None:
 
 
 def test_negated_aggregate_comparison_is_valid() -> None:
-    # not #count{C : q(C)} > 3 — C is the aggregate's local, not an unsafe
+    # not #count{ C : q(C) } > 3 — C is the aggregate's local, not an unsafe
     # global; clingo accepts this rule silently
     C = Variable("C")
     ok(P(x=1), [Q(x=1), Not(Count(C, condition=Q(x=C)) > 3)])

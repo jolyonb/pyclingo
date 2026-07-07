@@ -31,7 +31,7 @@ def test_top_level_term_renders_are_wrapped_and_checked() -> None:
     X = Variable("X")
     P = Predicate.define("p", ["x"])
     assert (~(X < 5)).render() == "not X < 5"
-    assert Count(X, condition=P(x=X)).render() == "#count{X : p(X)}"
+    assert Count(X, condition=P(x=X)).render() == "#count{ X : p(X) }"
 
 
 def test_nested_renders_do_not_multiply_checks() -> None:

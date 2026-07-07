@@ -1,10 +1,8 @@
 from typing import Self
 
+from pyclingo.conditioned_element import CONDITION_TYPE, ConditionedElement
 from pyclingo.core import (
-    AggregateBase,
     AtomSign,
-    Comparison,
-    DefaultNegation,
     Number,
     RenderingContext,
     String,
@@ -15,7 +13,6 @@ from pyclingo.core import (
 from pyclingo.predicate import Predicate
 
 type CHOICE_ELEMENT_TYPE = Predicate
-type CHOICE_CONDITION_TYPE = Predicate | DefaultNegation | Comparison
 type CARDINALITY_TYPE = int | Value
 
 
@@ -35,7 +32,7 @@ class Choice(Term):
     def __init__(
         self,
         element: CHOICE_ELEMENT_TYPE,
-        condition: CHOICE_CONDITION_TYPE | list[CHOICE_CONDITION_TYPE] | None = None,
+        condition: CONDITION_TYPE | list[CONDITION_TYPE] | None = None,
     ):
         """
         Create a choice rule with an initial element; see add() for further elements.
@@ -45,7 +42,7 @@ class Choice(Term):
             condition: Condition(s) determining when the element is considered
                       If None, it's an unconditional choice
         """
-        self._elements: list[tuple[CHOICE_ELEMENT_TYPE, list[CHOICE_CONDITION_TYPE]]] = []
+        self._elements: list[ConditionedElement] = []
         self._min_cardinality: None | Value = None
         self._max_cardinality: None | Value = None
         self._frozen = False
@@ -55,7 +52,7 @@ class Choice(Term):
     def add(
         self,
         element: CHOICE_ELEMENT_TYPE,
-        condition: CHOICE_CONDITION_TYPE | list[CHOICE_CONDITION_TYPE] | None = None,
+        condition: CONDITION_TYPE | list[CONDITION_TYPE] | None = None,
     ) -> Self:
         """
         Add another element with optional condition(s); returns self for chaining.
@@ -76,30 +73,7 @@ class Choice(Term):
         if not isinstance(element, Predicate):
             raise TypeError(f"Choice element must be a Predicate, got {type(element).__name__}")
 
-        # Coerce to list, then validate each condition uniformly
-        if condition is None:
-            conditions = []
-        elif isinstance(condition, list):
-            conditions = list(condition)  # copy: the caller's list must not alias rule internals
-        else:
-            conditions = [condition]
-        for cond in conditions:
-            if not isinstance(cond, (Predicate, DefaultNegation, Comparison)):
-                raise TypeError(
-                    f"Choice condition must be a Predicate, DefaultNegation, or Comparison, got {type(cond).__name__}"
-                )
-            inner: Term = cond
-            while isinstance(inner, DefaultNegation):
-                inner = inner.term
-            if isinstance(inner, Comparison) and any(
-                isinstance(term, AggregateBase) for term in (inner.left_term, inner.right_term)
-            ):
-                raise ValueError(
-                    "Aggregates cannot appear inside choice conditions (clingo syntax error); "
-                    "compute the aggregate in a separate rule"
-                )
-
-        self._elements.append((element, conditions))
+        self._elements.append(ConditionedElement((element,), condition, "choice"))
 
         return self
 
@@ -188,8 +162,8 @@ class Choice(Term):
         return self
 
     @property
-    def elements(self) -> list[tuple[CHOICE_ELEMENT_TYPE, list[CHOICE_CONDITION_TYPE]]]:
-        """The element-condition pairs in this choice rule (a defensive copy)."""
+    def elements(self) -> list[ConditionedElement]:
+        """The elements of this choice rule (a defensive copy of the list)."""
         return self._elements.copy()
 
     @property
@@ -214,13 +188,9 @@ class Choice(Term):
         consistency with how other Term classes handle groundedness.
         We may later add a separate property to check that no global variables are used if needed.
         """
-        for element, conditions in self._elements:
+        for element in self._elements:
             if not element.is_grounded:
                 return False
-
-            for condition in conditions:
-                if not condition.is_grounded:
-                    return False
 
         if self.min_cardinality and not self.min_cardinality.is_grounded:
             return False
@@ -251,18 +221,9 @@ class Choice(Term):
             max_str = self.max_cardinality.render()
             suffix = f" {max_str}"
 
-        elements_str = []
+        elements_str = "; ".join(element.render() for element in self._elements)
 
-        for element, conditions in self._elements:
-            element_str = element.render()
-
-            if conditions:
-                conditions_str = ", ".join(cond.render() for cond in conditions)
-                elements_str.append(f"{element_str} : {conditions_str}")
-            else:
-                elements_str.append(element_str)
-
-        return f"{prefix}{{ {'; '.join(elements_str)} }}{suffix}"
+        return f"{prefix}{{ {elements_str} }}{suffix}"
 
     def __str__(self) -> str:
         return self.render()
@@ -278,11 +239,8 @@ class Choice(Term):
     def collect_defined_constants(self) -> set[str]:
         constants = set()
 
-        for element, conditions in self._elements:
+        for element in self._elements:
             constants.update(element.collect_defined_constants())
-
-            for condition in conditions:
-                constants.update(condition.collect_defined_constants())
 
         if self.min_cardinality:
             constants.update(self.min_cardinality.collect_defined_constants())
@@ -295,11 +253,8 @@ class Choice(Term):
     def collect_variables(self) -> set[str]:
         variables = set()
 
-        for element, conditions in self._elements:
+        for element in self._elements:
             variables.update(element.collect_variables())
-
-            for condition in conditions:
-                variables.update(condition.collect_variables())
 
         if isinstance(self.min_cardinality, Variable):
             variables.add(self.min_cardinality.name)
@@ -311,8 +266,6 @@ class Choice(Term):
 
     def collect_predicate_signs(self) -> set[AtomSign]:
         signs: set[AtomSign] = set()
-        for element, conditions in self._elements:
+        for element in self._elements:
             signs.update(element.collect_predicate_signs())
-            for condition in conditions:
-                signs.update(condition.collect_predicate_signs())
         return signs

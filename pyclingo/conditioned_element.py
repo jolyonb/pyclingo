@@ -1,0 +1,110 @@
+"""
+The shared grammar of conditional constructs: "target(s) : conditions".
+
+Choice elements, aggregate elements, and conditional literals behave very
+differently — different legal positions, different target types, different
+wrappers — but the mechanics of SPECIFYING one element are identical: the
+same condition union, the same validation, the same rendering and walking.
+ConditionedElement owns those mechanics once; each construct validates its
+own targets and renders its own wrapper around the elements it holds.
+"""
+
+from pyclingo.core import AggregateBase, AtomSign, Comparison, DefaultNegation, Term
+from pyclingo.predicate import Predicate
+
+# The condition union every conditional construct shares
+type CONDITION_TYPE = Predicate | DefaultNegation | Comparison
+
+
+class ConditionedElement:
+    """One "target(s) : conditions" element; immutable once constructed."""
+
+    __slots__ = ("_conditions", "_targets")
+
+    def __init__(
+        self,
+        targets: tuple[Term, ...],
+        condition: CONDITION_TYPE | list[CONDITION_TYPE] | None,
+        construct: str,
+    ) -> None:
+        """
+        The owning construct validates its targets before constructing; this
+        validates the conditions. `construct` names the owner in errors
+        (e.g. "choice", "aggregate", "conditional literal").
+        """
+        if condition is None:
+            conditions = []
+        elif isinstance(condition, list):
+            conditions = list(condition)  # copy: the caller's list must not alias rule internals
+        else:
+            conditions = [condition]
+
+        for cond in conditions:
+            if not isinstance(cond, (Predicate, DefaultNegation, Comparison)):
+                raise TypeError(
+                    f"A {construct} condition must be a Predicate, DefaultNegation, or Comparison, "
+                    f"got {type(cond).__name__}"
+                )
+            inner: Term = cond
+            while isinstance(inner, DefaultNegation):
+                inner = inner.term
+            if isinstance(inner, Comparison) and any(
+                isinstance(term, AggregateBase) for term in (inner.left_term, inner.right_term)
+            ):
+                raise ValueError(
+                    f"Aggregates cannot appear inside {construct} conditions (clingo syntax "
+                    f"error); compute the aggregate in a separate rule"
+                )
+
+        self._targets = targets
+        self._conditions = conditions
+
+    @property
+    def targets(self) -> tuple[Term, ...]:
+        return self._targets
+
+    @property
+    def conditions(self) -> list[CONDITION_TYPE]:
+        """The element's conditions (a defensive copy)."""
+        return self._conditions.copy()
+
+    @property
+    def is_grounded(self) -> bool:
+        return all(t.is_grounded for t in self._targets) and all(c.is_grounded for c in self._conditions)
+
+    def render(self) -> str:
+        targets_str = ", ".join(target.render() for target in self._targets)
+        if not self._conditions:
+            return targets_str
+        conditions_str = ", ".join(cond.render() for cond in self._conditions)
+        return f"{targets_str} : {conditions_str}"
+
+    def freeze(self) -> None:
+        for target in self._targets:
+            target.freeze()
+        for cond in self._conditions:
+            cond.freeze()
+
+    def collect_variables(self) -> set[str]:
+        variables: set[str] = set()
+        for target in self._targets:
+            variables.update(target.collect_variables())
+        for cond in self._conditions:
+            variables.update(cond.collect_variables())
+        return variables
+
+    def collect_defined_constants(self) -> set[str]:
+        constants: set[str] = set()
+        for target in self._targets:
+            constants.update(target.collect_defined_constants())
+        for cond in self._conditions:
+            constants.update(cond.collect_defined_constants())
+        return constants
+
+    def collect_predicate_signs(self) -> set[AtomSign]:
+        signs: set[AtomSign] = set()
+        for target in self._targets:
+            signs.update(target.collect_predicate_signs())
+        for cond in self._conditions:
+            signs.update(cond.collect_predicate_signs())
+        return signs

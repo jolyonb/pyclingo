@@ -113,7 +113,7 @@ def _bind_fixpoint(binders: set[str], edges: list[EqualityEdge]) -> set[str]:
                 bound |= left
                 changed = True
             # An empty side means the other side is bound unconditionally
-            # (e.g. N = 1..3, or N = #count{...} whose variables are all local)
+            # (e.g. N = 1..3, or N = #count{ ... } whose variables are all local)
             if not left and not right <= bound:
                 bound |= right
                 changed = True
@@ -147,11 +147,11 @@ def _analyze_aggregate(aggregate: Aggregate, scopes: RuleScopes) -> set[str]:
     GLOBAL variables (those also occurring outside constructs are resolved
     later; structurally, aggregates expose nothing globally themselves).
     """
-    for element_tuple, conditions in aggregate.elements:
+    for element in aggregate.elements:
         scope = LocalScope(description=f"{aggregate.AGGREGATE_TYPE.value} element", is_aggregate_element=True)
-        for element in element_tuple:
-            _count_variables(element, scope.target_counts)
-        for condition in conditions:
+        for target in element.targets:
+            _count_variables(target, scope.target_counts)
+        for condition in element.conditions:
             _analyze_local_condition(condition, scope)
         scopes.local_scopes.append(scope)
     return set()
@@ -212,12 +212,13 @@ def analyze(head: Term | None, body: list[Term]) -> RuleScopes:
                 scopes.anonymous_in_head = True
             _count_variables(side, scopes.head_counts)
     elif isinstance(head, Choice):
-        for element, conditions in head.elements:
-            if "_" in element.collect_variables():
+        for element in head.elements:
+            target = element.targets[0]  # choice elements have exactly one target
+            if "_" in target.collect_variables():
                 scopes.anonymous_in_head = True
             scope = LocalScope(description="choice element", targets_are_global_without_condition=True)
-            _count_variables(element, scope.target_counts)
-            for condition in conditions:
+            _count_variables(target, scope.target_counts)
+            for condition in element.conditions:
                 _analyze_local_condition(condition, scope)
             scopes.local_scopes.append(scope)
         # Cardinality bound variables are global and need binding (probed)

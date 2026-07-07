@@ -107,7 +107,7 @@ class ASPProgram:
 
             require(Count(Adj, condition=...) == N, when=Clue(num=N))
 
-        renders ":- clue(N), #count{Adj : ...} != N."
+        renders ":- clue(N), #count{ Adj : ... } != N."
         """
         if not isinstance(target, Comparison):
             raise TypeError(

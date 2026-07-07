@@ -11,7 +11,7 @@ def test_aggregates_rejected_in_aggregate_conditions() -> None:
     # clingo cannot parse a nested aggregate; compute it in a separate rule
     P = Predicate.define("p", ["x"])
     X, Y = Variable("X"), Variable("Y")
-    with pytest.raises(ValueError, match="nested inside aggregate conditions"):
+    with pytest.raises(ValueError, match="inside aggregate conditions"):
         Count(X, condition=[P(x=X), Count(Y, condition=P(x=Y)) > 0])
 
 
@@ -26,7 +26,7 @@ def test_aggregate_freezes_when_captured_inside_a_comparison() -> None:
 
 
 def test_expression_weights_solve() -> None:
-    # #sum{X * 2, X : p(X)} over p(1..3) = 12 (probed against gringo)
+    # #sum{ X * 2, X : p(X) } over p(1..3) = 12 (probed against gringo)
     P = Predicate.define("p6", ["x"], show=False)
     T = Predicate.define("t6", ["s"])
     S, X = Variable("S"), Variable("X")
@@ -40,7 +40,7 @@ def test_expression_weights_solve() -> None:
 def test_expression_element_renders() -> None:
     X = Variable("X")
     P = Predicate.define("p7", ["x"])
-    assert Sum((X * 2, X), condition=P(x=X)).render() == "#sum{X * 2, X : p7(X)}"
+    assert Sum((X * 2, X), condition=P(x=X)).render() == "#sum{ X * 2, X : p7(X) }"
 
 
 def test_expression_element_variables_are_scoped() -> None:

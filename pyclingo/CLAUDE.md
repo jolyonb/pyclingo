@@ -105,9 +105,9 @@ Methods:
 
 #### Aggregates (`aggregates.py`)
 Aggregate functions for ASP:
-- **Count**: `#count{X : p(X)}`
-- **Sum/SumPlus**: `#sum{W,X : p(X,W)}`
-- **Min/Max**: `#min{W,X : p(X,W)}`
+- **Count**: `#count{ X : p(X) }`
+- **Sum/SumPlus**: `#sum{ W,X : p(X,W) }`
+- **Min/Max**: `#min{ W,X : p(X,W) }`
 
 All support multiple elements and conditions via `add()` method.
 
