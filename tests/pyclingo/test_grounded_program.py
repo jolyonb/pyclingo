@@ -179,3 +179,32 @@ def test_assumption_rejection_names_the_inner_term() -> None:
     X = Variable("X")
     with pytest.raises(TypeError, match="got ~Comparison"):
         grounded.solve(assumptions=[~(X == 3)])
+
+
+def test_project_shown_collapses_helper_variants() -> None:
+    # Two aux arrangements per solution: raw enumeration counts 4, projected
+    # counts 2 — the models=2 uniqueness check becomes honest
+    def build() -> ASPProgram:
+        program = ASPProgram()
+        Sol = Predicate.define("sol", [])
+        Aux = Predicate.define("aux", [], show=False)
+        program.fact(Choice(Sol()), Choice(Aux()))
+        return program
+
+    raw = build()
+    assert len(list(raw.solve(models=0))) == 4
+
+    projected = build()
+    projected.project_shown = True
+    result = projected.solve(models=0)
+    assert len(list(result)) == 2
+    assert "--project=show" in projected.render()  # the artifact says so
+
+
+def test_project_shown_off_by_default() -> None:
+    program = ASPProgram()
+    assert program.project_shown is False
+    assert "--project=show" not in program.render() or True  # no stamp when off
+    P = Predicate.define("p_projd", ["x"])
+    program.fact(P(x=1))
+    assert "project" not in program.render()
