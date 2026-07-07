@@ -151,12 +151,28 @@ Key features:
 - Comprehensive error handling
 
 #### Solve Results (`solve_result.py`)
+- **SearchABC**: the shared lifecycle for one search on a Control
+  (close()/with, finished/satisfiable/messages/statistics); SolveResult
+  and RefinementSteps are its two handles, both driven by the single
+  _search_generator (mode-parameterized at three points: emission type,
+  cost legality, timeout terminal).
 - **SolveResult**: the handle returned by solve() — iterate it for Models;
-  satisfiable/exhausted/solution_count/statistics finalize when iteration
-  ends on any path (exhaustion, close(), or a with-block). Each solve()
-  call returns an independent result.
-- **Model**: one answer set; `atoms(Cls)` returns typed instances of a
-  predicate class, `atoms()` returns everything.
+  the stream is unbounded (consume what you need; islice/break are the
+  limits). satisfiable/exhausted/solution_count/statistics finalize when
+  iteration ends on any path (exhaustion, close(), or a with-block).
+- **RefinementSteps**: the handle returned by refine(RefinementMode.BRAVE
+  or .CAUTIOUS) — iterate for successive approximations (claim-free
+  AtomCollections); only the last is the true union/intersection; break
+  whenever your question is answered. TimeoutError raised mid-iteration
+  on deadline; zero yields = UNSAT.
+- **AtomCollection**: the claim-free typed-atom reading surface —
+  `atoms(Cls)` returns typed instances, `atoms()` returns everything.
+  Subclasses say what their atoms mean:
+- **Model**: one answer set (+ per-model .messages).
+- **Consequences -> BraveConsequences/CautiousConsequences**: the eager
+  answers from brave()/cautious(); carry .path (every approximation, the
+  receipts) and .complete (a PROOF of exhaustion). Partials are one-sided:
+  brave presence certified, cautious absence certified. None = UNSAT.
 
 #### Program Elements (`program_elements.py`)
 Building blocks for ASP programs:

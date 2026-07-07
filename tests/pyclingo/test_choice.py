@@ -85,7 +85,7 @@ def test_expression_cardinality_bounds() -> None:
     N, X = Variable("N"), Variable("X")
     program.fact(Size(n=2), *[C(x=i) for i in range(1, 5)])
     program.when(Size(n=N), let=Choice(Pick(x=X), condition=C(x=X)).exactly(N + 1))
-    models = list(program.solve(models=0))
+    models = list(program.solve())
     assert len(models) == 4  # C(4, 3) ways to pick 3 of 4
     assert all(len(m.atoms(Pick)) == 3 for m in models)
 

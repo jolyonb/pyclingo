@@ -11,7 +11,7 @@ def test_format_statistics_renders_the_full_report() -> None:
     program = ASPProgram()
     P = Predicate.define("p", ["x"])
     program.fact(*[P(x=i) for i in range(1, 4)])
-    result = program.solve(models=0)
+    result = program.solve()
     list(result)
     report = result.format_statistics()
     # One anchor per section format_statistics reads

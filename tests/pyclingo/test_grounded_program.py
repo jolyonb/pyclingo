@@ -3,6 +3,8 @@ Tests for the ground()/solve() split: ground once, solve many times, with
 the sequential-solve and staleness contracts enforced loudly.
 """
 
+from itertools import islice
+
 import clingo
 import pytest
 
@@ -20,23 +22,25 @@ def make_program(n: int = 3) -> ASPProgram:
 
 def test_ground_once_solve_repeatedly() -> None:
     grounded = make_program().ground()
-    first = grounded.solve(models=0)
+    first = grounded.solve()
     assert len(list(first)) == 8
-    second = grounded.solve(models=0)
+    second = grounded.solve()
     assert len(list(second)) == 8
     assert first.exhausted and second.exhausted
 
 
-def test_per_solve_settings_on_one_grounding() -> None:
+def test_per_solve_consumption_on_one_grounding() -> None:
     grounded = make_program().ground()
-    assert len(list(grounded.solve(models=0))) == 8
-    assert len(list(grounded.solve(models=2))) == 2
-    assert len(list(grounded.solve())) == 1  # the default, per solve
+    assert len(list(grounded.solve())) == 8
+    partial = grounded.solve()
+    assert len(list(islice(partial, 2))) == 2
+    partial.close()  # early-stopped: free the grounding for the next solve
+    assert len(list(grounded.solve())) == 8
 
 
 def test_overlapping_solves_rejected() -> None:
     grounded = make_program().ground()
-    first = grounded.solve(models=0)
+    first = grounded.solve()
     next(iter(first))  # started but unconsumed
     with pytest.raises(RuntimeError, match="still open"):
         grounded.solve()
@@ -65,7 +69,7 @@ def test_grounding_is_an_independent_snapshot() -> None:
 
 def test_one_shot_solve_unchanged() -> None:
     # solve() is sugar for ground().solve(); behavior identical
-    result = make_program().solve(models=0)
+    result = make_program().solve()
     assert len(list(result)) == 8
     assert result.statistics is not None
     assert "wall_time" in result.statistics
@@ -78,7 +82,7 @@ def test_messages_window_per_solve_on_shared_handler() -> None:
     # Injection stands in for solve-phase messages.
     grounded = make_program().ground()
 
-    first = grounded.solve(models=0)
+    first = grounded.solve()
     iterator = iter(first)
     next(iterator)
     handler = grounded._message_handler
@@ -86,7 +90,7 @@ def test_messages_window_per_solve_on_shared_handler() -> None:
     list(iterator)
     assert len(first.messages) == 1
 
-    second = grounded.solve(models=0)
+    second = grounded.solve()
     list(second)
     assert second.messages == []  # the first solve's message was cleared
     assert grounded._message_handler.messages == []  # nothing accumulates across solves
@@ -94,35 +98,35 @@ def test_messages_window_per_solve_on_shared_handler() -> None:
 
 def test_abandon_frees_the_grounding() -> None:
     grounded = make_program().ground()
-    first = grounded.solve(models=0)
+    first = grounded.solve()
     next(iter(first))  # open and unconsumed
     grounded.abandon()
     assert first.finished
-    assert len(list(grounded.solve(models=0))) == 8
+    assert len(list(grounded.solve())) == 8
 
 
 def test_abandon_is_idempotent_and_safe_when_nothing_is_open() -> None:
     grounded = make_program().ground()
     grounded.abandon()  # nothing open: no-op
-    result = grounded.solve(models=0)
+    result = grounded.solve()
     list(result)
     grounded.abandon()  # already finished: no-op
     grounded.abandon()
-    assert len(list(grounded.solve(models=2))) == 2
+    assert len(list(islice(grounded.solve(), 2))) == 2
 
 
 def test_assumptions_filter_models_per_solve() -> None:
     grounded = make_program().ground()  # {a(1..3)}: 8 models
-    assert len(list(grounded.solve(models=0, assumptions=[A(value=1)]))) == 4
-    assert len(list(grounded.solve(models=0, assumptions=[~A(value=1)]))) == 4
-    assert len(list(grounded.solve(models=0, assumptions=[A(value=1), ~A(value=2)]))) == 2
+    assert len(list(grounded.solve(assumptions=[A(value=1)]))) == 4
+    assert len(list(grounded.solve(assumptions=[~A(value=1)]))) == 4
+    assert len(list(grounded.solve(assumptions=[A(value=1), ~A(value=2)]))) == 2
     # Assumptions never persist: the next solve is unconstrained
-    assert len(list(grounded.solve(models=0))) == 8
+    assert len(list(grounded.solve())) == 8
 
 
 def test_assumed_atoms_appear_in_every_model() -> None:
     grounded = make_program().ground()
-    for model in grounded.solve(models=0, assumptions=[A(value=2)]):
+    for model in grounded.solve(assumptions=[A(value=2)]):
         assert A(value=2) in set(model.atoms(A))
 
 
@@ -162,7 +166,7 @@ def test_assumptions_resolve_defined_constants() -> None:
     n = program.define_constant("n_assume", 4)
     program.fact(Choice(F(x=RangePool(1, n))))
     grounded = program.ground()
-    result = grounded.solve(models=0, assumptions=[F(x=n)])
+    result = grounded.solve(assumptions=[F(x=n)])
     models = list(result)
     assert all(F(x=4) in set(m.atoms(F)) for m in models)
     assert len(models) == 8  # 2^3 for the other slots
@@ -183,7 +187,7 @@ def test_assumption_rejection_names_the_inner_term() -> None:
 
 def test_project_shown_collapses_helper_variants() -> None:
     # Two aux arrangements per solution: raw enumeration counts 4, projected
-    # counts 2 — the models=2 uniqueness check becomes honest
+    # counts 2 — the islice-2 uniqueness check becomes honest
     def build() -> ASPProgram:
         program = ASPProgram()
         Sol = Predicate.define("sol", [])
@@ -192,11 +196,11 @@ def test_project_shown_collapses_helper_variants() -> None:
         return program
 
     raw = build()
-    assert len(list(raw.solve(models=0))) == 4
+    assert len(list(raw.solve())) == 4
 
     projected = build()
     projected.project_shown = True
-    result = projected.solve(models=0)
+    result = projected.solve()
     assert len(list(result)) == 2
     assert "--project=show" in projected.render()  # the artifact says so
 

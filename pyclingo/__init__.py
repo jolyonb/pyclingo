@@ -37,7 +37,17 @@ from .core import (
 )
 from .operators import ComparisonOperator
 from .predicate import Field, Predicate, PredicateField
-from .solve_result import AtomCollection, Model, SolveResult
+from .solve_result import (
+    AtomCollection,
+    BraveConsequences,
+    CautiousConsequences,
+    Consequences,
+    Model,
+    RefinementMode,
+    RefinementSteps,
+    SearchABC,
+    SolveResult,
+)
 from .solver import ASPProgram, GroundedProgram
 from .version import __version__
 
@@ -48,6 +58,12 @@ __all__ = [  # noqa: RUF022 (categorized deliberately, not sorted)
     "SolveResult",
     "Model",
     "AtomCollection",
+    "Consequences",
+    "BraveConsequences",
+    "CautiousConsequences",
+    "RefinementMode",
+    "RefinementSteps",
+    "SearchABC",
     "LogLevel",
     "ClingoMessage",
     # Declaring predicates

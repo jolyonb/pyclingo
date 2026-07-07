@@ -140,7 +140,7 @@ asp_code = program.render()
 print(asp_code)
 
 # Solve
-result = program.solve(models=0)  # 0 means find all models
+result = program.solve()  # a lazy stream: consume the models you want
 for model in result:
     print("Solution found:")
     for adult in model.atoms(Adult):

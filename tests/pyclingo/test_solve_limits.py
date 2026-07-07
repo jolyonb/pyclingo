@@ -1,8 +1,10 @@
 """
-Tests for model-count limits, wall-clock timeouts, and SolveResult lifecycle.
+Tests for consumer-side stream limits, wall-clock timeouts, and the
+SolveResult lifecycle.
 """
 
 import time
+from itertools import islice
 from typing import Any, cast
 
 import clingo
@@ -20,29 +22,33 @@ def make_choice_program(n: int) -> ASPProgram:
     return program
 
 
-def test_explicit_model_limit() -> None:
-    result = make_choice_program(3).solve(models=2)  # 8 models exist
-    assert len(list(result)) == 2
-    assert result.exhausted is False
+def test_consumer_side_limit() -> None:
+    # The stream is unbounded; the consumer's consumption is the limit
+    result = make_choice_program(3).solve()  # 8 models exist
+    assert len(list(islice(result, 2))) == 2
+    assert result.exhausted is False  # more may exist: we stopped, it didn't
 
 
-def test_zero_means_enumerate_all() -> None:
-    result = make_choice_program(3).solve(models=0)  # 8 models
+def test_full_consumption_enumerates_all() -> None:
+    result = make_choice_program(3).solve()  # 8 models
     assert len(list(result)) == 8
     assert result.exhausted is True
     assert result.satisfiable is True
 
 
-def test_default_is_a_single_model() -> None:
-    # clingo's own default: one model; enumeration is an explicit ask
+def test_take_one_model() -> None:
+    # The one-model ask is next(iter(...)); laziness means the search
+    # suspends after the first model — nothing runs ahead of consumption
     result = make_choice_program(3).solve()  # 8 models exist
-    assert len(list(result)) == 1
+    model = next(iter(result))
+    assert len(model) >= 0
+    assert result.solution_count == 1
     assert result.exhausted is False
 
 
 def test_timeout_yields_partial_results() -> None:
     # 2^60 models: unlimited enumeration can never finish, so the timeout must fire
-    result = make_choice_program(60).solve(models=0, timeout=1)
+    result = make_choice_program(60).solve(timeout=1)
     start = time.monotonic()
     models = list(result)
     elapsed = time.monotonic() - start
@@ -53,13 +59,13 @@ def test_timeout_yields_partial_results() -> None:
 
 
 def test_no_timeout_unaffected() -> None:
-    result = make_choice_program(2).solve(models=0, timeout=60)  # 4 models
+    result = make_choice_program(2).solve(timeout=60)  # 4 models
     assert len(list(result)) == 4
     assert result.exhausted is True
 
 
 def test_early_close_finalizes_bookkeeping() -> None:
-    result = make_choice_program(3).solve(models=0)  # 8 models
+    result = make_choice_program(3).solve()  # 8 models
     next(iter(result))  # a choice model may legitimately be the empty set
     result.close()
     assert result.exhausted is False  # we stopped early, truthfully reported
@@ -70,7 +76,7 @@ def test_early_close_finalizes_bookkeeping() -> None:
 
 def test_context_manager_closes() -> None:
     program = make_choice_program(3)
-    with program.solve(models=0) as result:
+    with program.solve() as result:
         next(iter(result))
     assert result.solution_count == 1
     assert result.exhausted is False
@@ -79,8 +85,8 @@ def test_context_manager_closes() -> None:
 def test_repeated_solves_are_independent() -> None:
     # Each solve() returns its own SolveResult; nothing is shared or locked
     program = make_choice_program(2)
-    first = program.solve(models=0)
-    second = program.solve(models=0)
+    first = program.solve()
+    second = program.solve()
     assert len(list(second)) == 4
     assert len(list(first)) == 4
     assert first.exhausted and second.exhausted
@@ -125,14 +131,14 @@ def test_negative_timeout_rejected() -> None:
 def test_timeout_anchors_at_first_iteration() -> None:
     # Time between solve() and iteration belongs to the caller: the budget
     # must not burn while clingo sits idle
-    result = make_choice_program(3).solve(models=0, timeout=1)
+    result = make_choice_program(3).solve(timeout=1)
     time.sleep(1.3)  # longer than the entire timeout
     assert len(list(result)) == 8
     assert result.exhausted is True
 
 
 def test_iterating_a_consumed_result_raises() -> None:
-    result = make_choice_program(2).solve(models=0)
+    result = make_choice_program(2).solve()
     assert len(list(result)) == 4
     with pytest.raises(RuntimeError, match="already consumed"):
         list(result)
@@ -149,7 +155,7 @@ def test_closed_result_raises_on_iteration() -> None:
 def test_break_and_resume_still_works() -> None:
     # Partial consumption is a legitimate streaming pattern: breaking out of
     # a loop and iterating again continues the same stream
-    result = make_choice_program(3).solve(models=0)  # 8 models
+    result = make_choice_program(3).solve()  # 8 models
     seen = 0
     for _model in result:
         seen += 1
@@ -172,7 +178,7 @@ def test_solve_phase_messages_attach_instead_of_halting() -> None:
     # each Model carries the batch that arrived while it was being found,
     # and the result accumulates them all
     program = make_choice_program(2)  # 4 models
-    result = program.solve(models=0)
+    result = program.solve()
     iterator = iter(result)
     first = next(iterator)
     assert first.messages == []

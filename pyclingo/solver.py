@@ -10,7 +10,17 @@ from pyclingo.core import AtomSign, Comparison, DefaultNegation, DefinedConstant
 from pyclingo.predicate import Predicate
 from pyclingo.program_elements import BlankLine, Comment, ProgramElement, RawASP, Rule
 from pyclingo.scoping import validate_rule
-from pyclingo.solve_result import SolveResult, convert_predicate_to_symbol
+from pyclingo.solve_result import (
+    AtomCollection,
+    BraveConsequences,
+    CautiousConsequences,
+    Consequences,
+    RefinementMode,
+    RefinementSteps,
+    SearchABC,
+    SolveResult,
+    convert_predicate_to_symbol,
+)
 from pyclingo.version import __version__
 
 
@@ -540,7 +550,7 @@ class ASPProgram:
             defined_constants=dict(self._defined_constants),
         )
 
-    def solve(self, models: int = 1, timeout: float = 0, stop_on_log_level: LogLevel = LogLevel.INFO) -> SolveResult:
+    def solve(self, timeout: float = 0, stop_on_log_level: LogLevel = LogLevel.INFO) -> SolveResult:
         """
         Solve the ASP program, returning a SolveResult that yields Models lazily.
 
@@ -548,11 +558,14 @@ class ASPProgram:
         call. For solving one program many times, call ground() once and
         solve the returned handle repeatedly.
 
+        The stream is unbounded: take what you need (next(iter(result)) for
+        one model, itertools.islice for N, a for-loop with break for a
+        condition) — clasp computes the next model only when you resume, so
+        nothing runs ahead of your consumption. Whole-stream reads
+        (list(result), a bare for-loop) enumerate EVERY model, which an
+        underconstrained program can make effectively endless.
+
         Args:
-            models: Maximum number of models to compute; defaults to 1, matching
-                    clingo's own default — enumeration is an explicit ask. Pass 0 to
-                    enumerate all models; beware that an underconstrained program may
-                    make this effectively endless.
             timeout: Wall-clock limit in seconds (0 for no limit), counted from the
                      start of iteration. On timeout, models found so far will have
                      been yielded and 'exhausted' remains False.
@@ -576,7 +589,19 @@ class ASPProgram:
             model enumeration is lazy. Every call returns an independent SolveResult,
             so repeated solves on one program never interfere.
         """
-        return self.ground(stop_on_log_level=stop_on_log_level).solve(models=models, timeout=timeout)
+        return self.ground(stop_on_log_level=stop_on_log_level).solve(timeout=timeout)
+
+    def cautious(
+        self, timeout: float = 0, max_iterations: int = 0, stop_on_log_level: LogLevel = LogLevel.INFO
+    ) -> CautiousConsequences | None:
+        """The atoms true in every answer set; sugar for ground().cautious(). See GroundedProgram.cautious()."""
+        return self.ground(stop_on_log_level=stop_on_log_level).cautious(timeout=timeout, max_iterations=max_iterations)
+
+    def brave(
+        self, timeout: float = 0, max_iterations: int = 0, stop_on_log_level: LogLevel = LogLevel.INFO
+    ) -> BraveConsequences | None:
+        """The atoms true in at least one answer set; sugar for ground().brave(). See GroundedProgram.brave()."""
+        return self.ground(stop_on_log_level=stop_on_log_level).brave(timeout=timeout, max_iterations=max_iterations)
 
 
 class GroundedProgram:
@@ -588,14 +613,19 @@ class GroundedProgram:
     exactly that program, unaffected by later mutation of the ASPProgram it
     came from — like a compiled regex and its pattern. Each solve() returns
     an independent SolveResult sharing this handle's single grounding, so
-    the expensive step is paid once.
+    the grounding step is paid once. One grounding answers many kinds of
+    question: solve() enumerates answer sets, cautious()/brave() compute
+    the atoms true in every/some answer set (with refine() as their
+    step-by-step primitive), and assumptions parameterize any of them per
+    call.
 
     One contract, enforced loudly: solves are sequential. A Control cannot
     run overlapping searches, so solve() raises while a previous result is
     unconsumed (consume it, close() it, or leave its with-block first).
 
-    clingo's statistics reflect the most recent solve on the shared Control;
-    each SolveResult snapshots them (plus its own wall_time) as it finishes.
+    clingo's statistics reflect the most recent search on the shared
+    Control; every handle (SolveResult and RefinementSteps alike) snapshots
+    them, plus its own wall_time, as it finishes.
     """
 
     def __init__(
@@ -613,7 +643,7 @@ class GroundedProgram:
         self._message_handler = message_handler
         self._check_all_atoms = check_all_atoms
         self._defined_constants = defined_constants or {}
-        self._active: SolveResult | None = None
+        self._active: SearchABC | None = None
 
     @property
     def text(self) -> str:
@@ -649,6 +679,40 @@ class GroundedProgram:
             converted.append((symbol, truth))
         return converted
 
+    def _begin_solve(
+        self,
+        mode: RefinementMode | None,
+        timeout: float,
+        assumptions: Sequence[Predicate | DefaultNegation] | None,
+    ) -> list[tuple[clingo.Symbol, bool]] | None:
+        """
+        The whole pre-solve sequence, shared by every solve-flavored call:
+        validate the timeout, convert assumptions, enforce the sequential
+        guard, clear the message list (the guard proves no generator is
+        mid-flight holding a window index, so clearing is safe), and
+        configure the Control. enum_mode is stated explicitly on every
+        entry, and models is always 0: streams are unbounded by design —
+        the consumer's consumption is the limit (clasp computes the next
+        model only when resumed, so nothing runs ahead of demand), and a
+        cap would silently truncate refinements. Returns the converted
+        assumptions.
+        """
+        if timeout < 0:
+            raise ValueError(f"timeout must be non-negative, got {timeout}")
+        converted = self._convert_assumptions(assumptions) if assumptions else None
+        if self._active is not None and not self._active.finished:
+            raise RuntimeError(
+                "The previous solve on this grounding is still open; a Control cannot run "
+                "overlapping searches. Consume the previous result, close() it, leave "
+                "its with-block, or call abandon() on this grounding."
+            )
+        self._message_handler.messages.clear()
+        solve_config = self._control.configuration.solve
+        assert isinstance(solve_config, clingo.Configuration)
+        solve_config.models = 0
+        solve_config.enum_mode = mode.value if mode is not None else "auto"
+        return converted
+
     def abandon(self) -> None:
         """
         Close the previous solve's result if it is still open, freeing this
@@ -661,18 +725,20 @@ class GroundedProgram:
 
     def solve(
         self,
-        models: int = 1,
         timeout: float = 0,
         assumptions: Sequence[Predicate | DefaultNegation] | None = None,
     ) -> SolveResult:
         """
         Solve this grounding, returning a SolveResult that yields Models lazily.
 
-        models and timeout behave exactly as on ASPProgram.solve(); they are
-        per-solve settings on the shared grounding.
+        The stream is unbounded: take what you need (next(iter(result)) for
+        one model, itertools.islice for N, a for-loop with break for a
+        condition) — clasp computes the next model only when you resume, so
+        nothing runs ahead of your consumption. Whole-stream reads
+        (list(result), a bare for-loop) enumerate EVERY model, which an
+        underconstrained program can make effectively endless.
 
         Args:
-            models: Maximum number of models to compute (0 enumerates all).
             timeout: Wall-clock limit in seconds (0 for no limit), counted
                 from the start of iteration.
             assumptions: Atoms fixed for THIS solve only — a grounded
@@ -682,24 +748,8 @@ class GroundedProgram:
                 silently make every model vanish (or be vacuous), so an
                 unknown atom raises instead.
         """
-        if timeout < 0:
-            raise ValueError(f"timeout must be non-negative, got {timeout}")
-        if models < 0:
-            raise ValueError(f"models must be non-negative (0 enumerates all), got {models}")
-        converted = self._convert_assumptions(assumptions) if assumptions else None
-        if self._active is not None and not self._active.finished:
-            raise RuntimeError(
-                "The previous solve on this grounding is still open; a Control cannot run "
-                "overlapping searches. Consume the previous SolveResult, close() it, leave "
-                "its with-block, or call abandon() on this grounding."
-            )
-        # The sequential guard above proves no generator is mid-flight holding
-        # a window index into this list, so clearing here is safe — each solve
-        # starts with an empty message list instead of accumulating forever
-        self._message_handler.messages.clear()
-        assert isinstance(self._control.configuration.solve, clingo.Configuration)
-        self._control.configuration.solve.models = models
-        result = SolveResult(
+        converted = self._begin_solve(None, timeout, assumptions)
+        self._active = result = SolveResult(
             self._control,
             self._predicate_types,
             timeout,
@@ -707,5 +757,122 @@ class GroundedProgram:
             check_all_atoms=self._check_all_atoms,
             assumptions=converted,
         )
-        self._active = result
         return result
+
+    def refine(
+        self,
+        mode: RefinementMode,
+        timeout: float = 0,
+        assumptions: Sequence[Predicate | DefaultNegation] | None = None,
+    ) -> RefinementSteps:
+        """
+        Step through a consequence refinement yourself: iterate for
+        successive approximations (claim-free AtomCollections) — CAUTIOUS
+        shrinking toward the intersection, BRAVE growing toward the union —
+        and stop whenever your question is answered, e.g. the atom you care
+        about has dropped out of a cautious approximation (certified
+        not-forced) or arrived in a brave one (certified possible). Each
+        step is a full solver search, so control between steps is control
+        over real work. See RefinementSteps for the full contract;
+        cautious()/brave() are the eager forms.
+        """
+        converted = self._begin_solve(mode, timeout, assumptions)
+        self._active = steps = RefinementSteps(
+            self._control,
+            self._predicate_types,
+            timeout,
+            self._message_handler,
+            converted or [],
+            mode,
+            check_all_atoms=self._check_all_atoms,
+        )
+        return steps
+
+    def cautious(
+        self,
+        timeout: float = 0,
+        max_iterations: int = 0,
+        assumptions: Sequence[Predicate | DefaultNegation] | None = None,
+    ) -> CautiousConsequences | None:
+        """
+        The atoms true in EVERY answer set (the intersection) — "which cells
+        are forced" is this question. Eager sugar over refine(CAUTIOUS).
+        Returns None if the program is unsatisfiable.
+
+        timeout (seconds) and max_iterations (refinement steps) each bound
+        the work, 0 meaning unbounded; a bounded run returns an INCOMPLETE
+        result (complete=False), from which absence is still certified —
+        see CautiousConsequences. A timeout before the first approximation
+        raises TimeoutError (nothing representable yet). Raises ValueError
+        if the program optimizes: the refinement would aggregate the
+        cost-descent path, not the optima.
+        """
+        return self._refine_eagerly(RefinementMode.CAUTIOUS, CautiousConsequences, timeout, max_iterations, assumptions)
+
+    def brave(
+        self,
+        timeout: float = 0,
+        max_iterations: int = 0,
+        assumptions: Sequence[Predicate | DefaultNegation] | None = None,
+    ) -> BraveConsequences | None:
+        """
+        The atoms true in AT LEAST ONE answer set (the union) — "which cells
+        are possible" is this question. Eager sugar over refine(BRAVE).
+        Returns None if the program is unsatisfiable.
+
+        timeout (seconds) and max_iterations (refinement steps) each bound
+        the work, 0 meaning unbounded; a bounded run returns an INCOMPLETE
+        result (complete=False) whose every atom is still certified
+        possible — see BraveConsequences. Raises ValueError if the program
+        optimizes (see cautious()).
+        """
+        return self._refine_eagerly(RefinementMode.BRAVE, BraveConsequences, timeout, max_iterations, assumptions)
+
+    def _refine_eagerly[C: Consequences](
+        self,
+        mode: RefinementMode,
+        result_class: type[C],
+        timeout: float,
+        max_iterations: int,
+        assumptions: Sequence[Predicate | DefaultNegation] | None,
+    ) -> C | None:
+        """
+        The shared fold under cautious()/brave(): consume the steps
+        primitive, honoring the bounds, and build the injected result
+        class from the fold — its path is every approximation in order
+        (the last is the headline answer) and its complete is True only
+        when the refinement PROVED exhaustion (False whenever a bound cut
+        it short, including a cap landing exactly on the final step).
+        Returns None for proven unsatisfiability.
+        """
+        if max_iterations < 0:
+            raise ValueError(f"max_iterations must be non-negative (0 means unbounded), got {max_iterations}")
+        steps = self.refine(mode, timeout, assumptions)
+        path: list[AtomCollection] = []
+        complete = False
+        try:
+            for approximation in steps:
+                path.append(approximation)
+                if max_iterations and len(path) >= max_iterations:
+                    # Even a cap landing exactly on the final approximation
+                    # reports incomplete: exhaustion was never proven
+                    break
+            else:
+                complete = steps.exhausted
+        except TimeoutError:
+            if mode is RefinementMode.CAUTIOUS and not path:
+                raise TimeoutError(
+                    "cautious refinement was interrupted before its first approximation; "
+                    "with no models seen, its superset bound is every atom — nothing "
+                    "representable to return. Raise the timeout."
+                ) from None
+        finally:
+            steps.close()
+        if not path and complete:
+            return None  # proved unsatisfiable: no answer sets to ask about
+        return result_class(
+            atoms=list(path[-1].atoms()) if path else [],
+            path=tuple(path),
+            complete=complete,
+            messages=steps.messages,
+        )
