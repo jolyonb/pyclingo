@@ -23,7 +23,17 @@ from typing import TYPE_CHECKING
 from pyclingo.aggregates import Aggregate
 from pyclingo.choice import Choice
 from pyclingo.conditional_literal import ConditionalLiteral
-from pyclingo.core import AggregateBase, Comparison, DefaultNegation, ExplicitPool, Expression, Term, Variable
+from pyclingo.core import (
+    AggregateBase,
+    Comparison,
+    DefaultNegation,
+    ExplicitPool,
+    Expression,
+    Pool,
+    RangePool,
+    Term,
+    Variable,
+)
 from pyclingo.predicate import Predicate
 
 if TYPE_CHECKING:
@@ -45,6 +55,9 @@ class LocalScope:
     condition_counts: Counter[str] = field(default_factory=Counter)
     binders: set[str] = field(default_factory=set)
     equality_edges: list[EqualityEdge] = field(default_factory=list)
+    # One-way edges: source bound -> target bound, never the reverse
+    # (X = 1..N binds X from N; ranges never invert)
+    directed_edges: list[EqualityEdge] = field(default_factory=list)
     # Choice elements without conditions expose their target variables
     # globally; aggregate targets must be bound by their own condition
     targets_are_global_without_condition: bool = False
@@ -61,6 +74,7 @@ class RuleScopes:
     body_counts: Counter[str] = field(default_factory=Counter)  # global occurrences only
     global_binders: set[str] = field(default_factory=set)
     equality_edges: list[EqualityEdge] = field(default_factory=list)
+    directed_edges: list[EqualityEdge] = field(default_factory=list)
     anonymous_in_head: bool = False
     local_scopes: list[LocalScope] = field(default_factory=list)
     # (variable, element description) pairs where an aggregate tuple shares a
@@ -102,7 +116,10 @@ def _occurrences(term: Term) -> Counter[str]:
     elif isinstance(term, ExplicitPool):
         for element in term.elements:
             counts.update(_occurrences(element))
-    # Constants and range pools (grounded bounds) contain no variables
+    elif isinstance(term, RangePool):
+        counts.update(_occurrences(term.start))
+        counts.update(_occurrences(term.end))
+    # Constants contain no variables
     return counts
 
 
@@ -110,12 +127,19 @@ def _count_variables(term: Term, counts: Counter[str]) -> None:
     counts.update(_occurrences(term))
 
 
-def _bind_fixpoint(binders: set[str], edges: list[EqualityEdge]) -> set[str]:
-    """Propagate bindings across equality edges until nothing changes."""
+def _bind_fixpoint(binders: set[str], edges: list[EqualityEdge], directed_edges: list[EqualityEdge]) -> set[str]:
+    """
+    Propagate bindings until nothing changes: equality edges flow both ways;
+    directed edges flow source -> target only (pool bindings never invert).
+    """
     bound = set(binders)
     changed = True
     while changed:
         changed = False
+        for source, target in directed_edges:
+            if source <= bound and not target <= bound:
+                bound |= target
+                changed = True
         for left, right in edges:
             if left and left <= bound and not right <= bound:
                 bound |= right
@@ -148,7 +172,11 @@ def _analyze_comparison(comparison: Comparison, scopes: RuleScopes, counts: Coun
             _count_variables(term, counts)
             side_vars.append(frozenset(_variables_of(term)))
 
-    if comparison.is_equality:
+    if isinstance(comparison.right_term, Pool):
+        # X = 1..N binds X once N is bound; the range never inverts (probed),
+        # so the edge is one-way: bound(bounds) -> bound(X)
+        scopes.directed_edges.append((side_vars[1], side_vars[0]))
+    elif comparison.is_equality:
         scopes.equality_edges.append((side_vars[0], side_vars[1]))
 
 
@@ -180,7 +208,9 @@ def _analyze_local_condition(condition: Term, scope: LocalScope) -> None:
         for term in (condition.left_term, condition.right_term):
             _count_variables(term, scope.condition_counts)
             sides.append(frozenset(_variables_of(term)))
-        if condition.is_equality:
+        if isinstance(condition.right_term, Pool):
+            scope.directed_edges.append((sides[1], sides[0]))
+        elif condition.is_equality:
             scope.equality_edges.append((sides[0], sides[1]))
     else:  # pragma: no cover - construction-time validation prevents this
         _count_variables(condition, scope.condition_counts)
@@ -322,7 +352,7 @@ def validate_rule(head: Term | None, body: list[Term], rule: str | Rule, check_s
             f"Use a fresh variable inside the aggregate."
         )
 
-    bound = _bind_fixpoint(scopes.global_binders, scopes.equality_edges)
+    bound = _bind_fixpoint(scopes.global_binders, scopes.equality_edges, scopes.directed_edges)
     unsafe = sorted(set(scopes.global_occurrences()) - bound)
     if unsafe:
         names = ", ".join(unsafe)
@@ -333,7 +363,7 @@ def validate_rule(head: Term | None, body: list[Term], rule: str | Rule, check_s
         )
 
     for scope in scopes.local_scopes:
-        local_bound = _bind_fixpoint(scope.binders | bound, scope.equality_edges)
+        local_bound = _bind_fixpoint(scope.binders | bound, scope.equality_edges, scope.directed_edges)
         local_unsafe = sorted((set(scope.target_counts) | set(scope.condition_counts)) - local_bound)
         if local_unsafe:
             names = ", ".join(local_unsafe)

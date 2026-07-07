@@ -609,19 +609,25 @@ class Pool(BasicTerm, ABC):
 
 class RangePool(Pool):
     """
-    Represents a range pool in ASP programs, like 1..5.
+    Represents a range pool in ASP programs, like 1..5 or 1..N.
 
     Bounds must be integer-valued: ints, Numbers, #const-defined constants,
-    or grounded integer Expressions. A #const bound is trusted to be
-    integer-valued — this class cannot see the program's constant table, so
-    a string-valued constant renders fine and fails at solve.
+    Variables, or integer Expressions (X = 1..N*2 is fine when N is bound).
+    A variable bound must be bound by a positive body literal — ranges never
+    invert (gringo rejects deriving N from X = 1..N with X bound), which
+    the scoping analysis models as a one-way binding edge. A #const bound is
+    trusted to be integer-valued — this class cannot see the program's
+    constant table, so a string-valued constant renders fine and fails at
+    solve. A range that is empty at runtime (start exceeding end after
+    substitution) is not an error: it simply matches nothing.
     """
 
-    def __init__(self, start: int | ConstantBase | Expression, end: int | ConstantBase | Expression):
+    def __init__(self, start: int | Value | Expression, end: int | Value | Expression):
         """
         Initialize a range pool with start and end values (both inclusive).
 
-        Raises if either bound is of the wrong type or an ungrounded Expression.
+        Raises if either bound is of the wrong type, or if both are literal
+        integers with start exceeding end.
         """
         # Convert integers to Number objects
         if isinstance(start, int):
@@ -630,34 +636,34 @@ class RangePool(Pool):
             end = Number(end)
 
         for label, bound in (("start", start), ("end", end)):
-            if not isinstance(bound, (Number, DefinedConstant, Expression)):
+            if isinstance(bound, String):
+                raise TypeError(f"Range {label} must be integer-valued, got a String")
+            if not isinstance(bound, (Number, DefinedConstant, Variable, Expression)):
                 raise TypeError(
-                    f"Range {label} must be an int, Number, DefinedConstant, or grounded "
-                    f"Expression, got {type(bound).__name__}"
+                    f"Range {label} must be an int, Number, DefinedConstant, Variable, "
+                    f"or Expression, got {type(bound).__name__}"
                 )
-            if isinstance(bound, Expression) and not bound.is_grounded:
-                raise ValueError(f"Expression in range {label} must be grounded")
 
         if isinstance(start, Number) and isinstance(end, Number) and start.value > end.value:
             raise ValueError(f"Range {start.value}..{end.value} is empty (start exceeds end)")
 
-        self._start: ConstantBase | Expression = start
-        self._end: ConstantBase | Expression = end
+        self._start: Value | Expression = start
+        self._end: Value | Expression = end
 
     @property
-    def start(self) -> ConstantBase | Expression:
+    def start(self) -> Value | Expression:
         """The starting value of the range (inclusive)."""
         return self._start
 
     @property
-    def end(self) -> ConstantBase | Expression:
+    def end(self) -> Value | Expression:
         """The ending value of the range (inclusive)."""
         return self._end
 
     @property
     def is_grounded(self) -> bool:
-        """Always True: bounds are validated to be constants or grounded expressions."""
-        return True
+        """Grounded when both bounds are (variable bounds ground at solve)."""
+        return self._start.is_grounded and self._end.is_grounded
 
     def render(self, context: RenderingContext = RenderingContext.DEFAULT) -> str:
         return f"{self.start.render()}..{self.end.render()}"
@@ -671,8 +677,7 @@ class RangePool(Pool):
         return constants
 
     def collect_variables(self) -> set[str]:
-        """Range pools cannot contain variables."""
-        return set()
+        return self.start.collect_variables() | self.end.collect_variables()
 
 
 class ExplicitPool(Pool):
