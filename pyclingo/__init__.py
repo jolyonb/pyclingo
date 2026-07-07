@@ -13,7 +13,7 @@ from .aggregates import (
 )
 from .choice import Choice
 from .clingo_handler import ClingoMessage, LogLevel
-from .conditional_literal import ConditionalLiteral, key_for_each_lock
+from .conditional_literal import ConditionalLiteral
 from .conditioned_element import CONDITION_TYPE
 from .core import (
     ANY,
@@ -69,7 +69,6 @@ __all__ = [  # noqa: RUF022 (categorized deliberately, not sorted)
     "pool",
     "Not",
     "Abs",
-    "key_for_each_lock",
     # Hierarchy types: these appear in public signatures and return types —
     # annotate with them; you rarely construct them directly
     "CONDITION_TYPE",

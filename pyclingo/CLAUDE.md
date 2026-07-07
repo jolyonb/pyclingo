@@ -122,8 +122,9 @@ All support multiple elements and conditions via `add()` method.
 
 #### Conditional Literals (`conditional_literal.py`)
 Conditional structures: `p(X) : q(X)`
-- Used in aggregates and choice rules
-- Helper function `key_for_each_lock()` for intuitive construction
+- Used in aggregates and choice rules, and directly in rule bodies
+- Intuition: the head is a "key", the condition a "lock" — the literal
+  holds when every lock has a matching key
 
 ### 5. Collections (`core.py`)
 Collections of terms for ASP expansion:

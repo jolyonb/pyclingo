@@ -10,8 +10,13 @@ class ConditionalLiteral(Term):
     """
     Represents a conditional literal in ASP programs (head : condition).
 
-    This corresponds to structures like "p(X) : q(X)" in ASP,
-    which represent a conjunction over all matches in rule bodies.
+    This corresponds to structures like "p(X) : q(X)" in ASP, which
+    represent a conjunction over all matches in rule bodies.
+
+    An intuition that helps: think of the head as a "key" and the condition
+    as a "lock" — the literal holds when every lock has a matching key.
+    Keys without locks are fine; a lock without a key fails. E.g. in a rule
+    body, "covered(X) : cell(X)" holds only if every cell is covered.
     """
 
     def __init__(
@@ -73,26 +78,3 @@ class ConditionalLiteral(Term):
 
     def collect_predicate_signs(self) -> set[AtomSign]:
         return self._element.collect_predicate_signs()
-
-
-def key_for_each_lock(
-    key: CONDITIONAL_TERM_TYPE,
-    lock: CONDITIONAL_TERM_TYPE | list[CONDITIONAL_TERM_TYPE],
-) -> ConditionalLiteral:
-    """
-    Ensures there is a matching key for each lock that exists.
-
-    In ASP conditionals (X : Y), this creates a term ensuring that for every
-    instance satisfying the lock condition, there must also be a matching key.
-
-    Args:
-        key: The term that must be satisfied (the "key")
-        lock: The condition(s) defining when the key is required (the "lock")
-
-    Note:
-        - Every "lock" must have a matching "key"
-        - It's acceptable to have "keys" without corresponding "locks"
-    """
-    # The wrapper just translates our intuitive lock/key terminology
-    # to the standard Clingo terminology used internally
-    return ConditionalLiteral(head=key, condition=lock)
