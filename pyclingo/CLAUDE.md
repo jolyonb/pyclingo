@@ -85,7 +85,7 @@ Arithmetic and comparison operations:
 
 Operators supported (Python operator -> rendered ASP):
 - Arithmetic: `+`, `-`, `*`, `//` (renders `/`), `%` (renders `\`), `**`, `-` (unary), `|x|` via Abs()
-- Bitwise: `&`, `|` (renders `?`), `^`, `~` (complement; on predicates `~` is default negation instead)
+- Bitwise: `&`, `|` (renders `?`), `^`, `Compl(x)` (renders `~`; the `~` operator itself is reserved for default negation)
 - Comparison: `==`, `!=`, `<`, `<=`, `>`, `>=`
 - Power and bitwise renderings are deliberately over-parenthesized; classic
   arithmetic keeps minimal parentheses. Pinned against clingo evaluation in

@@ -20,7 +20,13 @@ from typing import Any
 
 import pytest
 
-from pyclingo import ASPProgram, Number, Predicate
+from pyclingo import ASPProgram, Compl, Number, Predicate
+
+
+def compl(x: Any) -> Any:
+    """Bitwise complement for the dual-use case table: ~ on ints, Compl on terms."""
+    return ~x if isinstance(x, int) else Compl(x)
+
 
 CASES = [
     # The hard-fought classics
@@ -56,9 +62,9 @@ CASES = [
     ("and of sums", lambda a, b, c: (a + b) & c, (1, 2, 2)),
     ("sum of ands", lambda a, b, c: (a & b) + c, (6, 3, 2)),
     ("bitwise mix", lambda a, b, c: (a & b) | (b ^ c), (6, 3, 5)),
-    ("complement", lambda a, b, c: ~a, (5, 0, 0)),
-    ("complement of sum", lambda a, b, c: ~(a + b), (5, 3, 0)),
-    ("complement then and", lambda a, b, c: ~a & b, (5, 7, 0)),
+    ("complement", lambda a, b, c: compl(a), (5, 0, 0)),
+    ("complement of sum", lambda a, b, c: compl(a + b), (5, 3, 0)),
+    ("complement then and", lambda a, b, c: compl(a) & b, (5, 7, 0)),
 ]
 
 
@@ -104,4 +110,4 @@ def test_minimal_parenthesization_for_classic_operators() -> None:
     assert (a * (b // c)).render() == "1 * (2 / 3)"
     assert (a * (b % c)).render() == "1 * (2 \\ 3)"
     assert (a % b * c).render() == "1 \\ 2 * 3"
-    assert (~a).render() == "~1"
+    assert Compl(a).render() == "~1"

@@ -19,7 +19,7 @@ class Operation(Enum):
     BITOR = "?"  # Python: |  (ASP spells bitwise or ?)
     BITXOR = "^"  # Python: ^
     UNARY_MINUS = "unary-"  # Python: unary -
-    COMPLEMENT = "~"  # Python: ~ on values/expressions (on predicates, ~ is default negation)
+    COMPLEMENT = "~"  # Python: Compl(x)  (~ itself is reserved for default negation)
     ABS = "abs"  # Python: Abs(x)  (ASP spells absolute value |x|)
 
 

@@ -9,7 +9,7 @@ Everything else in the package imports downward from here.
 from abc import ABC, ABCMeta, abstractmethod
 from collections.abc import Sequence
 from enum import Enum
-from typing import TYPE_CHECKING, Any, ClassVar, cast, overload
+from typing import TYPE_CHECKING, Any, ClassVar, Never, cast, overload
 
 from pyclingo.operators import (
     BINARY_OPERATIONS,
@@ -335,9 +335,12 @@ class Value(BasicTerm, ComparableTerm, ABC, metaclass=_ValueMeta):
     def __rxor__(self, other: int | VALUE_EXPRESSION_TYPE) -> Expression:
         return Expression(other, Operation.BITXOR, self)
 
-    def __invert__(self) -> Expression:
-        """Bitwise complement (~X); distinct from ~predicate, which is default negation."""
-        return Expression(None, Operation.COMPLEMENT, self)
+    def __invert__(self) -> Never:
+        """~ is reserved for default negation, which needs a literal: always raises."""
+        raise TypeError(
+            "~ is default negation and applies to literals (predicates, comparisons); "
+            "for bitwise complement, use Compl(x)"
+        )
 
 
 class Variable(Value):
@@ -1002,9 +1005,12 @@ class Expression(ComparableTerm):
     def __rxor__(self, other: EXPRESSION_FIELD_TYPE) -> Expression:
         return Expression(other, Operation.BITXOR, self)
 
-    def __invert__(self) -> Expression:
-        """Bitwise complement (~X); distinct from ~predicate, which is default negation."""
-        return Expression(None, Operation.COMPLEMENT, self)
+    def __invert__(self) -> Never:
+        """~ is reserved for default negation, which needs a literal: always raises."""
+        raise TypeError(
+            "~ is default negation and applies to literals (predicates, comparisons); "
+            "for bitwise complement, use Compl(x)"
+        )
 
     def __str__(self) -> str:
         return self.render()
@@ -1309,6 +1315,17 @@ def Not(term: Negatable) -> DefaultNegation:
 def Abs(term: EXPRESSION_FIELD_TYPE) -> Expression:
     """Builds an absolute-value expression, |term|."""
     return Expression(None, Operation.ABS, term)
+
+
+def Compl(term: EXPRESSION_FIELD_TYPE) -> Expression:
+    """
+    Builds a bitwise-complement expression, rendered ~term.
+
+    A named function rather than Python's ~ operator: in pyclingo, ~ is
+    reserved for default negation on literals, so the two meanings of
+    clingo's ~ never share a spelling.
+    """
+    return Expression(None, Operation.COMPLEMENT, term)
 
 
 ANY = Variable("_")

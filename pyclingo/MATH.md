@@ -20,14 +20,14 @@ actual evaluation.
 | `x \| y` | `x ? y` | bitwise or — ASP spells it `?` |
 | `x ^ y` | `x ^ y` | bitwise xor |
 | `-x` | `-x` | |
-| `~x` | `~x` | bitwise complement on values; on a predicate, `~p` is default negation |
+| `Compl(x)` | `~x` | bitwise complement — `~` itself is reserved for default negation |
 | `Abs(x)` | `\|x\|` | |
 
 ## Precedence
 
 Gringo's precedence, established empirically (loosest to tightest): `^`,
 then `?`, then `&`, then `+ -`, then `* / \`, then `**` (right-associative),
-then unary `-` and `~`. Two traps for Python intuitions: the bitwise
+then unary `-` and complement. Two traps for Python intuitions: the bitwise
 operators bind *looser* than `+`, and unary minus binds *tighter* than `**`
 (in gringo `-2**2` is `(-2)**2 = 4`; in Python it is `-(2**2) = -4`).
 

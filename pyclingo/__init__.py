@@ -19,6 +19,7 @@ from .core import (
     ANY,
     Abs,
     Comparison,
+    Compl,
     DefaultNegation,
     DefinedConstant,
     ExplicitPool,
@@ -69,6 +70,7 @@ __all__ = [  # noqa: RUF022 (categorized deliberately, not sorted)
     "pool",
     "Not",
     "Abs",
+    "Compl",
     # Hierarchy types: these appear in public signatures and return types —
     # annotate with them; you rarely construct them directly
     "CONDITION_TYPE",
