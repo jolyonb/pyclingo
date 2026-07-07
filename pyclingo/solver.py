@@ -8,7 +8,12 @@ from pyclingo.clingo_handler import ClingoMessageHandler, LogLevel
 from pyclingo.conditional_literal import ConditionalLiteral
 from pyclingo.conditioned_element import CONDITION_TYPE
 from pyclingo.core import AtomSign, Comparison, DefaultNegation, DefinedConstant, Pool, Term
-from pyclingo.optimization import OPTIMIZATION_TERM_TYPE, Optimization, OptimizationDirective
+from pyclingo.optimization import (
+    OPTIMIZATION_TERM_TYPE,
+    Optimization,
+    OptimizationDirective,
+    raw_text_optimizes,
+)
 from pyclingo.predicate import Predicate
 from pyclingo.program_elements import BlankLine, Comment, ProgramElement, RawASP, Rule
 from pyclingo.scoping import validate_optimization_element, validate_rule
@@ -407,6 +412,21 @@ class ASPProgram:
                     f"but no such atoms occur anywhere in the program — nothing derives them."
                 )
 
+    def _optimizes(self) -> bool:
+        """
+        Whether this program optimizes: a native minimize()/maximize()
+        directive, or a raw block containing #minimize/#maximize/:~ (the
+        scanner ignores comments and strings; the solve-time cost check
+        backstops anything it cannot see).
+        """
+        for elements in self._segments.values():
+            for element in elements:
+                if isinstance(element, OptimizationDirective):
+                    return True
+                if isinstance(element, RawASP) and raw_text_optimizes(element.text):
+                    return True
+        return False
+
     def _validate_names(self) -> None:
         """
         Raise on naming collisions that would corrupt solving:
@@ -591,6 +611,14 @@ class ASPProgram:
                 f"{message_handler.format_all_messages(verb='grounding')}"
             )
 
+        optimizes = self._optimizes()
+        if self.project_shown and optimizes:
+            raise ValueError(
+                "project_shown cannot be combined with optimization: clasp warns that "
+                "optimization may depend on enumeration order under projection, so the "
+                "reported optimum may not be the true one. Disable projection for "
+                "optimizing programs."
+            )
         if self.project_shown:
             assert isinstance(control.configuration.solve, clingo.Configuration)
             control.configuration.solve.project = "show"
@@ -609,6 +637,7 @@ class ASPProgram:
             message_handler,
             check_all_atoms=has_raw,
             defined_constants=dict(self._defined_constants),
+            optimizes=optimizes,
         )
 
     def solve(self, timeout: float = 0, stop_on_log_level: LogLevel = LogLevel.INFO) -> SolveResult:
@@ -697,6 +726,7 @@ class GroundedProgram:
         message_handler: ClingoMessageHandler,
         check_all_atoms: bool,
         defined_constants: dict[str, int | str] | None = None,
+        optimizes: bool = False,
     ) -> None:
         self._text = text
         self._control = control
@@ -704,6 +734,7 @@ class GroundedProgram:
         self._message_handler = message_handler
         self._check_all_atoms = check_all_atoms
         self._defined_constants = defined_constants or {}
+        self._optimizes = optimizes
         self._active: SearchABC | None = None
 
     @property
@@ -760,6 +791,15 @@ class GroundedProgram:
         """
         if timeout < 0:
             raise ValueError(f"timeout must be non-negative, got {timeout}")
+        if self._optimizes:
+            if mode is None:
+                raise ValueError("This program optimizes (#minimize/#maximize present). Solve it with optimize().")
+            raise ValueError(
+                f"{mode.value} consequences over an optimizing program are computed "
+                f"against the solver's cost-descent path, not the set of optimal "
+                f"models — the result would be wrong. Remove the optimization "
+                f"directive to ask about all answer sets."
+            )
         converted = self._convert_assumptions(assumptions) if assumptions else None
         if self._active is not None and not self._active.finished:
             raise RuntimeError(

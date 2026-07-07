@@ -438,14 +438,21 @@ def _search_generator(
                     model = handle.model()
                     if model is None:
                         break
-                    if refining and model.cost:
-                        # Variation point: costs are illegal while refining.
-                        raise ValueError(
-                            f"{mode} consequences over an optimizing program (#minimize/#maximize "
-                            f"present) are computed against the solver's cost-descent path, not "
-                            f"the set of optimal models — the result would be wrong. Remove the "
-                            f"optimization directive to ask about all answer sets."
-                        )
+                    if model.cost:
+                        # Variation point: costs are illegal outside optimize
+                        # mode. Refinement would aggregate the cost-descent
+                        # path, not the optima; enumeration would stream one
+                        # improving chain as if it were distinct solutions.
+                        # This backstops the static detection for any
+                        # optimization spelling the raw-text scan cannot see.
+                        if refining:
+                            raise ValueError(
+                                f"{mode} consequences over an optimizing program (#minimize/#maximize "
+                                f"present) are computed against the solver's cost-descent path, not "
+                                f"the set of optimal models — the result would be wrong. Remove the "
+                                f"optimization directive to ask about all answer sets."
+                            )
+                        raise ValueError("This program optimizes (the model carries a cost). Solve it with optimize().")
                     if check_all_atoms:
                         # raw_asp text is invisible to the walkers, so its
                         # contract is exhaustive declaration: an atom with an

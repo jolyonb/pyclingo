@@ -163,8 +163,8 @@ def test_sequential_guard_covers_consequences() -> None:
 
 
 def test_optimizing_program_rejected() -> None:
-    # Probed: the refinement follows the cost descent and gives a
-    # confidently wrong answer; refuse loudly
+    # The refinement would follow the cost descent and give a confidently
+    # wrong answer; the raw-text scan refuses statically, before grounding
     program = build()
     program.raw_asp("#minimize{ 1,X : color(X) }.", predicates=[Color])
     with pytest.raises(ValueError, match="cost-descent"):
@@ -179,19 +179,19 @@ def test_negative_bounds_rejected() -> None:
         grounded.cautious(max_iterations=-1)
 
 
-def test_failed_refinement_leaves_the_grounding_usable() -> None:
-    # The cost guard raises from inside the refinement's with-block; the
-    # search must be closed on that path too — no _active registration is
-    # needed because no search survives the call (eager + with-block)
+def test_optimizing_grounding_refuses_every_non_optimize_verb() -> None:
+    # Static detection covers the whole verb surface, with per-verb remedies
     program = build()
     program.raw_asp("#minimize{ 1,X : color(X) }.", predicates=[Color])
     grounded = program.ground()
     with pytest.raises(ValueError, match="cost-descent"):
         grounded.cautious()
-    result = grounded.solve()
-    assert len(list(result)) >= 1  # the Control is free; no overlapping-search error
     with pytest.raises(ValueError, match="cost-descent"):
         grounded.brave()
+    with pytest.raises(ValueError, match="cost-descent"):
+        grounded.refine(RefinementMode.BRAVE)
+    with pytest.raises(ValueError, match=r"optimize\(\)"):
+        grounded.solve()
 
 
 def test_steps_primitive_adaptive_early_exit() -> None:

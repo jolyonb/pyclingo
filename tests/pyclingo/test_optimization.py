@@ -9,7 +9,8 @@ reports negated costs; priorities are ordinal keys with free gaps).
 import clingo
 import pytest
 
-from pyclingo import ANY, ASPProgram, Choice, Count, Predicate, String, Variable
+from pyclingo import ANY, ASPProgram, Choice, Count, Predicate, SolveResult, String, Variable
+from pyclingo.clingo_handler import ClingoMessageHandler, LogLevel
 
 
 def optimal_cost(program: ASPProgram) -> list[int]:
@@ -152,3 +153,62 @@ def test_bare_statements_sit_at_priority_zero() -> None:
     program.minimize(1, X, condition=Pick(x=X), priority=2)
     program.minimize(X, condition=Pick(x=X))  # bare: level 0
     assert optimal_cost(program) == [1, 1]  # [level 2, level 0], count then sum
+
+
+def test_native_directive_refuses_solve_and_consequences() -> None:
+    program = ASPProgram()
+    X = Variable("X")
+    program.fact(Choice(Pick(x=1)).add(Pick(x=2)).at_least(1))
+    program.minimize(X, condition=Pick(x=X))
+    with pytest.raises(ValueError, match=r"optimize\(\)"):
+        program.solve()
+    with pytest.raises(ValueError, match="cost-descent"):
+        program.cautious()
+
+
+def test_weak_constraint_in_raw_detected() -> None:
+    # :~ is #minimize in disguise; the scan must catch it with no
+    # #minimize token anywhere in the text
+    program = ASPProgram()
+    program.fact(Pick(x=1))
+    program.raw_asp(":~ pick(X). [X@1, X]")
+    with pytest.raises(ValueError, match=r"optimize\(\)"):
+        program.solve()
+
+
+def test_tokens_in_comments_and_strings_do_not_count() -> None:
+    program = ASPProgram()
+    program.fact(Pick(x=1))
+    program.raw_asp('% a note about #minimize\n%* block :~ comment *%\nnote("#maximize inside a string").')
+    Note = Predicate.define("note", ["t"])
+    program.raw_asp("", predicates=[Note])
+    result = program.solve()  # not an optimizing program
+    assert len(list(result)) == 1
+
+
+def test_project_shown_refuses_optimization() -> None:
+    # clasp warns optimization may depend on enumeration order under
+    # projection; the combination is refused at ground
+    program = ASPProgram()
+    X = Variable("X")
+    program.fact(Choice(Pick(x=1)).add(Pick(x=2)).at_least(1))
+    program.minimize(X, condition=Pick(x=X))
+    program.project_shown = True
+    with pytest.raises(ValueError, match="enumeration order"):
+        program.ground()
+
+
+def test_runtime_backstop_catches_unscanned_costs() -> None:
+    # Defense in depth: a costed model reaching the models-mode generator
+    # raises even when static detection saw nothing. Constructed directly,
+    # since every library path is already guarded statically.
+    ctl = clingo.Control(logger=lambda c, m: None)
+    solve_config = ctl.configuration.solve
+    assert isinstance(solve_config, clingo.Configuration)
+    solve_config.models = 0
+    ctl.add("base", [], "pick(1..2). #minimize{ 1,X : pick(X) }.")
+    ctl.ground([("base", [])])
+    handler = ClingoMessageHandler("", stop_on_level=LogLevel.CRITICAL)
+    result = SolveResult(ctl, {("pick", 1): Pick}, 0, handler)
+    with pytest.raises(ValueError, match="carries a cost"):
+        list(result)
