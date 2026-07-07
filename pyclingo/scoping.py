@@ -282,7 +282,7 @@ def _resolve_localities(scopes: RuleScopes) -> None:
                 scopes.body_counts[name] += scope.target_counts.pop(name)
 
 
-def validate_rule(head: Term | None, body: list[Term], rule: str | Rule) -> None:
+def validate_rule(head: Term | None, body: list[Term], rule: str | Rule, check_singletons: bool = True) -> None:
     """
     Raise ValueError for unsafe or singleton variables, at rule construction
     time — the traceback lands on the line that built the bad rule.
@@ -290,6 +290,10 @@ def validate_rule(head: Term | None, body: list[Term], rule: str | Rule) -> None
     `rule` provides the text for error messages: pass the Rule itself (or
     anything with render()), and it is rendered only when an error actually
     needs it — the happy path never pays for the string.
+
+    Safety checks always run (their rejections are certain gringo
+    rejections); the singleton check is a pyclingo-only lint and can be
+    switched off (ASPProgram(allow_singletons=True)).
     """
 
     def rule_text() -> str:
@@ -331,6 +335,8 @@ def validate_rule(head: Term | None, body: list[Term], rule: str | Rule) -> None
                 f"the same element."
             )
 
+    if not check_singletons:
+        return
     singletons = sorted(
         [name for name, count in scopes.global_occurrences().items() if count == 1]
         + [

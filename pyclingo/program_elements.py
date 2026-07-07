@@ -92,7 +92,7 @@ class BlankLine(ProgramElement):
 class Rule(ProgramElement):
     """Represents an ASP rule."""
 
-    def __init__(self, head: Term | None = None, body: Term | list[Term] | None = None):
+    def __init__(self, head: Term | None = None, body: Term | list[Term] | None = None, check_singletons: bool = True):
         """
         Creates a rule.
 
@@ -130,7 +130,7 @@ class Rule(ProgramElement):
         # Fail fast on unsafe and singleton variables: the traceback lands on
         # the solver author's line, not in clingo's grounding output. The rule
         # itself is passed for error text, rendered only if an error needs it
-        validate_rule(self.head, self.body, self)
+        validate_rule(self.head, self.body, self, check_singletons=check_singletons)
 
     def render(self) -> str:
         result = ""

@@ -24,10 +24,21 @@ class ASPProgram:
     the program.
     """
 
-    def __init__(self, header: str | None = None, default_segment: str = "Rules") -> None:
-        """Initialize an empty ASP program."""
+    def __init__(
+        self, header: str | None = None, default_segment: str = "Rules", allow_singletons: bool = False
+    ) -> None:
+        """
+        Initialize an empty ASP program.
+
+        allow_singletons switches off the singleton-variable lint (a variable
+        used exactly once is rejected as a likely typo). The lint is
+        pyclingo-only — gringo is silent about singletons — so exploratory
+        code may prefer it off; ANY remains the per-variable escape either
+        way. Safety checks are not affected.
+        """
         if header is not None and ("\n" in header or "\r" in header):
             raise ValueError("Program header must be a single line (it renders as one % comment)")
+        self._check_singletons = not allow_singletons
         self._segments: defaultdict[str, list[ProgramElement]] = defaultdict(list)
         self._defined_constants: dict[str, int | str] = {}
         self._show_overrides: dict[type[Predicate], bool | ConditionalLiteral] = {}
@@ -76,7 +87,7 @@ class ASPProgram:
                 )
         for statement in facts:
             segment_key = self._segment_key(segment)
-            self._segments[segment_key].append(Rule(head=statement))
+            self._segments[segment_key].append(Rule(head=statement, check_singletons=self._check_singletons))
 
     def when(self, *conditions: Term, let: Term, segment: str | None = None) -> None:
         """Create a clingo rule which sets the let term when all conditions are satisfied."""
@@ -88,7 +99,9 @@ class ASPProgram:
         if not isinstance(let, Term):
             raise TypeError(f"when() let must be a Term, got {type(let).__name__}")
         segment_key = self._segment_key(segment)
-        self._segments[segment_key].append(Rule(head=let, body=list(conditions)))
+        self._segments[segment_key].append(
+            Rule(head=let, body=list(conditions), check_singletons=self._check_singletons)
+        )
 
     def forbid(self, *conditions: Term, segment: str | None = None) -> None:
         """Creates a clingo constraint which forbids the specified combination of conditions."""
@@ -98,7 +111,7 @@ class ASPProgram:
             if not isinstance(condition, Term):
                 raise TypeError(f"forbid() conditions must be Terms, got {type(condition).__name__}")
         segment_key = self._segment_key(segment)
-        self._segments[segment_key].append(Rule(body=list(conditions)))
+        self._segments[segment_key].append(Rule(body=list(conditions), check_singletons=self._check_singletons))
 
     def require(self, *terms: Term, implies: Comparison | None = None, segment: str | None = None) -> None:
         """
@@ -244,7 +257,7 @@ class ASPProgram:
         # shared builder cannot silently rewrite it, and validate its variables
         # (a #show directive has no rule body, so everything must be bound
         # inside the conditional literal itself)
-        validate_rule(None, [condition], f"#show {condition.render()}.")
+        validate_rule(None, [condition], f"#show {condition.render()}.", check_singletons=self._check_singletons)
         condition.freeze()
         self._show_overrides[type(head)] = condition
 
