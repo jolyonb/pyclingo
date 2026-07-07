@@ -6,13 +6,14 @@ the sequential-solve and staleness contracts enforced loudly.
 import clingo
 import pytest
 
-from pyclingo import ASPProgram, Choice, Predicate, RangePool
+from pyclingo import ASPProgram, Choice, Number, Predicate, RangePool, Variable
+
+A = Predicate.define("a", ["value"])
 
 
 def make_program(n: int = 3) -> ASPProgram:
     """2^n models: an unconstrained choice over a(1..n)."""
     program = ASPProgram()
-    A = Predicate.define("a", ["value"])
     program.fact(Choice(A(value=RangePool(1, n))))
     return program
 
@@ -106,3 +107,66 @@ def test_abandon_is_idempotent_and_safe_when_nothing_is_open() -> None:
     grounded.abandon()  # already finished: no-op
     grounded.abandon()
     assert len(list(grounded.solve(models=2))) == 2
+
+
+def test_assumptions_filter_models_per_solve() -> None:
+    grounded = make_program().ground()  # {a(1..3)}: 8 models
+    assert len(list(grounded.solve(models=0, assumptions=[A(value=1)]))) == 4
+    assert len(list(grounded.solve(models=0, assumptions=[~A(value=1)]))) == 4
+    assert len(list(grounded.solve(models=0, assumptions=[A(value=1), ~A(value=2)]))) == 2
+    # Assumptions never persist: the next solve is unconstrained
+    assert len(list(grounded.solve(models=0))) == 8
+
+
+def test_assumed_atoms_appear_in_every_model() -> None:
+    grounded = make_program().ground()
+    for model in grounded.solve(models=0, assumptions=[A(value=2)]):
+        assert A(value=2) in set(model.atoms(A))
+
+
+def test_assuming_a_fact_false_is_unsat() -> None:
+    program = ASPProgram()
+    F = Predicate.define("f_assume", ["x"])
+    program.fact(F(x=9))
+    grounded = program.ground()
+    result = grounded.solve(assumptions=[~F(x=9)])
+    assert list(result) == []
+    assert result.satisfiable is False
+
+
+def test_absent_atom_assumption_raises_with_teaching() -> None:
+    grounded = make_program().ground()
+    Ghost = Predicate.define("ghost", ["x"])
+    with pytest.raises(ValueError, match="does not occur in this grounding"):
+        grounded.solve(assumptions=[Ghost(x=7)])
+    with pytest.raises(ValueError, match="does not occur in this grounding"):
+        grounded.solve(assumptions=[~Ghost(x=7)])
+
+
+def test_ungrounded_and_wrong_type_assumptions_rejected() -> None:
+    grounded = make_program().ground()
+    X = Variable("X")
+    with pytest.raises(ValueError, match="must be grounded"):
+        grounded.solve(assumptions=[A(value=X)])
+    with pytest.raises(TypeError, match="predicate atoms"):
+        grounded.solve(assumptions=[X == 1])  # type: ignore[list-item]
+
+
+def test_assumptions_resolve_defined_constants() -> None:
+    # gringo substitutes #const at grounding, so the ground atom carries the
+    # value; the handle resolves the reference through its snapshot
+    program = ASPProgram()
+    F = Predicate.define("f_const", ["x"])
+    n = program.define_constant("n_assume", 4)
+    program.fact(Choice(F(x=RangePool(1, n))))
+    grounded = program.ground()
+    result = grounded.solve(models=0, assumptions=[F(x=n)])
+    models = list(result)
+    assert all(F(x=4) in set(m.atoms(F)) for m in models)
+    assert len(models) == 8  # 2^3 for the other slots
+
+
+def test_expression_assumptions_rejected_with_teaching() -> None:
+    grounded = make_program().ground()
+    with pytest.raises(ValueError, match="pass the computed value"):
+        grounded.solve(assumptions=[A(value=Number(1) + 1)])

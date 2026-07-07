@@ -31,6 +31,7 @@ from typing import Any, Self, overload
 import clingo
 
 from pyclingo.clingo_handler import ClingoMessage, ClingoMessageHandler
+from pyclingo.core import DefinedConstant, Number, String
 from pyclingo.predicate import Predicate
 from pyclingo.statistics import format_statistics_clingo_style
 
@@ -113,10 +114,18 @@ class SolveResult:
         timeout: float,
         message_handler: ClingoMessageHandler,
         check_all_atoms: bool = False,
+        assumptions: list[tuple[clingo.Symbol, bool]] | None = None,
     ) -> None:
         self._state = _SolveState()
         self._iterator = _solve_generator(
-            control, predicate_types, timeout, time.perf_counter(), self._state, message_handler, check_all_atoms
+            control,
+            predicate_types,
+            timeout,
+            time.perf_counter(),
+            self._state,
+            message_handler,
+            check_all_atoms,
+            assumptions or [],
         )
 
     @property
@@ -200,6 +209,7 @@ def _solve_generator(
     state: _SolveState,
     message_handler: ClingoMessageHandler,
     check_all_atoms: bool,
+    assumptions: list[tuple[clingo.Symbol, bool]],
 ) -> Generator[Model]:
     """
     Yields models and finalizes bookkeeping on every exit path.
@@ -221,7 +231,7 @@ def _solve_generator(
         # Async only when a wall-clock timeout demands it (see module
         # docstring): clingo has no timeout configuration key, so we wait on
         # the handle and cancel at the deadline.
-        with control.solve(yield_=True, async_=deadline is not None) as handle:
+        with control.solve(assumptions=assumptions, yield_=True, async_=deadline is not None) as handle:
             try:
                 while True:
                     handle.resume()
@@ -287,6 +297,42 @@ def _solve_generator(
                 state.statistics = statistics
             except RuntimeError:
                 pass
+
+
+def convert_predicate_to_symbol(
+    predicate: Predicate, defined_constants: dict[str, int | str] | None = None
+) -> clingo.Symbol:
+    """
+    Convert a grounded Predicate instance into a clingo Symbol, recursively —
+    the mirror of convert_symbol_to_predicate. The classical-negation sign
+    maps to the symbol's sign; #const references resolve through
+    defined_constants (gringo substitutes them at grounding, so the ground
+    atom carries the value, not the name).
+    """
+    arguments: list[clingo.Symbol] = []
+    for field_name in predicate.field_names():
+        value = predicate.read_as_term(field_name)
+        if isinstance(value, DefinedConstant):
+            resolved = (defined_constants or {}).get(value.value)
+            if resolved is None:
+                raise ValueError(
+                    f"Cannot convert {predicate.render()} to a symbol: '{value.value}' is a "
+                    f"#const reference and no value for it is available here"
+                )
+            arguments.append(clingo.Number(resolved) if isinstance(resolved, int) else clingo.String(resolved))
+        elif isinstance(value, Number):
+            arguments.append(clingo.Number(value.value))
+        elif isinstance(value, String):
+            arguments.append(clingo.String(value.value))
+        elif isinstance(value, Predicate):
+            arguments.append(convert_predicate_to_symbol(value, defined_constants))
+        else:
+            raise ValueError(
+                f"Cannot convert {predicate.render()} to a symbol: field '{field_name}' holds "
+                f"{type(value).__name__}. clingo evaluates arithmetic at grounding (with its own "
+                f"semantics — see MATH.md), so pass the computed value instead."
+            )
+    return clingo.Function(predicate.get_name(), arguments, positive=not predicate.negated)
 
 
 def convert_symbol_to_predicate(symbol: clingo.Symbol, predicate_types: PREDICATE_TYPES) -> Predicate:

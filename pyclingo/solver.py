@@ -6,11 +6,11 @@ import clingo
 from pyclingo.choice import Choice
 from pyclingo.clingo_handler import ClingoMessageHandler, LogLevel
 from pyclingo.conditional_literal import ConditionalLiteral
-from pyclingo.core import AtomSign, Comparison, DefinedConstant, Pool, Term
+from pyclingo.core import AtomSign, Comparison, DefaultNegation, DefinedConstant, Pool, Term
 from pyclingo.predicate import Predicate
 from pyclingo.program_elements import BlankLine, Comment, ProgramElement, RawASP, Rule
 from pyclingo.scoping import validate_rule
-from pyclingo.solve_result import SolveResult
+from pyclingo.solve_result import SolveResult, convert_predicate_to_symbol
 from pyclingo.version import __version__
 
 
@@ -488,7 +488,14 @@ class ASPProgram:
         # (the raw_asp contract: exhaustive declaration)
         has_raw = any(isinstance(element, RawASP) for elements in self._segments.values() for element in elements)
 
-        return GroundedProgram(asp_source, control, predicate_types, message_handler, check_all_atoms=has_raw)
+        return GroundedProgram(
+            asp_source,
+            control,
+            predicate_types,
+            message_handler,
+            check_all_atoms=has_raw,
+            defined_constants=dict(self._defined_constants),
+        )
 
     def solve(self, models: int = 1, timeout: float = 0, stop_on_log_level: LogLevel = LogLevel.INFO) -> SolveResult:
         """
@@ -555,18 +562,48 @@ class GroundedProgram:
         predicate_types: dict[tuple[str, int], type[Predicate]],
         message_handler: ClingoMessageHandler,
         check_all_atoms: bool,
+        defined_constants: dict[str, int | str] | None = None,
     ) -> None:
         self._text = text
         self._control = control
         self._predicate_types = predicate_types
         self._message_handler = message_handler
         self._check_all_atoms = check_all_atoms
+        self._defined_constants = defined_constants or {}
         self._active: SolveResult | None = None
 
     @property
     def text(self) -> str:
         """The rendered ASP program this grounding solves."""
         return self._text
+
+    def _convert_assumptions(
+        self, assumptions: Sequence[Predicate | DefaultNegation]
+    ) -> list[tuple[clingo.Symbol, bool]]:
+        """Convert assumption literals to (symbol, truth) pairs, existence-checked."""
+        converted: list[tuple[clingo.Symbol, bool]] = []
+        for literal in assumptions:
+            if isinstance(literal, DefaultNegation):
+                inner = literal.term
+                truth = False
+            else:
+                inner = literal
+                truth = True
+            if not isinstance(inner, Predicate):
+                raise TypeError(
+                    f"Assumptions must be grounded predicate atoms or their ~negations, got {type(literal).__name__}"
+                )
+            if not inner.is_grounded:
+                raise ValueError(f"Assumptions must be grounded: {inner.render()} contains variables")
+            symbol = convert_predicate_to_symbol(inner, self._defined_constants)
+            if symbol not in self._control.symbolic_atoms:
+                raise ValueError(
+                    f"Assumption {inner.render()} does not occur in this grounding — assuming "
+                    f"an absent atom silently empties (or is vacuous over) the model set. "
+                    f"Check the atom's spelling and arguments."
+                )
+            converted.append((symbol, truth))
+        return converted
 
     def abandon(self) -> None:
         """
@@ -578,7 +615,12 @@ class GroundedProgram:
             self._active.close()
             self._active = None
 
-    def solve(self, models: int = 1, timeout: float = 0) -> SolveResult:
+    def solve(
+        self,
+        models: int = 1,
+        timeout: float = 0,
+        assumptions: Sequence[Predicate | DefaultNegation] | None = None,
+    ) -> SolveResult:
         """
         Solve this grounding, returning a SolveResult that yields Models lazily.
 
@@ -589,11 +631,18 @@ class GroundedProgram:
             models: Maximum number of models to compute (0 enumerates all).
             timeout: Wall-clock limit in seconds (0 for no limit), counted
                 from the start of iteration.
+            assumptions: Atoms fixed for THIS solve only — a grounded
+                Predicate assumes it true, ~Predicate assumes it false
+                (assumptions are solver literals, so ~ is exact). Each atom
+                must occur in this grounding: assuming an absent atom would
+                silently make every model vanish (or be vacuous), so an
+                unknown atom raises instead.
         """
         if timeout < 0:
             raise ValueError(f"timeout must be non-negative, got {timeout}")
         if models < 0:
             raise ValueError(f"models must be non-negative (0 enumerates all), got {models}")
+        converted = self._convert_assumptions(assumptions) if assumptions else None
         if self._active is not None and not self._active.finished:
             raise RuntimeError(
                 "The previous solve on this grounding is still open; a Control cannot run "
@@ -608,6 +657,7 @@ class GroundedProgram:
             timeout,
             self._message_handler,
             check_all_atoms=self._check_all_atoms,
+            assumptions=converted,
         )
         self._active = result
         return result
