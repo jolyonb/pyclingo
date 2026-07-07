@@ -32,7 +32,7 @@ def test_declared_predicates_are_shown_and_round_trip() -> None:
 def test_undeclared_shown_atoms_fail_loudly() -> None:
     program = ASPProgram()
     program.raw_asp("bar(1).\n#show bar/1.")
-    with pytest.raises(ValueError, match="Unknown predicate type: bar"):
+    with pytest.raises(ValueError, match="bar/1 was never declared"):
         list(program.solve())
 
 
@@ -66,3 +66,27 @@ def test_show_override_honored_for_raw_only_predicates() -> None:
     program.raw_asp("q(1).")  # forgot predicates=... but then explicitly:
     program.show(Q)
     assert "#show q/1." in program.render()
+
+
+def test_undeclared_raw_atoms_fail_loudly_in_mixed_programs() -> None:
+    # The raw_asp contract is exhaustive declaration: an atom whose signature
+    # was never declared fails at the model, even though show directives
+    # would have hidden it silently
+    program = ASPProgram()
+    P = Predicate.define("p_mixed", ["x"])
+    program.fact(P(x=1))
+    program.raw_asp("hidden_atom(42).")
+    with pytest.raises(ValueError, match="hidden_atom/1 was never declared"):
+        next(iter(program.solve()))
+
+
+def test_declared_scaffolding_stays_hidden_without_error() -> None:
+    # Privacy is a visibility choice (show=False), not an omission: declared
+    # scaffolding is checked, collision-guarded, and hidden from models
+    program = ASPProgram()
+    P = Predicate.define("p_scaf", ["x"])
+    Reach = Predicate.define("reach", ["x"], show=False)
+    program.fact(P(x=1))
+    program.raw_asp("reach(1). reach(2).", predicates=[Reach])
+    model = next(iter(program.solve()))
+    assert [str(a) for a in model.atoms()] == ["p_scaf(1)"]

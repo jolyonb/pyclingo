@@ -25,11 +25,12 @@ statistics copy), and the Control is freed last. Concretely:
 
 import time
 from collections.abc import Generator, Iterator
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Self, overload
 
 import clingo
 
+from pyclingo.clingo_handler import ClingoMessage, ClingoMessageHandler
 from pyclingo.predicate import Predicate
 from pyclingo.statistics import format_statistics_clingo_style
 
@@ -45,8 +46,10 @@ class Model:
     (Clingo calls this a model; the paradigm's own name for it is an answer set.)
     """
 
-    def __init__(self, atoms: list[Predicate]) -> None:
+    def __init__(self, atoms: list[Predicate], messages: list[ClingoMessage] | None = None) -> None:
         self._atoms = atoms
+        # Diagnostics clingo emitted while searching for this model (usually empty)
+        self.messages = messages if messages is not None else []
         self._by_class: dict[type[Predicate], list[Predicate]] = {}
         for atom in atoms:
             self._by_class.setdefault(type(atom), []).append(atom)
@@ -89,6 +92,7 @@ class _SolveState:
     solution_count: int = 0
     statistics: dict[str, Any] | None = None
     finished: bool = False
+    messages: list[ClingoMessage] = field(default_factory=list)
 
 
 class SolveResult:
@@ -108,9 +112,13 @@ class SolveResult:
         predicate_types: PREDICATE_TYPES,
         timeout: float,
         tic: float,
+        message_handler: ClingoMessageHandler,
+        check_all_atoms: bool = False,
     ) -> None:
         self._state = _SolveState()
-        self._iterator = _solve_generator(control, predicate_types, timeout, tic, self._state)
+        self._iterator = _solve_generator(
+            control, predicate_types, timeout, tic, self._state, message_handler, check_all_atoms
+        )
 
     @property
     def satisfiable(self) -> bool | None:
@@ -151,6 +159,17 @@ class SolveResult:
         self.close()
 
     @property
+    def messages(self) -> list[ClingoMessage]:
+        """
+        Diagnostics clingo emitted during the solve phase (after grounding).
+
+        These never halt solving — the stop_on_log_level threshold applies to
+        parsing and grounding only. Each Model also carries the slice that
+        arrived while it was being found.
+        """
+        return list(self._state.messages)
+
+    @property
     def statistics(self) -> dict[str, Any] | None:
         """
         Raw clingo statistics plus 'wall_time', or None if solving never ran.
@@ -174,6 +193,8 @@ def _solve_generator(
     timeout: float,
     tic: float,
     state: _SolveState,
+    message_handler: ClingoMessageHandler,
+    check_all_atoms: bool,
 ) -> Generator[Model]:
     """
     Yields models and finalizes bookkeeping on every exit path.
@@ -187,6 +208,10 @@ def _solve_generator(
     deadline = time.monotonic() + timeout if timeout > 0 else None
     timed_out = False
     final: clingo.SolveResult | None = None
+    # Messages before this index belong to parsing/grounding, already policed
+    # by the stop threshold; everything after is solve-phase, captured and
+    # attached rather than halting
+    messages_seen = len(message_handler.messages)
     try:
         # Async only when a wall-clock timeout demands it (see module
         # docstring): clingo has no timeout configuration key, so we wait on
@@ -207,10 +232,28 @@ def _solve_generator(
                     model = handle.model()
                     if model is None:
                         break
+                    if check_all_atoms:
+                        # raw_asp text is invisible to the walkers, so its
+                        # contract is exhaustive declaration: an atom with an
+                        # unknown signature is a forgotten predicates= entry
+                        # (show directives would silently hide it otherwise)
+                        for symbol in model.symbols(atoms=True):
+                            if (symbol.name, len(symbol.arguments)) not in predicate_types:
+                                raise ValueError(
+                                    f"Model contains {symbol}, whose signature "
+                                    f"{symbol.name}/{len(symbol.arguments)} was never declared. "
+                                    f"raw_asp blocks must declare every predicate they produce "
+                                    f"via predicates=[...]; control visibility with show= on the "
+                                    f"class, not by omitting it."
+                                )
                     state.solution_count += 1
                     state.satisfiable = True
+                    new_messages = message_handler.messages[messages_seen:]
+                    messages_seen = len(message_handler.messages)
+                    state.messages.extend(new_messages)
                     yield Model(
-                        [convert_symbol_to_predicate(symbol, predicate_types) for symbol in model.symbols(shown=True)]
+                        [convert_symbol_to_predicate(symbol, predicate_types) for symbol in model.symbols(shown=True)],
+                        messages=new_messages,
                     )
             finally:
                 # Also reached when the caller close()s mid-iteration and when
@@ -228,6 +271,8 @@ def _solve_generator(
                 final = outcome
     finally:
         state.finished = True
+        # Messages after the last model (exhaustion proof, cancellation)
+        state.messages.extend(message_handler.messages[messages_seen:])
         if final is not None:
             # Skipped if the result was closed before solving began. clingo
             # raises if statistics are not ready; none is better than raising.

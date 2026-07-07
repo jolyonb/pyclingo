@@ -86,3 +86,20 @@ def test_not_reserved_as_constant_name() -> None:
     program = ASPProgram()
     with pytest.raises(ValueError, match="reserved"):
         program.define_constant("not", 1)
+
+
+def test_empty_segment_names_rejected_everywhere() -> None:
+    program = ASPProgram()
+    P = Predicate.define("p_seg", ["x"])
+    with pytest.raises(ValueError, match="cannot be empty"):
+        program.add_segment("")
+    with pytest.raises(ValueError, match="cannot be empty"):
+        program.fact(P(x=1), segment="  ")
+
+
+def test_snake_case_segment_headers_render_as_words() -> None:
+    program = ASPProgram()
+    P = Predicate.define("p_seg2", ["x"])
+    program.fact(P(x=1), segment="grid_stuff")
+    program.fact(P(x=2))  # second segment so headers render
+    assert "% ===== Grid Stuff =====" in program.render()

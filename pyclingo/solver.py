@@ -34,6 +34,16 @@ class ASPProgram:
         self.header: str | None = header
         self.default_segment: str = default_segment.lower()
 
+    def _segment_key(self, segment: str | None) -> str:
+        """Normalize a segment name (None means the default segment), rejecting invalid names."""
+        if segment is None:
+            return self.default_segment
+        if not segment.strip():
+            raise ValueError("Segment names cannot be empty")
+        if "\n" in segment or "\r" in segment:
+            raise ValueError("Segment names must be single-line (they render as section comments)")
+        return segment.lower()
+
     def add_segment(self, segment: str) -> None:
         """
         Pre-declare an empty segment, fixing its position in the rendered output.
@@ -43,10 +53,7 @@ class ASPProgram:
         already-existing segment is an error, because its position is already set
         and the request can't be honored.
         """
-        # Normalize segment name to lowercase for case-insensitive handling
-        if "\n" in segment or "\r" in segment:
-            raise ValueError("Segment names must be single-line (they render as section comments)")
-        normalized_segment = segment.lower()
+        normalized_segment = self._segment_key(segment)
         if normalized_segment in self._segments:
             raise ValueError(f"Segment '{segment}' already exists")
         self._segments[normalized_segment] = []
@@ -68,7 +75,7 @@ class ASPProgram:
                     f"variable(s) {variables}. Use when(conditions, let=...) to derive predicates."
                 )
         for statement in facts:
-            segment_key = (segment or self.default_segment).lower()
+            segment_key = self._segment_key(segment)
             self._segments[segment_key].append(Rule(head=statement))
 
     def when(self, *conditions: Term, let: Term, segment: str | None = None) -> None:
@@ -80,7 +87,7 @@ class ASPProgram:
                 raise TypeError(f"when() conditions must be Terms, got {type(condition).__name__}")
         if not isinstance(let, Term):
             raise TypeError(f"when() let must be a Term, got {type(let).__name__}")
-        segment_key = (segment or self.default_segment).lower()
+        segment_key = self._segment_key(segment)
         self._segments[segment_key].append(Rule(head=let, body=list(conditions)))
 
     def forbid(self, *conditions: Term, segment: str | None = None) -> None:
@@ -90,7 +97,7 @@ class ASPProgram:
         for condition in conditions:
             if not isinstance(condition, Term):
                 raise TypeError(f"forbid() conditions must be Terms, got {type(condition).__name__}")
-        segment_key = (segment or self.default_segment).lower()
+        segment_key = self._segment_key(segment)
         self._segments[segment_key].append(Rule(body=list(conditions)))
 
     def require(self, *terms: Term, implies: Comparison | None = None, segment: str | None = None) -> None:
@@ -149,17 +156,17 @@ class ASPProgram:
         """
         if not isinstance(text, str):
             raise TypeError(f"raw_asp() text must be a string, got {type(text).__name__}")
-        segment_key = (segment or self.default_segment).lower()
+        segment_key = self._segment_key(segment)
         self._segments[segment_key].append(RawASP(text, predicates))
 
     def comment(self, text: str, segment: str | None = None) -> None:
         """Add a comment to the program."""
-        segment_key = (segment or self.default_segment).lower()
+        segment_key = self._segment_key(segment)
         self._segments[segment_key].append(Comment(text))
 
     def blank_line(self, segment: str | None = None) -> None:
         """Add a blank line to the program for formatting."""
-        segment_key = (segment or self.default_segment).lower()
+        segment_key = self._segment_key(segment)
         self._segments[segment_key].append(BlankLine())
 
     def section(self, title: str, segment: str | None = None) -> None:
@@ -216,21 +223,30 @@ class ASPProgram:
         """Hide this predicate from output, overriding its default visibility."""
         self._show_overrides[predicate] = False
 
-    def show_when(self, predicate: type[Predicate], condition: ConditionalLiteral) -> None:
+    def show_when(self, condition: ConditionalLiteral) -> None:
         """
-        Show this predicate only where the condition holds, e.g.
-        show_when(P, ConditionalLiteral(p(C), [p(C), ~outside(C)])) renders as
-        "#show p(C) : p(C), not outside(C)."
+        Show a predicate only where the condition holds. The shown predicate
+        is the conditional literal's head, e.g.
+
+            show_when(ConditionalLiteral(p(C), [p(C), ~outside(C)]))
+
+        renders as "#show p(C) : p(C), not outside(C)."
         """
         if not isinstance(condition, ConditionalLiteral):
             raise TypeError(f"show_when condition must be a ConditionalLiteral, got {type(condition).__name__}")
+        head = condition.head
+        if not isinstance(head, Predicate):
+            raise ValueError(
+                f"show_when needs a conditional literal whose head is a predicate atom "
+                f"(the thing to show), got {type(head).__name__}"
+            )
         # A show directive is a capture too: freeze so later mutation of a
         # shared builder cannot silently rewrite it, and validate its variables
         # (a #show directive has no rule body, so everything must be bound
         # inside the conditional literal itself)
         validate_rule(None, [condition], f"#show {condition.render()}.")
         condition.freeze()
-        self._show_overrides[predicate] = condition
+        self._show_overrides[type(head)] = condition
 
     def _collect_predicates(self) -> set[type[Predicate]]:
         """Collect all predicate classes used anywhere in the program, show_when conditions included."""
@@ -340,7 +356,7 @@ class ASPProgram:
                     lines.append("")
                 else:
                     first_segment = False
-                lines.extend(("", f"% ===== {segment_name.title()} ====="))
+                lines.extend(("", f"% ===== {segment_name.replace('_', ' ').title()} ====="))
             lines.extend(element.render() for element in elements)
 
         # 4. #show directives: program overrides first, class defaults second.
@@ -350,12 +366,19 @@ class ASPProgram:
         any_hidden = False
         # Each sign has its own show signature, and a directive for an absent
         # signature draws a gringo info — so emit per present sign. An
-        # explicit show() override counts as positive presence (the user
-        # asked; raw_asp-only predicates have no walkable occurrences).
+        # explicit show() override counts as positive presence only where a
+        # positive atom could exist: either the walkers saw one, or raw text
+        # (which they cannot see) might provide one. A predicate occurring
+        # ONLY classically negated gets no dangling positive directive.
         signs = self._collect_predicate_signs()
-        positive_classes = {cls for cls, negated, is_atom in signs if is_atom and not negated} | set(
-            self._show_overrides
-        )
+        walked_positive = {cls for cls, negated, is_atom in signs if is_atom and not negated}
+        has_raw = any(isinstance(element, RawASP) for elements in self._segments.values() for element in elements)
+        override_positive = {
+            cls
+            for cls, visibility in self._show_overrides.items()
+            if visibility is True and (cls in walked_positive or has_raw)
+        }
+        positive_classes = walked_positive | override_positive
         negated_classes = {cls for cls, negated, is_atom in signs if is_atom and negated}
         for pred in self._collect_predicates() | set(self._show_overrides):
             visibility = self._show_overrides.get(pred, pred.shown_by_default())
@@ -407,7 +430,9 @@ class ASPProgram:
             timeout: Wall-clock limit in seconds (0 for no limit), counted from the
                      start of iteration. On timeout, models found so far will have
                      been yielded and 'exhausted' remains False.
-            stop_on_log_level: Log level at which to abort solving
+            stop_on_log_level: Log level at which to abort — applies to parsing
+                and grounding. Solve-phase messages never halt; they are
+                captured on each Model (.messages) and the SolveResult
 
         Returns:
             A SolveResult: iterate it for Models (each with typed atoms() access);
@@ -415,6 +440,8 @@ class ASPProgram:
             iteration ends on any path (exhaustion, close(), or a with-block).
 
         Raises:
+            ValueError: For render-time validation failures (undeclared
+                constants, name collisions, shows of underived predicates)
             RuntimeError: If an error occurs during parsing or grounding, or the
                 log level threshold is exceeded
 
@@ -472,4 +499,9 @@ class ASPProgram:
 
         predicate_types = {(pred.get_name(), pred.get_arity()): pred for pred in self._collect_predicates()}
 
-        return SolveResult(control, predicate_types, timeout, tic)
+        # Raw text is invisible to the walkers, so with raw blocks present
+        # every model's full atom set is checked against declared signatures
+        # (the raw_asp contract: exhaustive declaration)
+        has_raw = any(isinstance(element, RawASP) for elements in self._segments.values() for element in elements)
+
+        return SolveResult(control, predicate_types, timeout, tic, message_handler, check_all_atoms=has_raw)

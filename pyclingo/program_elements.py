@@ -38,8 +38,12 @@ class Comment(ProgramElement):
         """text may be multi-line."""
         if not isinstance(text, str):
             raise TypeError(f"Comment text must be a string, got {type(text).__name__}")
-        if "*%" in text:
-            raise ValueError("Comment text cannot contain '*%', which terminates ASP block comments")
+        # Multi-line text renders as a %* *% block, and gringo NESTS block
+        # comments: an inner %* swallows the rest of the file, and an inner
+        # *% terminates early — both delimiters are forbidden. Single-line
+        # text renders after %, where anything goes.
+        if "\n" in text and ("%*" in text or "*%" in text):
+            raise ValueError("Multi-line comment text cannot contain '%*' or '*%' (ASP block comment delimiters)")
         self.text = text
 
     def render(self) -> str:
@@ -52,11 +56,14 @@ class RawASP(ProgramElement):
     A verbatim block of ASP text: the escape hatch for constructs pyclingo
     does not support.
 
-    Raw text is invisible to the program's tree walkers, so declare any
-    predicates the block produces via the predicates argument — that is what
-    makes #show directives cover them and lets solutions round-trip into
-    typed instances. Undeclared atoms appearing in a model fail solving with
-    "Unknown predicate type". Constants registered via define_constant() are
+    Raw text is invisible to the program's tree walkers, so the contract is:
+    declare EVERY predicate the block produces via predicates=, controlling
+    visibility per class (show= at definition, or program show()/hide()) —
+    declaration means existence, the show config means visibility, exactly
+    as for walked predicates. Declared classes round-trip into typed
+    instances and participate in name-collision checks. If a model contains
+    an atom whose signature was never declared anywhere, solving fails
+    loudly at that model. Constants registered via define_constant() are
     always emitted, so raw text may use them freely.
     """
 
@@ -121,8 +128,9 @@ class Rule(ProgramElement):
         self.body = body_terms
 
         # Fail fast on unsafe and singleton variables: the traceback lands on
-        # the solver author's line, not in clingo's grounding output
-        validate_rule(self.head, self.body, self.render())
+        # the solver author's line, not in clingo's grounding output. The rule
+        # itself is passed for error text, rendered only if an error needs it
+        validate_rule(self.head, self.body, self)
 
     def render(self) -> str:
         result = ""

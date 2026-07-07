@@ -13,12 +13,18 @@ The probe-derived ground truth lives in tests/pyclingo/test_scoping.py.
 
 from collections import Counter
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 from pyclingo.aggregates import Aggregate
 from pyclingo.choice import Choice
 from pyclingo.conditional_literal import ConditionalLiteral
 from pyclingo.core import AggregateBase, Comparison, DefaultNegation, ExplicitPool, Expression, Term, Variable
 from pyclingo.predicate import Predicate
+
+if TYPE_CHECKING:
+    # Annotation-only upward reference: program_elements imports validate_rule
+    # from here, so scoping cannot import Rule at runtime
+    from pyclingo.program_elements import Rule
 
 # An equality edge: if every variable on one side is bound, the other side
 # becomes bound (and vice versa)
@@ -276,21 +282,29 @@ def _resolve_localities(scopes: RuleScopes) -> None:
                 scopes.body_counts[name] += scope.target_counts.pop(name)
 
 
-def validate_rule(head: Term | None, body: list[Term], rule_text: str) -> None:
+def validate_rule(head: Term | None, body: list[Term], rule: str | Rule) -> None:
     """
     Raise ValueError for unsafe or singleton variables, at rule construction
     time — the traceback lands on the line that built the bad rule.
+
+    `rule` provides the text for error messages: pass the Rule itself (or
+    anything with render()), and it is rendered only when an error actually
+    needs it — the happy path never pays for the string.
     """
+
+    def rule_text() -> str:
+        return rule if isinstance(rule, str) else rule.render()
+
     scopes = analyze(head, body)
     _resolve_localities(scopes)
 
     if scopes.anonymous_in_head:
-        raise ValueError(f"The anonymous variable '_' cannot appear in a rule head (unsafe): {rule_text}")
+        raise ValueError(f"The anonymous variable '_' cannot appear in a rule head (unsafe): {rule_text()}")
 
     if scopes.globals_in_aggregate_tuples:
         listing = "; ".join(f"{name} in {description}" for name, description in scopes.globals_in_aggregate_tuples)
         raise ValueError(
-            f"Aggregate tuple shares variable(s) with the rest of the rule ({listing}): {rule_text}\n"
+            f"Aggregate tuple shares variable(s) with the rest of the rule ({listing}): {rule_text()}\n"
             f"With the variable fixed by the rule, the aggregate's element set collapses "
             f"to at most one element per ground instance — almost never the intent. "
             f"Use a fresh variable inside the aggregate."
@@ -301,7 +315,7 @@ def validate_rule(head: Term | None, body: list[Term], rule_text: str) -> None:
     if unsafe:
         names = ", ".join(unsafe)
         raise ValueError(
-            f"Unsafe variable(s) {names} in rule: {rule_text}\n"
+            f"Unsafe variable(s) {names} in rule: {rule_text()}\n"
             f"Every variable must be bound by a positive body literal "
             f"(or an equality with something bound)."
         )
@@ -312,7 +326,7 @@ def validate_rule(head: Term | None, body: list[Term], rule_text: str) -> None:
         if local_unsafe:
             names = ", ".join(local_unsafe)
             raise ValueError(
-                f"Unsafe local variable(s) {names} in {scope.description} of rule: {rule_text}\n"
+                f"Unsafe local variable(s) {names} in {scope.description} of rule: {rule_text()}\n"
                 f"Local variables must be bound by a positive condition inside "
                 f"the same element."
             )
@@ -329,7 +343,7 @@ def validate_rule(head: Term | None, body: list[Term], rule_text: str) -> None:
     if singletons:
         names = ", ".join(singletons)
         raise ValueError(
-            f"Singleton variable(s) {names} in rule: {rule_text}\n"
+            f"Singleton variable(s) {names} in rule: {rule_text()}\n"
             f"A variable used exactly once is usually a typo; use ANY for an "
             f"intentional don't-care."
         )

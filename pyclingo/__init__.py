@@ -12,7 +12,7 @@ from .aggregates import (
     SumPlus,
 )
 from .choice import Choice
-from .clingo_handler import LogLevel
+from .clingo_handler import ClingoMessage, LogLevel
 from .conditional_literal import ConditionalLiteral, key_for_each_lock
 from .conditioned_element import CONDITION_TYPE
 from .core import (
@@ -46,6 +46,7 @@ __all__ = [  # noqa: RUF022 (categorized deliberately, not sorted)
     "SolveResult",
     "Model",
     "LogLevel",
+    "ClingoMessage",
     # Declaring predicates
     "Predicate",
     "Field",

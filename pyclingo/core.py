@@ -43,7 +43,6 @@ type AtomSign = tuple[PREDICATE_CLASS_TYPE, bool, bool]
 # Type aliases for the operator cluster
 type EXPRESSION_FIELD_TYPE = Value | Expression | int
 type VALUE_EXPRESSION_TYPE = Value | Expression
-type NUMBER_LIKE = int | Number | DefinedConstant | Variable
 
 
 class RenderingContext(Enum):
@@ -149,8 +148,10 @@ class ComparableTerm(Term, ABC):
 
     # Defining __eq__ sets __hash__ to None; restore identity hashing. Hash-based
     # containers (sets, dicts) work because they compare stored hash values before
-    # calling __eq__. LIST/TUPLE membership does call __eq__ and therefore raises via
-    # Comparison.__bool__ — loud, but a real restriction: use sets for containment.
+    # calling __eq__. LIST/TUPLE membership is a trap: CPython short-circuits on
+    # identity, so a PRESENT cached value returns True silently, while an absent
+    # one reaches __eq__ and raises via Comparison.__bool__ — it appears to work
+    # until the first miss. Use sets for containment.
     __hash__ = object.__hash__
 
     def __lt__(self, other: Any) -> Comparison:
@@ -344,7 +345,8 @@ class Variable(Value):
     Represents a variable in an ASP program.
 
     Variables in ASP start with an uppercase letter or can be an underscore '_'
-    for anonymous variables. During solving a variable ranges over all ground
+    for anonymous variables. (Deliberately narrower than gringo, which also
+    allows _X-style names: one underscore means anonymous, full stop.) During solving a variable ranges over all ground
     terms — numbers, strings, and compound terms alike: X == 4 compares against
     a number, X == Cell(1, 2) against a compound term (and C == Cell(X, ANY)
     destructures a bound compound). For several alternatives at once, use a
@@ -603,7 +605,9 @@ class RangePool(Pool):
     Represents a range pool in ASP programs, like 1..5.
 
     Bounds must be integer-valued: ints, Numbers, #const-defined constants,
-    or grounded integer Expressions.
+    or grounded integer Expressions. A #const bound is trusted to be
+    integer-valued — this class cannot see the program's constant table, so
+    a string-valued constant renders fine and fails at solve.
     """
 
     def __init__(self, start: int | ConstantBase | Expression, end: int | ConstantBase | Expression):
@@ -1182,6 +1186,12 @@ class Comparison(Negatable):
 
     def inverse(self) -> Comparison:
         """The complementary comparison: X == N inverts to X != N, X < N to X >= N."""
+        if isinstance(self._right_term, Pool):
+            raise ValueError(
+                "A pool comparison has no inverse: pools expand disjunctively, so "
+                "'X != (2;3)' is true for every X. Write the domain restriction as "
+                "positive conditions instead."
+            )
         return Comparison(self._left_term, self.operator.inverse, self._right_term)
 
     def collect_defined_constants(self) -> set[str]:

@@ -98,3 +98,8 @@ def test_conditions_without_implies_rejected() -> None:
     C = Variable("C")
     with pytest.raises(TypeError, match="exactly one Comparison"):
         program.require(P(x=C), C > 0)  # type: ignore[call-arg]
+
+
+def test_inverse_refuses_pool_comparisons_with_explanation() -> None:
+    with pytest.raises(ValueError, match="disjunctively"):
+        X.in_([2, 3]).inverse()

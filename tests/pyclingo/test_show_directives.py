@@ -33,7 +33,7 @@ def test_show_when_predicates_reach_the_round_trip() -> None:
     X = Variable("X")
     program.fact(P(x=1), Q(x=1))
     program.hide(Q)
-    program.show_when(P, ConditionalLiteral(P(x=X), [P(x=X), Not(Q(x=X))]))
+    program.show_when(ConditionalLiteral(P(x=X), [P(x=X), Not(Q(x=X))]))
     assert "#show p(X) : p(X), not q(X)." in program.render()
     list(program.solve())  # must not raise "Unknown predicate type"
 
@@ -56,7 +56,7 @@ def test_show_when_validates_its_condition() -> None:
     Q = Predicate.define("q", ["x"])
     X, Y = Variable("X"), Variable("Y")
     with pytest.raises(ValueError, match="Unsafe"):
-        program.show_when(P, ConditionalLiteral(P(x=X), Q(x=Y)))
+        program.show_when(ConditionalLiteral(P(x=X), Q(x=Y)))
 
 
 def test_show_of_underived_predicate_raises_at_render() -> None:
@@ -77,3 +77,26 @@ def test_show_with_raw_asp_present_is_not_validated() -> None:
     program.raw_asp("q_raw(1).")
     program.show(Q)
     assert "#show q_raw/1." in program.render()
+
+
+def test_show_of_negated_only_predicate_emits_no_positive_directive() -> None:
+    # An explicit show() of a predicate occurring only as -p must not emit a
+    # dangling "#show p/n." (gringo infos on absent signatures)
+    program = ASPProgram()
+    P = Predicate.define("p_negonly", ["x"], show=False)
+    program.fact(-P(x=1))
+    program.show(P)
+    rendered = program.render()
+    assert "#show -p_negonly/1." in rendered
+    assert "#show p_negonly/1." not in rendered
+    model = next(iter(program.solve()))
+    assert [a.negated for a in model.atoms(P)] == [True]
+
+
+def test_show_when_head_must_be_a_predicate() -> None:
+    # The shown predicate is the head; a comparison head has nothing to show
+    program = ASPProgram()
+    Q = Predicate.define("q_key", ["x"])
+    X = Variable("X")
+    with pytest.raises(ValueError, match="head is a predicate atom"):
+        program.show_when(ConditionalLiteral(X == 1, Q(x=X)))

@@ -3,10 +3,13 @@ Tests for model-count limits, wall-clock timeouts, and SolveResult lifecycle.
 """
 
 import time
+from typing import Any, cast
 
+import clingo
 import pytest
 
 from pyclingo import ASPProgram, Choice, Predicate, RangePool, Variable
+from pyclingo.clingo_handler import ClingoMessageHandler
 
 
 def make_choice_program(n: int) -> ASPProgram:
@@ -161,3 +164,27 @@ def test_closing_before_any_iteration_still_marks_consumed() -> None:
     result.close()
     with pytest.raises(RuntimeError, match="already consumed"):
         list(result)
+
+
+def test_solve_phase_messages_attach_instead_of_halting() -> None:
+    # No known clingo 5.8 construct emits solve-phase messages in API mode,
+    # so this injects into the handler between models to test the plumbing:
+    # each Model carries the batch that arrived while it was being found,
+    # and the result accumulates them all
+    program = make_choice_program(2)  # 4 models
+    result = program.solve(models=0)
+    iterator = iter(result)
+    first = next(iterator)
+    assert first.messages == []
+
+    # The Iterator annotation hides the generator's frame; the runtime type is known
+    frame = cast(Any, result._iterator).gi_frame
+    handler = frame.f_locals["message_handler"]
+    assert isinstance(handler, ClingoMessageHandler)
+    handler.on_message(clingo.MessageCode.Other, "info: something mid-solve")
+
+    second = next(iterator)
+    assert len(second.messages) == 1
+    assert "mid-solve" in second.messages[0].message
+    list(iterator)  # exhaust
+    assert len(result.messages) == 1
