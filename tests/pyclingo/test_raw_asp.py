@@ -32,8 +32,10 @@ def test_declared_predicates_are_shown_and_round_trip() -> None:
 def test_undeclared_shown_atoms_fail_loudly() -> None:
     program = ASPProgram()
     program.raw_asp("bar(1).\n#show bar/1.")
-    with pytest.raises(ValueError, match="bar/1 was never declared"):
-        list(program.solve())
+    # The contract is enforced at ground time against gringo's own
+    # signature table — before any model, UNSAT programs included
+    with pytest.raises(ValueError, match="never declared to pyclingo: bar/1"):
+        program.solve()
 
 
 def test_respects_segments() -> None:
@@ -76,8 +78,8 @@ def test_undeclared_raw_atoms_fail_loudly_in_mixed_programs() -> None:
     P = Predicate.define("p_mixed", ["x"])
     program.fact(P(x=1))
     program.raw_asp("hidden_atom(42).")
-    with pytest.raises(ValueError, match="hidden_atom/1 was never declared"):
-        next(iter(program.solve()))
+    with pytest.raises(ValueError, match="never declared to pyclingo: hidden_atom/1"):
+        program.solve()
 
 
 def test_declared_scaffolding_stays_hidden_without_error() -> None:
@@ -90,3 +92,39 @@ def test_declared_scaffolding_stays_hidden_without_error() -> None:
     program.raw_asp("reach(1). reach(2).", predicates=[Reach])
     model = next(iter(program.solve()))
     assert [str(a) for a in model.atoms()] == ["p_scaf(1)"]
+
+
+def test_exhaustive_declaration_catches_modelless_violations() -> None:
+    # The ground-time check sees what a per-model scan structurally cannot:
+    # undeclared predicates in UNSAT programs (no model ever arrives) and
+    # predicates false in every model
+    unsat = ASPProgram()
+    unsat.raw_asp("helper(1).\n:- helper(1).")
+    with pytest.raises(ValueError, match="never declared to pyclingo: helper/1"):
+        unsat.solve()
+
+    never_true = ASPProgram()
+    Q = Predicate.define("q_raw_nt", ["x"])
+    never_true.fact(Q(x=1))
+    never_true.raw_asp("{ maybe(X) : q_raw_nt(X) }.\n:- maybe(X).")
+    with pytest.raises(ValueError, match="never declared to pyclingo: maybe/1"):
+        never_true.solve()
+
+
+def test_all_undeclared_signatures_reported_at_once() -> None:
+    program = ASPProgram()
+    program.raw_asp("first(1).\nsecond(1, 2).")
+    with pytest.raises(ValueError, match="first/1, second/2"):
+        program.solve()
+
+
+def test_const_atom_collision_diagnosed() -> None:
+    # gringo substitutes #const only in TERM positions: the atom stays a
+    # distinct symbol, silently. The signatures check names the collision.
+    program = ASPProgram()
+    program.define_constant("foo", 5)
+    P = Predicate.define("p_cc", ["x"])
+    program.fact(P(x=1))
+    program.raw_asp("foo.")
+    with pytest.raises(ValueError, match="both a #const and an atom"):
+        program.solve()

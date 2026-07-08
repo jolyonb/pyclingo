@@ -417,7 +417,6 @@ class SolveResult(SearchABC):
         predicate_types: PREDICATE_TYPES,
         timeout: float,
         message_handler: ClingoMessageHandler,
-        check_all_atoms: bool = False,
         assumptions: list[tuple[clingo.Symbol, bool]] | None = None,
     ) -> None:
         state = _SearchState()
@@ -429,7 +428,6 @@ class SolveResult(SearchABC):
                 time.perf_counter(),
                 state,
                 message_handler,
-                check_all_atoms,
                 assumptions or [],
                 mode=None,
             ),
@@ -479,7 +477,6 @@ class RefinementSteps(SearchABC):
         message_handler: ClingoMessageHandler,
         assumptions: list[tuple[clingo.Symbol, bool]],
         mode: RefinementMode,
-        check_all_atoms: bool = False,
     ) -> None:
         state = _SearchState()
         super().__init__(
@@ -490,7 +487,6 @@ class RefinementSteps(SearchABC):
                 time.perf_counter(),
                 state,
                 message_handler,
-                check_all_atoms,
                 assumptions,
                 mode=mode,
             ),
@@ -544,7 +540,6 @@ class OptimizeSteps(SearchABC):
         timeout: float,
         message_handler: ClingoMessageHandler,
         assumptions: list[tuple[clingo.Symbol, bool]],
-        check_all_atoms: bool = False,
     ) -> None:
         state = _SearchState()
         super().__init__(
@@ -555,7 +550,6 @@ class OptimizeSteps(SearchABC):
                 time.perf_counter(),
                 state,
                 message_handler,
-                check_all_atoms,
                 assumptions,
                 mode=OPTIMIZE,
             ),
@@ -584,7 +578,6 @@ def _search_generator(
     tic: float,
     state: _SearchState,
     message_handler: ClingoMessageHandler,
-    check_all_atoms: bool,
     assumptions: list[tuple[clingo.Symbol, bool]],
     mode: SEARCH_MODE,
 ) -> Generator[AtomCollection]:
@@ -653,20 +646,6 @@ def _search_generator(
                                 f"optimization directive to ask about all answer sets."
                             )
                         raise ValueError("This program optimizes (the model carries a cost). Solve it with optimize().")
-                    if check_all_atoms:
-                        # raw_asp text is invisible to the walkers, so its
-                        # contract is exhaustive declaration: an atom with an
-                        # unknown signature is a forgotten predicates= entry
-                        # (show directives would silently hide it otherwise)
-                        for symbol in model.symbols(atoms=True):
-                            if (symbol.name, len(symbol.arguments)) not in predicate_types:
-                                raise ValueError(
-                                    f"Model contains {symbol}, whose signature "
-                                    f"{symbol.name}/{len(symbol.arguments)} was never declared. "
-                                    f"raw_asp blocks must declare every predicate they produce "
-                                    f"via predicates=[...]; control visibility with show= on the "
-                                    f"class, not by omitting it."
-                                )
                     state.emission_count += 1
                     state.satisfiable = True
                     new_messages = message_handler.messages[messages_seen:]

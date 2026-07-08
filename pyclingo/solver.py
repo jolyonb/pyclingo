@@ -478,7 +478,8 @@ class ASPProgram:
         - two distinct predicate classes sharing (name, arity): solutions could not
           be reconstructed unambiguously
         - a nullary predicate sharing its name with a #const: gringo substitutes
-          the constant's value into the atom, silently corrupting round-trips
+          the constant only in TERM positions, so the atom stays a distinct,
+          silently unrelated symbol
         """
         by_signature: dict[tuple[str, int], type[Predicate]] = {}
         for pred in self._collect_predicates():
@@ -676,16 +677,35 @@ class ASPProgram:
         predicate_types = {(pred.get_name(), pred.get_arity()): pred for pred in self._collect_predicates()}
 
         # Raw text is invisible to the walkers, so with raw blocks present
-        # every model's full atom set is checked against declared signatures
-        # (the raw_asp contract: exhaustive declaration)
+        # the raw_asp contract (exhaustive declaration) is enforced here,
+        # against gringo's own signature table: every ground signature must
+        # be a declared class.
         has_raw = any(isinstance(element, RawASP) for elements in self._segments.values() for element in elements)
+        if has_raw:
+            undeclared = sorted(
+                {(name, arity) for name, arity, _positive in control.symbolic_atoms.signatures} - set(predicate_types)
+            )
+            if undeclared:
+                for name, arity in undeclared:
+                    if arity == 0 and name in self._defined_constants:
+                        raise ValueError(
+                            f"'{name}' is both a #const and an atom in the grounding: gringo "
+                            f"substitutes the constant only in TERM positions, so the atom "
+                            f"stays a distinct, silently unrelated symbol. Rename one of them."
+                        )
+                listing = ", ".join(f"{name}/{arity}" for name, arity in undeclared)
+                raise ValueError(
+                    f"The grounded program contains predicates never declared to pyclingo: "
+                    f"{listing}. raw_asp blocks must declare every predicate they produce "
+                    f"via predicates=[...]; control visibility with show= on the class, "
+                    f"not by omitting it."
+                )
 
         return GroundedProgram(
             asp_source,
             control,
             predicate_types,
             message_handler,
-            check_all_atoms=has_raw,
             defined_constants=dict(self._defined_constants),
             ground_levels=ground_levels,
         )
@@ -791,7 +811,6 @@ class GroundedProgram:
         control: clingo.Control,
         predicate_types: dict[tuple[str, int], type[Predicate]],
         message_handler: ClingoMessageHandler,
-        check_all_atoms: bool,
         defined_constants: dict[str, int | str] | None = None,
         ground_levels: tuple[int, ...] = (),
     ) -> None:
@@ -799,7 +818,6 @@ class GroundedProgram:
         self._control = control
         self._predicate_types = predicate_types
         self._message_handler = message_handler
-        self._check_all_atoms = check_all_atoms
         self._defined_constants = defined_constants or {}
         # Ground truth from the minimize observer: the surviving priority
         # levels, highest first — bool(levels) IS "does this program optimize?"
@@ -940,7 +958,6 @@ class GroundedProgram:
             self._predicate_types,
             timeout,
             self._message_handler,
-            check_all_atoms=self._check_all_atoms,
             assumptions=converted,
         )
         return result
@@ -985,7 +1002,6 @@ class GroundedProgram:
             self._message_handler,
             converted or [],
             mode,
-            check_all_atoms=self._check_all_atoms,
         )
         return steps
 
@@ -1126,7 +1142,6 @@ class GroundedProgram:
             timeout,
             self._message_handler,
             converted or [],
-            check_all_atoms=self._check_all_atoms,
         )
         return steps
 
