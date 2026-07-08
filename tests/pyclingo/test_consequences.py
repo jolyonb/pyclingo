@@ -59,7 +59,7 @@ def test_brave_is_the_union() -> None:
 def test_cautious_finds_forced_atoms() -> None:
     # forced is derived in every answer set: the hint-generator question
     program = build()
-    program.when(Color(x=ANY), let=Forced())
+    program.when(Color(x=ANY)).derive(Forced())
     result = program.cautious()
     assert result is not None
     assert len(result.atoms(Forced)) == 1
@@ -283,7 +283,7 @@ def _pigeonhole() -> ASPProgram:
     program = ASPProgram()
     P, P2, H = Variable("P"), Variable("P2"), Variable("H")
     program.fact(*[Pigeon(p=i) for i in range(1, 13)])
-    program.when(Pigeon(p=P), let=Choice(Assign(p=P, h=RangePool(1, 11))).exactly(1))
+    program.when(Pigeon(p=P)).derive(Choice(Assign(p=P, h=RangePool(1, 11))).exactly(1))
     program.forbid(Assign(p=P, h=H), Assign(p=P2, h=H), P < P2)
     return program
 
@@ -342,14 +342,11 @@ def test_refinement_timeout_mid_stream_raises() -> None:
     P, P2, H = Variable("P"), Variable("P2"), Variable("H")
     program.fact(Choice(Free()))
     program.fact(*[PigeonM(p=i) for i in range(1, 13)])
-    program.when(PigeonM(p=P), let=Choice(AssignM(p=P, h=RangePool(1, 11))).at_most(1))
+    program.when(PigeonM(p=P)).derive(Choice(AssignM(p=P, h=RangePool(1, 11))).at_most(1))
     program.forbid(AssignM(p=P, h=H), AssignM(p=P2, h=H), P < P2)
     # hard_mid needs all 12 pigeons placed in 11 distinct holes: impossible,
     # but proving that is the slow step
-    program.when(
-        Count((P, H), condition=AssignM(p=P, h=H)) >= 12,
-        let=Hard(),
-    )
+    program.when(Count((P, H), condition=AssignM(p=P, h=H)) >= 12).derive(Hard())
     steps = program.ground().brave_iter(timeout=0.1)
     with pytest.raises(TimeoutError, match="did not finish"):
         list(steps)

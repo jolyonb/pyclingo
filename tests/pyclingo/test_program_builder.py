@@ -1,6 +1,6 @@
 """
-Tests for ASPProgram's construction methods: fact, when, forbid, raw_asp,
-define_constant, and the guards on their inputs.
+Tests for ASPProgram's construction methods: fact, when, forbid,
+raw_asp, define_constant, and the guards on their inputs.
 """
 
 import pytest
@@ -21,24 +21,22 @@ def test_builder_methods_reject_wrong_types() -> None:
     with pytest.raises(TypeError, match="must be Predicate or Choice instances, got str"):
         program.fact("p(1).")  # type: ignore[arg-type]
     with pytest.raises(TypeError, match="must be Terms, got str"):
-        program.when("p(X)", let=P(x=1))  # type: ignore[arg-type]
+        program.when("p(X)").derive(P(x=1))  # type: ignore[arg-type]
     with pytest.raises(TypeError, match="raw_asp\\(\\) text must be a string"):
         program.raw_asp(42)  # type: ignore[arg-type]
 
 
 def test_empty_conditions_are_rejected() -> None:
     program = ASPProgram()
-    P = Predicate.define("p", ["x"])
     with pytest.raises(ValueError, match="forbid\\(\\) requires at least one"):
         program.forbid()
-    with pytest.raises(ValueError, match="use fact\\(\\)"):
-        program.when(let=P(x=1))
-    with pytest.raises(ValueError, match="use fact\\(\\)"):
-        program.when(let=Choice(P(x=RangePool(1, 3))))
+    with pytest.raises(ValueError, match="use fact\\(\\) or require\\(\\)"):
+        program.when()
 
 
-def test_bare_choice_rules_are_facts() -> None:
-    # A bare choice rule is an unconditional statement, so fact() states it
+def test_fact_states_bare_choice_rules() -> None:
+    # A bare choice rule is a legitimate unconditional statement, so fact()
+    # takes it alongside grounded predicates
     program = ASPProgram()
     P = Predicate.define("p", ["x"])
     program.fact(Choice(P(x=RangePool(1, 3))))
@@ -57,7 +55,7 @@ def test_aggregate_comparisons_cannot_be_heads() -> None:
     P = Predicate.define("p", ["x"])
     X = Variable("X")
     with pytest.raises(ValueError, match="cannot be rule heads"):
-        program.when(P(x=1), let=(Count(X, condition=P(x=X)) == 1))
+        program.when(P(x=1)).derive(Count(X, condition=P(x=X)) == 1)
 
 
 def test_const_nullary_predicate_collision_rejected() -> None:
@@ -94,14 +92,14 @@ def test_empty_segment_names_rejected_everywhere() -> None:
     with pytest.raises(ValueError, match="cannot be empty"):
         program.add_segment("")
     with pytest.raises(ValueError, match="cannot be empty"):
-        program.fact(P(x=1), segment="  ")
+        program["  "].fact(P(x=1))
 
 
 def test_segment_headers_render_the_name_verbatim() -> None:
     program = ASPProgram()
     P = Predicate.define("p_seg2", ["x"])
     program.add_segment("grid_stuff")
-    program.fact(P(x=1), segment="grid_stuff")
+    program["grid_stuff"].fact(P(x=1))
     program.fact(P(x=2))  # second segment so headers render
     assert "% ===== grid_stuff =====" in program.render()
 
@@ -136,8 +134,10 @@ def test_failed_rule_leaves_builders_unfrozen() -> None:
     Q = Predicate.define("q_uf", ["x"])
     X, Y = Variable("X"), Variable("Y")
     choice = Choice(P(x=X), condition=Q(x=X))
+    scene = program.when(Q(x=Y))
     with pytest.raises(ValueError, match="Singleton variable"):
-        program.when(Q(x=Y), let=choice)  # Y is a singleton — rule rejected
+        scene.derive(choice)  # Y is a singleton — rule rejected
+    scene.derive(P(x=Y))  # close the scene so the program stays renderable
     choice.add(P(x=X + 1), Q(x=X))  # still mutable: the rule never captured it
     program.fact(choice)
     assert "{ p_uf(X) : q_uf(X); p_uf(X + 1) : q_uf(X) }" in program.render()

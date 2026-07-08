@@ -20,11 +20,11 @@ def test_writes_address_segments_by_exact_name() -> None:
     program = ASPProgram()
     TestPred = Predicate.define("test", ["value"])
     program.add_segment("Symbols")
-    program.fact(TestPred(value=1), segment="Symbols")
+    program["Symbols"].fact(TestPred(value=1))
 
     # A different casing is a different (nonexistent) segment
-    with pytest.raises(ValueError, match="Segment 'SYMBOLS' does not exist"):
-        program.fact(TestPred(value=2), segment="SYMBOLS")
+    with pytest.raises(KeyError, match="Segment 'SYMBOLS' does not exist"):
+        program["SYMBOLS"].fact(TestPred(value=2))
 
     assert "test(1)." in program.render()
 

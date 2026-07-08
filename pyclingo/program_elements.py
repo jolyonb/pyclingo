@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from collections.abc import Iterator, Sequence
+from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
 from pyclingo.conditional_literal import ConditionalLiteral
@@ -29,73 +29,6 @@ class ProgramElement(ABC):
     def collect_predicates(self) -> set[PREDICATE_CLASS_TYPE]:
         """All Predicate classes used in this element (both signs, any position)."""
         return {predicate for predicate, _negated, _is_atom in self.collect_predicate_signs()}
-
-
-class Segment:
-    """
-    One named block of program elements, rendered under its header.
-
-    add_segment is the one creation point: it pre-declares a named
-    segment, or attaches one built standalone — the program holds the
-    object you gave it, so appends through any handle are visible.
-    program["name"] reads a segment back (KeyError if absent); the
-    verbs' segment= writes into existing segments only. The default
-    segment alone self-creates: it is the program's own room.
-    """
-
-    def __init__(self, name: str) -> None:
-        self._name = self.validate_name(name)
-        self._elements: list[ProgramElement] = []
-
-    @staticmethod
-    def validate_name(name: str) -> str:
-        """The name, exactly as given; rejects empty or multi-line ones."""
-        if not isinstance(name, str):
-            raise TypeError(f"Segment name must be a string, got {type(name).__name__}")
-        if not name.strip():
-            raise ValueError("Segment names cannot be empty")
-        if "\n" in name or "\r" in name:
-            raise ValueError("Segment names must be single-line (they render as section comments)")
-        return name
-
-    @property
-    def name(self) -> str:
-        """The segment's name."""
-        return self._name
-
-    def append(self, element: ProgramElement) -> None:
-        """Add an element to the end of the segment."""
-        self._elements.append(element)
-
-    def __len__(self) -> int:
-        return len(self._elements)
-
-    def __iter__(self) -> Iterator[ProgramElement]:
-        return iter(self._elements)
-
-    def render(self, with_header: bool) -> str:
-        """
-        Render the segment's elements, one per line. With with_header, a
-        blank line and a "% ===== name =====" section comment precede them.
-        """
-        lines = [element.render() for element in self._elements]
-        if with_header:
-            lines = ["", f"% ===== {self._name} =====", *lines]
-        return "\n".join(lines)
-
-    def collect_predicate_signs(self) -> set[AtomSign]:
-        """(class, negated, is_atom) occurrences across the segment's elements."""
-        signs: set[AtomSign] = set()
-        for element in self._elements:
-            signs.update(element.collect_predicate_signs())
-        return signs
-
-    def collect_defined_constants(self) -> set[str]:
-        """All defined constant names used in the segment's elements."""
-        constants: set[str] = set()
-        for element in self._elements:
-            constants.update(element.collect_defined_constants())
-        return constants
 
 
 class Comment(ProgramElement):

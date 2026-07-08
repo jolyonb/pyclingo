@@ -15,7 +15,7 @@ def test_body_literal_after_conditional_literal_stays_separate() -> None:
     Good = Predicate.define("good", [])
     X = Variable("X")
     program.fact(Q(x=1), Q(x=2))
-    program.when(ConditionalLiteral(Q(x=X), Q(x=X)), R(), let=Good())
+    program.when(ConditionalLiteral(Q(x=X), Q(x=X)), R()).derive(Good())
     assert "q(X) : q(X); r." in program.render()
     # r is deliberately absent, which draws a clingo info; tolerate it
     models = list(program.solve(stop_on_log_level=LogLevel.WARNING))

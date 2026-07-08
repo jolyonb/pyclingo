@@ -56,7 +56,7 @@ def test_grounding_is_an_independent_snapshot() -> None:
     Q = Predicate.define("q_extra", ["x"])
     before = program.ground()
     program.fact(P(x=1))
-    program.when(P(x=1), let=Q(x=1))
+    program.when(P(x=1)).derive(Q(x=1))
     after = program.ground()
     assert "p_extra" not in before.text
     assert "p_extra" in after.text
@@ -192,7 +192,8 @@ def test_project_shown_collapses_helper_variants() -> None:
         program = ASPProgram()
         Sol = Predicate.define("sol", [])
         Aux = Predicate.define("aux", [], show=False)
-        program.fact(Choice(Sol()), Choice(Aux()))
+        program.fact(Choice(Sol()))
+        program.fact(Choice(Aux()))
         return program
 
     raw = build()

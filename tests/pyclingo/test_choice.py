@@ -40,7 +40,7 @@ def test_choice_freezes_when_captured_by_a_rule() -> None:
     P, Q = Predicate.define("p", ["x"]), Predicate.define("q", ["x"])
     X = Variable("X")
     choice = Choice(P(x=X), condition=Q(x=X))
-    program.when(Q(x=X), let=choice)
+    program.when(Q(x=X)).derive(choice)
     with pytest.raises(RuntimeError, match="frozen"):
         choice.add(P(x=X))
     with pytest.raises(RuntimeError, match="frozen"):
@@ -52,8 +52,8 @@ def test_choice_builds_freely_before_capture_and_shares_after() -> None:
     P, Q, R = (Predicate.define(n, ["x"]) for n in ("p", "q", "r"))
     X = Variable("X")
     choice = Choice(P(x=X), condition=Q(x=X)).add(R(x=X)).exactly(1)  # chaining pre-capture
-    program.when(Q(x=X), let=choice)
-    program.when(R(x=X), let=choice)  # sharing a built choice is fine
+    program.when(Q(x=X)).derive(choice)
+    program.when(R(x=X)).derive(choice)  # sharing a built choice is fine
     assert program.render().count("{ p(X) : q(X); r(X) } = 1") == 2
 
 
@@ -84,7 +84,7 @@ def test_expression_cardinality_bounds() -> None:
     Pick = Predicate.define("pick", ["x"])
     N, X = Variable("N"), Variable("X")
     program.fact(Size(n=2), *[C(x=i) for i in range(1, 5)])
-    program.when(Size(n=N), let=Choice(Pick(x=X), condition=C(x=X)).exactly(N + 1))
+    program.when(Size(n=N)).derive(Choice(Pick(x=X), condition=C(x=X)).exactly(N + 1))
     models = list(program.solve())
     assert len(models) == 4  # C(4, 3) ways to pick 3 of 4
     assert all(len(m.atoms(Pick)) == 3 for m in models)
@@ -97,4 +97,4 @@ def test_expression_bound_variables_must_bind() -> None:
     Q = Predicate.define("q_eb", ["x"])
     N, X = Variable("N"), Variable("X")
     with pytest.raises(ValueError, match="Unsafe variable"):
-        program.when(Q(x=1), let=Choice(P(x=X), condition=Q(x=X)).exactly(N + 1))
+        program.when(Q(x=1)).derive(Choice(P(x=X), condition=Q(x=X)).exactly(N + 1))

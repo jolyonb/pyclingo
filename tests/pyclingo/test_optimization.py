@@ -294,7 +294,7 @@ def _slow_unsat_optimizing() -> ASPProgram:
     program = ASPProgram()
     P, P2, H = Variable("P"), Variable("P2"), Variable("H")
     program.fact(*[PigeonOpt(p=i) for i in range(1, 13)])
-    program.when(PigeonOpt(p=P), let=Choice(AssignOpt(p=P, h=RangePool(1, 11))).exactly(1))
+    program.when(PigeonOpt(p=P)).derive(Choice(AssignOpt(p=P, h=RangePool(1, 11))).exactly(1))
     program.forbid(AssignOpt(p=P, h=H), AssignOpt(p=P2, h=H), P < P2)
     program.minimize(1, P, condition=AssignOpt(p=P, h=ANY))
     return program
@@ -508,7 +508,8 @@ def test_auto_terms_exclude_construct_locals() -> None:
     Tag = Predicate.define("tag_at", ["t"])
     program = ASPProgram()
     X, T = Variable("X"), Variable("T")
-    program.fact(Choice(Pick(x=1)).add(Pick(x=2)), Tag(t=1), Tag(t=2))
+    program.fact(Choice(Pick(x=1)).add(Pick(x=2)))
+    program.fact(Tag(t=1), Tag(t=2))
     program.penalize(Tag(t=T), Count(X, condition=Pick(x=X)) >= 2)
     assert ":~ tag_at(T), #count{ X : pick(X) } >= 2. [1, T]" in program.render()
 

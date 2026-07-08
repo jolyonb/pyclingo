@@ -111,6 +111,6 @@ def test_vars_in_a_real_rule() -> None:
     Q = Predicate.define("q_vars", ["a"])
     program = ASPProgram()
     program.fact(P(a=1, b=2))
-    program.when(P(a=V.X, b=V.Y), V.X < V.Y, let=Q(a=V.X))
+    program.when(P(a=V.X, b=V.Y), V.X < V.Y).derive(Q(a=V.X))
     model = next(iter(program.solve()))
     assert [a["a"].value for a in model.atoms(Q)] == [1]

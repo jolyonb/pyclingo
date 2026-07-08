@@ -105,7 +105,7 @@ program.fact(john)
 program.fact(mary)
 
 # Rules
-program.when(Person(name=X, age=Y), Y >= 18, let=Adult(name=X))
+program.when(Person(name=X, age=Y), Y >= 18).derive(Adult(name=X))
 
 # Constraints
 program.forbid(Person(name=ANY, age=Y), Y < 0)

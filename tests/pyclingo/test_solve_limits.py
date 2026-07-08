@@ -108,7 +108,7 @@ def test_unsafe_rules_raise_at_construction() -> None:
     Q = Predicate.define("q", ["x"])
     X, Y = Variable("X"), Variable("Y")
     with pytest.raises(ValueError, match="Unsafe variable"):
-        program.when(P(x=X), let=Q(x=Y))
+        program.when(P(x=X)).derive(Q(x=Y))
 
 
 def test_grounding_diagnostics_ride_in_the_error() -> None:
@@ -117,7 +117,7 @@ def test_grounding_diagnostics_ride_in_the_error() -> None:
     program = ASPProgram()
     P = Predicate.define("p", ["x"])
     Q = Predicate.define("q", ["x"])
-    program.when(Q(x=1), let=P(x=1))
+    program.when(Q(x=1)).derive(P(x=1))
     with pytest.raises(RuntimeError, match="does not occur"):
         program.solve()
 
@@ -205,7 +205,7 @@ def test_timeout_before_any_model_raises() -> None:
     B = Predicate.define("h_p", ["p"], show=False)
     P, P2, H = Variable("P"), Variable("P2"), Variable("H")
     program.fact(*[B(p=i) for i in range(1, 13)])
-    program.when(B(p=P), let=Choice(A(p=P, h=RangePool(1, 11))).exactly(1))
+    program.when(B(p=P)).derive(Choice(A(p=P, h=RangePool(1, 11))).exactly(1))
     program.forbid(A(p=P, h=H), A(p=P2, h=H), P < P2)
     result = program.solve(timeout=0.05)
     with pytest.raises(TimeoutError, match="no model within"):

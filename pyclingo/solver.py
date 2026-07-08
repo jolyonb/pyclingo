@@ -7,17 +7,12 @@ from pyclingo.choice import Choice
 from pyclingo.clingo_handler import ClingoMessageHandler, LogLevel
 from pyclingo.conditional_literal import ConditionalLiteral
 from pyclingo.conditioned_element import CONDITION_TYPE
-from pyclingo.core import AtomSign, Comparison, DefaultNegation, DefinedConstant, Pool, Term
-from pyclingo.optimization import (
-    OPTIMIZATION_TERM_TYPE,
-    Optimization,
-    OptimizationDirective,
-    OptStrategy,
-    WeakConstraint,
-)
+from pyclingo.core import AtomSign, DefaultNegation, DefinedConstant, Term
+from pyclingo.optimization import OPTIMIZATION_TERM_TYPE, OptStrategy
 from pyclingo.predicate import Predicate
-from pyclingo.program_elements import BlankLine, Comment, RawASP, Rule, Segment
-from pyclingo.scoping import validate_optimization_element, validate_rule, validate_weak_constraint
+from pyclingo.program_elements import RawASP
+from pyclingo.scoping import validate_rule
+from pyclingo.segment import Segment, When
 from pyclingo.solve_result import (
     OPTIMIZE,
     SEARCH_MODE,
@@ -93,27 +88,11 @@ class ASPProgram:
         self.header: str | None = header
         self.default_segment: str = Segment.validate_name(default_segment)
 
-    def _segment_key(self, segment: str | None) -> str:
-        """The segment name (None means the default segment); rejects invalid names."""
-        if segment is None:
-            return self.default_segment
-        return Segment.validate_name(segment)
-
-    def _segment(self, segment: str | None) -> Segment:
-        """
-        The verbs' write target. A named segment must already exist (see
-        add_segment); only the DEFAULT segment self-creates — it is the
-        program's own room.
-        """
-        key = self._segment_key(segment)
+    def _default_segment(self) -> Segment:
+        """The default segment, created on first use; every other segment needs add_segment."""
+        key = self.default_segment
         if key not in self._segments:
-            if segment is not None:
-                existing = ", ".join(f"'{name}'" for name in self._segments) or "(none)"
-                raise ValueError(
-                    f"Segment '{segment}' does not exist — create it first with "
-                    f"add_segment('{segment}'); existing segments: {existing}"
-                )
-            self._segments[key] = Segment(key)
+            self._segments[key] = Segment(key, allow_singletons=not self._check_singletons)
         return self._segments[key]
 
     def __getitem__(self, segment: str) -> Segment:
@@ -155,14 +134,16 @@ class ASPProgram:
         Add a segment, fixing its position in the rendered output, and
         return it: a string pre-declares an empty segment, a Segment
         object attaches it as-is (the program holds the object you gave
-        it — appends through any handle are visible).
+        it — appends through any handle are visible). Statements are then
+        spoken on the returned handle, or on program["name"].
 
-        This is the one creation point: the verbs' segment= writes into
-        existing segments only, and program["name"] reads without
-        creating. Adding a name that already exists is an error, because
-        its position is already set and the request can't be honored.
+        Adding a name that already exists is an error, because its
+        position is already set; assign with program["name"] = segment to
+        replace one in place.
         """
-        attached = segment if isinstance(segment, Segment) else Segment(segment)
+        attached = (
+            segment if isinstance(segment, Segment) else Segment(segment, allow_singletons=not self._check_singletons)
+        )
         if attached.name in self._segments:
             given = segment if isinstance(segment, str) else segment.name
             raise ValueError(f"Segment '{given}' already exists")
@@ -180,95 +161,21 @@ class ASPProgram:
             raise KeyError(f"Segment '{segment}' does not exist; existing segments: {existing}")
         del self._segments[key]
 
-    def fact(self, *facts: Predicate | Choice, segment: str | None = None) -> None:
-        """
-        Add unconditional statements to the program: grounded facts, or bare
-        choice rules like { a(1..3) } (whose element variables are local).
-        """
-        if not facts:
-            raise ValueError("fact() requires at least one statement")
-        for statement in facts:
-            if not isinstance(statement, (Predicate, Choice)):
-                raise TypeError(
-                    f"fact() arguments must be Predicate or Choice instances, got {type(statement).__name__}"
-                )
-            if isinstance(statement, Predicate) and not statement.is_grounded:
-                variables = ", ".join(sorted(statement.collect_variables()))
-                raise ValueError(
-                    f"fact() requires grounded predicates, but {statement.render()} contains "
-                    f"variable(s) {variables}. Use when(conditions, let=...) to derive predicates."
-                )
-        for statement in facts:
-            rule = Rule(head=statement, check_singletons=self._check_singletons)
-            self._segment(segment).append(rule)
+    def fact(self, *facts: Predicate | Choice) -> None:
+        """Add unconditional statements to the default segment; see Segment.fact()."""
+        self._default_segment().fact(*facts)
 
-    def when(self, *conditions: Term, let: Term, segment: str | None = None) -> None:
-        """Create a clingo rule which sets the let term when all conditions are satisfied."""
-        if not conditions:
-            raise ValueError("when() requires at least one condition; use fact() for unconditional statements")
-        for condition in conditions:
-            if not isinstance(condition, Term):
-                raise TypeError(f"when() conditions must be Terms, got {type(condition).__name__}")
-        if not isinstance(let, Term):
-            raise TypeError(f"when() let must be a Term, got {type(let).__name__}")
-        rule = Rule(head=let, body=list(conditions), check_singletons=self._check_singletons)
-        self._segment(segment).append(rule)
+    def when(self, *conditions: Term) -> When:
+        """Hold conditions for a closer, in the default segment; see Segment.when()."""
+        return self._default_segment().when(*conditions)
 
-    def forbid(self, *conditions: Term, segment: str | None = None) -> None:
-        """Creates a clingo constraint which forbids the specified combination of conditions."""
-        if not conditions:
-            raise ValueError("forbid() requires at least one condition")
-        for condition in conditions:
-            if not isinstance(condition, Term):
-                raise TypeError(f"forbid() conditions must be Terms, got {type(condition).__name__}")
-        rule = Rule(body=list(conditions), check_singletons=self._check_singletons)
-        self._segment(segment).append(rule)
+    def forbid(self, *conditions: Term) -> None:
+        """Forbid the combination, in the default segment; see Segment.forbid()."""
+        self._default_segment().forbid(*conditions)
 
-    def require(self, *terms: Term, implies: Comparison | None = None, segment: str | None = None) -> None:
-        """
-        Require that a comparison holds: unconditionally, or as an implication.
-
-        Two forms, both pure syntactic sugar for a forbid constraint on the
-        inverse comparison:
-
-            require(Count(C, condition=...) >= 2)                # must hold, always
-            require(Clue(num=N), implies=Count(...) == N)        # conditions imply it
-
-        The second is the material implication W -> C, entirely equivalent to
-        forbid(*W, C.inverse()). Note that unlike when(), require() checks the
-        relation but never derives. The implication example renders
-        ":- clue(N), #count{ Adj : ... } != N."
-        """
-        target: Term
-        conditions: tuple[Term, ...]
-        if implies is None:
-            if len(terms) != 1:
-                raise TypeError(
-                    "require() without implies= takes exactly one Comparison (the unconditional "
-                    "form); to require a comparison under conditions, pass it as "
-                    "require(*conditions, implies=comparison)."
-                )
-            # A single non-Comparison falls through to the teaching error below
-            target = terms[0]
-            conditions = ()
-        else:
-            target = implies
-            conditions = terms
-        if not isinstance(target, Comparison):
-            raise TypeError(
-                f"require() implies must be a Comparison, got {type(target).__name__}. To make "
-                f"a predicate hold, derive it with when(*conditions, let=...)."
-            )
-        if isinstance(target.right_term, Pool):
-            raise ValueError(
-                "require() cannot invert a pool comparison: pools expand disjunctively, "
-                "so 'X != (2;3)' is true for every X. Write the domain restriction as a "
-                "positive body condition instead."
-            )
-        for condition in conditions:
-            if not isinstance(condition, Term):
-                raise TypeError(f"require() conditions must be Terms, got {type(condition).__name__}")
-        self.forbid(*conditions, target.inverse(), segment=segment)
+    def require(self, *comparison: Term) -> None:
+        """Require a comparison to hold, in the default segment; see Segment.require()."""
+        self._default_segment().require(*comparison)
 
     def minimize(
         self,
@@ -276,28 +183,9 @@ class ASPProgram:
         *tuple_terms: OPTIMIZATION_TERM_TYPE,
         condition: CONDITION_TYPE | list[CONDITION_TYPE] | None = None,
         priority: int = 0,
-        segment: str | None = None,
     ) -> None:
-        """
-        Add a #minimize statement: among the answer sets, prefer those
-        where the total weight is smallest. The weight is summed over
-        DISTINCT ground tuples, so include identifying terms after it
-        exactly as in a #sum tuple:
-
-            minimize(Size, C, condition=island(loc=C, size=Size))
-
-        renders "#minimize{ Size, C : island(C, Size) }." — without C, two
-        same-sized islands would collapse to one contribution. priority
-        stacks objectives lexicographically (higher decided first,
-        rendered W@P); priorities are ordinal keys and gaps are free.
-        All statements at a priority share ONE tuple set: duplicate
-        tuples count once, distinct tuples sum.
-
-        Every variable must be bound by the element's own conditions — this
-        directive has no rule body. Optimization changes how the program
-        must be solved; see optimize().
-        """
-        self._add_optimization(Optimization.MINIMIZE, weight, tuple_terms, condition, priority, segment)
+        """Add a #minimize statement to the default segment; see Segment.minimize()."""
+        self._default_segment().minimize(weight, *tuple_terms, condition=condition, priority=priority)
 
     def maximize(
         self,
@@ -305,29 +193,9 @@ class ASPProgram:
         *tuple_terms: OPTIMIZATION_TERM_TYPE,
         condition: CONDITION_TYPE | list[CONDITION_TYPE] | None = None,
         priority: int = 0,
-        segment: str | None = None,
     ) -> None:
-        """
-        Add a #maximize statement: prefer answer sets with the LARGEST
-        total weight. Exactly minimize() with the preference flipped
-        (clingo reports the cost of a maximization as a negated sum). See
-        minimize() for the tuple-distinctness and priority rules.
-        """
-        self._add_optimization(Optimization.MAXIMIZE, weight, tuple_terms, condition, priority, segment)
-
-    def _add_optimization(
-        self,
-        sense: Optimization,
-        weight: int | OPTIMIZATION_TERM_TYPE,
-        tuple_terms: tuple[OPTIMIZATION_TERM_TYPE, ...],
-        condition: CONDITION_TYPE | list[CONDITION_TYPE] | None,
-        priority: int,
-        segment: str | None,
-    ) -> None:
-        directive = OptimizationDirective(sense, weight, tuple_terms, condition, priority)
-        validate_optimization_element(directive.element, directive.render(), check_singletons=self._check_singletons)
-        directive.element.freeze()
-        self._segment(segment).append(directive)
+        """Add a #maximize statement to the default segment; see Segment.maximize()."""
+        self._default_segment().maximize(weight, *tuple_terms, condition=condition, priority=priority)
 
     def penalize(
         self,
@@ -335,62 +203,25 @@ class ASPProgram:
         weight: int | OPTIMIZATION_TERM_TYPE = 1,
         terms: Sequence[OPTIMIZATION_TERM_TYPE] | None = None,
         priority: int = 0,
-        segment: str | None = None,
     ) -> None:
-        """
-        A forbid() that charges instead of forbidding: each ground match of
-        the conditions adds weight to the cost, and optimize() prefers
-        answer sets paying least. Renders as a weak constraint,
-        ":~ conditions. [weight@priority, terms]" — semantically identical
-        to minimize() (one shared tuple set; duplicate tuples count once),
-        so the spelling is intent: penalize() for soft constraints,
-        minimize() for objectives.
+        """Charge for each match of the conditions, in the default segment; see Segment.penalize()."""
+        self._default_segment().penalize(*conditions, weight=weight, terms=terms, priority=priority)
 
-        By default each ground match is charged separately: the tuple gets
-        the conditions' variables, written out in the render. Pass terms=
-        to charge by a different identity — terms=[] deliberately collapses
-        EVERY match into one charge (gringo's own bare-tuple semantics).
-        Every weight/terms variable must be bound by the conditions.
+    def raw_asp(self, text: str, predicates: Sequence[type[Predicate]] = ()) -> None:
+        """Add verbatim ASP text to the default segment; see Segment.raw_asp()."""
+        self._default_segment().raw_asp(text, predicates)
 
-            penalize(Island(loc=C, size=S), weight=S)
+    def comment(self, text: str) -> None:
+        """Add a comment to the default segment."""
+        self._default_segment().comment(text)
 
-        charges each island its size.
-        """
-        weak = WeakConstraint(conditions, weight, tuple(terms) if terms is not None else None, priority)
-        validate_weak_constraint(
-            weak.targets, list(weak.conditions), weak.render(), check_singletons=self._check_singletons
-        )
-        weak.freeze()
-        self._segment(segment).append(weak)
+    def blank_line(self) -> None:
+        """Add a blank line to the default segment."""
+        self._default_segment().blank_line()
 
-    def raw_asp(self, text: str, segment: str | None = None, predicates: Sequence[type[Predicate]] = ()) -> None:
-        """
-        Add a verbatim block of ASP text: the escape hatch for constructs
-        pyclingo does not model.
-
-        Declare any predicates the block produces via predicates so that show
-        directives cover them and solutions round-trip into typed instances.
-        A declaration covers the POSITIVE sign's visibility; raw text that
-        derives classically negated atoms (-p) needs its own visibility
-        channel — a raw "#show -p/n." line, or show_when with a negated
-        head — or those atoms stay silently absent from output.
-        """
-        if not isinstance(text, str):
-            raise TypeError(f"raw_asp() text must be a string, got {type(text).__name__}")
-        self._segment(segment).append(RawASP(text, predicates))
-
-    def comment(self, text: str, segment: str | None = None) -> None:
-        """Add a comment to the program."""
-        self._segment(segment).append(Comment(text))
-
-    def blank_line(self, segment: str | None = None) -> None:
-        """Add a blank line to the program for formatting."""
-        self._segment(segment).append(BlankLine())
-
-    def section(self, title: str, segment: str | None = None) -> None:
-        """Add a blank line and title comment as a section header."""
-        self.blank_line(segment=segment)
-        self.comment(title, segment=segment)
+    def section(self, title: str) -> None:
+        """Add a blank line and title comment to the default segment."""
+        self._default_segment().section(title)
 
     def define_constant(self, name: str, value: int | str) -> DefinedConstant:
         """
@@ -578,6 +409,8 @@ class ASPProgram:
         3. Program segments (rules, comments, section headers)
         4. #show directives (program overrides, then class defaults)
         """
+        for segment in self._segments.values():
+            segment.check_pending()
         self._validate_constants()
         self._validate_names()
         self._validate_shown_predicates()

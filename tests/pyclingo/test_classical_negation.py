@@ -42,7 +42,7 @@ def test_negated_atoms_bind_in_bodies() -> None:
     program = ASPProgram()
     program.fact(-P(x=2))
     X = Variable("X")
-    program.when(-P(x=X), let=Q(x=X))
+    program.when(-P(x=X)).derive(Q(x=X))
     model = next(iter(program.solve()))
     assert [a["x"].value for a in model.atoms(Q)] == [2]
     negatives = [a for a in model.atoms(P) if a.negated]
@@ -108,5 +108,5 @@ def test_scoping_counts_signed_atoms() -> None:
     program = ASPProgram()
     X, Y = Variable("X"), Variable("Y")
     with pytest.raises(ValueError, match="Singleton"):
-        program.when(-P(x=X), let=Q(x=X))
-        program.when(P(x=X), -Q(x=Y), let=Q(x=X))
+        program.when(-P(x=X)).derive(Q(x=X))
+        program.when(P(x=X), -Q(x=Y)).derive(Q(x=X))

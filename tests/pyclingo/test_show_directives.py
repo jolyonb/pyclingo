@@ -154,7 +154,7 @@ def test_aggregate_tuple_terms_are_data_not_atoms() -> None:
     program = ASPProgram()
     N, Y = Variable("N"), Variable("Y")
     program.fact(Q(x=1), Q(x=2))
-    program.when(N == Count(Island(loc=Y), condition=Q(x=Y)), let=Total(n=N))
+    program.when(N == Count(Island(loc=Y), condition=Q(x=Y))).derive(Total(n=N))
     rendered = program.render()
     assert "#show island_agg/1." not in rendered
     model = next(iter(program.solve()))

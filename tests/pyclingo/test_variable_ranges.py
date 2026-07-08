@@ -18,7 +18,7 @@ def test_binding_position_solves() -> None:
     program = ASPProgram()
     N, X = Variable("N"), Variable("X")
     program.fact(Size(n=3))
-    program.when(Size(n=N), X.in_(RangePool(1, N)), let=Q(x=X))
+    program.when(Size(n=N), X.in_(RangePool(1, N))).derive(Q(x=X))
     model = next(iter(program.solve()))
     assert sorted(a["x"].value for a in model.atoms(Q)) == [1, 2, 3]
 
@@ -28,7 +28,7 @@ def test_argument_position_head_expands() -> None:
     program = ASPProgram()
     N = Variable("N")
     program.fact(Size(n=3))
-    program.when(Size(n=N), let=Q(x=RangePool(1, N)))
+    program.when(Size(n=N)).derive(Q(x=RangePool(1, N)))
     model = next(iter(program.solve()))
     assert sorted(a["x"].value for a in model.atoms(Q)) == [1, 2, 3]
 
@@ -38,7 +38,7 @@ def test_expression_bounds_solve() -> None:
     program = ASPProgram()
     N, X = Variable("N"), Variable("X")
     program.fact(Size(n=2))
-    program.when(Size(n=N), X.in_(RangePool(1, N * 2)), let=Q(x=X))
+    program.when(Size(n=N), X.in_(RangePool(1, N * 2))).derive(Q(x=X))
     model = next(iter(program.solve()))
     assert sorted(a["x"].value for a in model.atoms(Q)) == [1, 2, 3, 4]
 
@@ -50,7 +50,7 @@ def test_both_bounds_variables_solve() -> None:
     program = ASPProgram()
     L, H, X = Variable("L"), Variable("H"), Variable("X")
     program.fact(Lo(n=2), Hi(n=4))
-    program.when(Lo(n=L), Hi(n=H), X.in_(RangePool(L, H)), let=Q(x=X))
+    program.when(Lo(n=L), Hi(n=H), X.in_(RangePool(L, H))).derive(Q(x=X))
     model = next(iter(program.solve()))
     assert sorted(a["x"].value for a in model.atoms(Q)) == [2, 3, 4]
 
@@ -63,7 +63,7 @@ def test_runtime_empty_range_is_not_an_error() -> None:
     program = ASPProgram()
     L, H, X = Variable("L"), Variable("H"), Variable("X")
     program.fact(Lo(n=5), Hi(n=2), W())
-    program.when(Lo(n=L), Hi(n=H), X.in_(RangePool(L, H)), let=Q(x=X))
+    program.when(Lo(n=L), Hi(n=H), X.in_(RangePool(L, H))).derive(Q(x=X))
     model = next(iter(program.solve()))
     assert model.atoms(Q) == []
     assert len(model.atoms(W)) == 1
@@ -87,7 +87,7 @@ def test_unbound_range_variable_rejected_at_construction() -> None:
     program = ASPProgram()
     N, X = Variable("N"), Variable("X")
     with pytest.raises(ValueError, match="Unsafe variable"):
-        program.when(X.in_(RangePool(1, N)), let=Q(x=X))
+        program.when(X.in_(RangePool(1, N))).derive(Q(x=X))
 
 
 def test_ranges_never_invert() -> None:
@@ -97,7 +97,7 @@ def test_ranges_never_invert() -> None:
     P = Predicate.define("p_inv", ["x"], show=False)
     N, X = Variable("N"), Variable("X")
     with pytest.raises(ValueError, match="Unsafe variable"):
-        program.when(P(x=X), X.in_(RangePool(1, N)), let=Q(x=N))
+        program.when(P(x=X), X.in_(RangePool(1, N))).derive(Q(x=N))
 
 
 def test_variable_range_inside_aggregate_condition() -> None:
@@ -107,11 +107,7 @@ def test_variable_range_inside_aggregate_condition() -> None:
     program = ASPProgram()
     N, K, X = Variable("N"), Variable("K"), Variable("X")
     program.fact(Size(n=3), C(x=2), C(x=7))
-    program.when(
-        Size(n=N),
-        K == Count(X, condition=[X.in_(RangePool(1, N)), C(x=X)]),
-        let=Out(k=K),
-    )
+    program.when(Size(n=N), K == Count(X, condition=[X.in_(RangePool(1, N)), C(x=X)])).derive(Out(k=K))
     model = next(iter(program.solve()))
     assert [a["k"].value for a in model.atoms(Out)] == [1]
 

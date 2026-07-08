@@ -43,7 +43,7 @@ def test_respects_segments() -> None:
     Base = Predicate.define("base", ["x"])
     program.fact(Base(x=1))  # populate the default segment so headers render
     program.add_segment("extras")
-    program.raw_asp("foo(1).", segment="extras")
+    program["extras"].raw_asp("foo(1).")
     rendered = program.render()
     assert rendered.index("===== extras =====") < rendered.index("foo(1).")
 

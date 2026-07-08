@@ -223,11 +223,11 @@ def test_repeated_variable_in_expression_arguments_counts() -> None:
 
 def test_allow_singletons_switches_off_the_lint() -> None:
     program = ASPProgram(allow_singletons=True)
-    program.when(Q(x=X), let=P(x=1))  # X used once: fine here
+    program.when(Q(x=X)).derive(P(x=1))  # X used once: fine here
     assert "p(1) :- q(X)." in program.render()
 
 
 def test_allow_singletons_does_not_soften_safety() -> None:
     program = ASPProgram(allow_singletons=True)
     with pytest.raises(ValueError, match="Unsafe variable"):
-        program.when(Q(x=Y), let=P(x=X))
+        program.when(Q(x=Y)).derive(P(x=X))
