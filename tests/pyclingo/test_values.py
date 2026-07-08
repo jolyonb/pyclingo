@@ -4,7 +4,7 @@ Tests for the content rules of Number, String, and pools.
 
 import pytest
 
-from pyclingo import DefinedConstant, Number, RangePool, String, Value, Variable, pool
+from pyclingo import ANY, ASPProgram, DefinedConstant, Number, Predicate, RangePool, String, V, Value, Variable, pool
 
 
 def test_number_range_matches_clingo() -> None:
@@ -67,3 +67,50 @@ def test_non_ascii_variable_and_constant_names_rejected() -> None:
         Variable("Ärger")
     with pytest.raises(ValueError, match="ASCII"):
         DefinedConstant("größe")
+
+
+def test_vars_attribute_factory() -> None:
+    # V.X IS Variable("X") — the cache makes them the same object
+    assert V.X is Variable("X")
+    assert V.Cell.render() == "Cell"
+    with pytest.raises(ValueError, match="uppercase"):
+        V.cell  # noqa: B018 (the attribute access is the act under test)
+
+
+def test_variable_indexing_derives_names() -> None:
+    X = Variable("X")
+    assert X[1] is Variable("X_1")
+    assert X[1][2].render() == "X_1_2"
+    assert V.Adj[3].render() == "Adj_3"
+    assert X["adj"] is Variable("X_adj")
+    assert X[1]["lo"].render() == "X_1_lo"
+    with pytest.raises(TypeError, match="non-negative int"):
+        X[-1]
+    with pytest.raises(TypeError, match="int or a str"):
+        X[1.5]  # type: ignore[index]
+    with pytest.raises(ValueError, match="uppercase"):
+        ANY[1]  # "_" + "_1" would be a leading-underscore name
+
+
+def test_derived_and_factory_names_inherit_variable_validation() -> None:
+    # Both paths construct Variable(name), so the constructor's rules —
+    # ASCII, capitalization, character set — apply automatically
+    X = Variable("X")
+    with pytest.raises(ValueError, match="ASCII"):
+        X["ünter"]
+    with pytest.raises(ValueError, match="letters, digits, and underscores"):
+        X["a-b"]
+    with pytest.raises(TypeError, match="empty string"):
+        X[""]  # would silently mint "X_"
+    with pytest.raises(ValueError, match="ASCII"):
+        V.Ünter  # noqa: B018 (the attribute access is the act under test)
+
+
+def test_vars_in_a_real_rule() -> None:
+    P = Predicate.define("p_vars", ["a", "b"])
+    Q = Predicate.define("q_vars", ["a"])
+    program = ASPProgram()
+    program.fact(P(a=1, b=2))
+    program.when(P(a=V.X, b=V.Y), V.X < V.Y, let=Q(a=V.X))
+    model = next(iter(program.solve()))
+    assert [a["a"].value for a in model.atoms(Q)] == [1]

@@ -403,6 +403,21 @@ class Variable(Value):
     def collect_variables(self) -> set[str]:
         return {self.name}
 
+    def __getitem__(self, index: int | str) -> Variable:
+        """
+        A derived variable: X[1] is Variable("X_1") and X["adj"] is
+        Variable("X_adj"). Structured naming for code that mints families
+        of related variables (a helper building rule fragments derives
+        locals from a base it owns, instead of string-suffix plumbing);
+        chains naturally (X[1]["lo"] is X_1_lo). The derived name passes
+        Variable's own validation, so bad suffixes fail loudly.
+        """
+        if isinstance(index, bool) or not isinstance(index, (int, str)) or (isinstance(index, int) and index < 0):
+            raise TypeError(f"Variable index must be a non-negative int or a str, got {index!r}")
+        if index == "":
+            raise TypeError("Variable index cannot be an empty string")
+        return Variable(f"{self._name}_{index}")
+
     def in_(self, pool_or_range: Pool | list | tuple | range) -> Comparison:
         """
         Creates a comparison that binds this variable to a pool or range.
@@ -1338,6 +1353,23 @@ def Compl(term: EXPRESSION_FIELD_TYPE) -> Expression:
 
 
 ANY = Variable("_")
+
+
+class Vars:
+    """
+    Variables by attribute: V.Cell is Variable("Cell"), no declaration
+    needed — the module-level V is ready to use, and attribute access is
+    the whole API. Kills the create_variables preamble for authors who
+    prefer inline names; Variable name validation still applies (V.cell
+    raises with the uppercase rule). Combines with indexing: V.C[1] is
+    Variable("C_1").
+    """
+
+    def __getattr__(self, name: str) -> Variable:
+        return Variable(name)
+
+
+V = Vars()
 
 
 @overload

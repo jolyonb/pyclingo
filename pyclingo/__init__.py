@@ -30,8 +30,10 @@ from .core import (
     RangePool,
     String,
     Term,
+    V,
     Value,
     Variable,
+    Vars,
     create_variables,
     pool,
 )
@@ -79,6 +81,8 @@ __all__ = [  # noqa: RUF022 (categorized deliberately, not sorted)
     # Rule-building objects
     "Variable",
     "ANY",
+    "V",
+    "Vars",
     "Choice",
     "ConditionalLiteral",
     "RangePool",
