@@ -4,7 +4,7 @@ Tests for raw_asp: the verbatim-ASP escape hatch and its predicate seatbelt.
 
 import pytest
 
-from pyclingo import ASPProgram, Predicate
+from pyclingo import ASPProgram, ConditionalLiteral, Predicate, Variable
 
 
 def test_renders_verbatim() -> None:
@@ -128,3 +128,41 @@ def test_const_atom_collision_diagnosed() -> None:
     program.raw_asp("foo.")
     with pytest.raises(ValueError, match="both a #const and an atom"):
         program.solve()
+
+
+def test_show_declares_as_fully_as_predicates() -> None:
+    # The contract is "pyclingo must know the class", by any door:
+    # show(Q) hands over the class object, so the grounding check accepts
+    # and models round-trip — no predicates= needed
+    Q = Predicate.define("q_door", ["x"])
+    program = ASPProgram()
+    program.raw_asp("q_door(1..3).")
+    program.show(Q)
+    model = next(iter(program.solve()))
+    assert sorted(a["x"].value for a in model.atoms(Q)) == [1, 2, 3]
+
+
+def test_raw_negated_atoms_have_a_visibility_channel() -> None:
+    # predicates= covers the positive sign; the negated sign's channel is
+    # show_when with a negated head (or a raw #show -p/n line)
+    P = Predicate.define("p_negraw", ["x"])
+    program = ASPProgram()
+    X = Variable("X")
+    program.fact(P(x=1))
+    program.raw_asp("-p_negraw(2).", predicates=[P])
+    program.show_when(ConditionalLiteral(-P(x=X), -P(x=X)))
+    model = next(iter(program.solve()))
+    negated = [a for a in model.atoms(P) if a.negated]
+    assert [a["x"].value for a in negated] == [2]
+
+
+def test_raw_show_term_forms_get_a_teaching_error() -> None:
+    # #show term forms emit arbitrary non-atom output pyclingo cannot
+    # model; the conversion error teaches instead of clingo's bare
+    # RuntimeError("unexpected")
+    P = Predicate.define("p_term", ["x"])
+    program = ASPProgram()
+    program.fact(P(x=2))
+    program.raw_asp("#show 2*X : p_term(X).")
+    with pytest.raises(ValueError, match="non-predicate output"):
+        list(program.solve())

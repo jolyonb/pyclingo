@@ -162,7 +162,8 @@ class ASPProgram:
                     f"variable(s) {variables}. Use when(conditions, let=...) to derive predicates."
                 )
         for statement in facts:
-            self._segment(segment).append(Rule(head=statement, check_singletons=self._check_singletons))
+            rule = Rule(head=statement, check_singletons=self._check_singletons)
+            self._segment(segment).append(rule)
 
     def when(self, *conditions: Term, let: Term, segment: str | None = None) -> None:
         """Create a clingo rule which sets the let term when all conditions are satisfied."""
@@ -173,7 +174,8 @@ class ASPProgram:
                 raise TypeError(f"when() conditions must be Terms, got {type(condition).__name__}")
         if not isinstance(let, Term):
             raise TypeError(f"when() let must be a Term, got {type(let).__name__}")
-        self._segment(segment).append(Rule(head=let, body=list(conditions), check_singletons=self._check_singletons))
+        rule = Rule(head=let, body=list(conditions), check_singletons=self._check_singletons)
+        self._segment(segment).append(rule)
 
     def forbid(self, *conditions: Term, segment: str | None = None) -> None:
         """Creates a clingo constraint which forbids the specified combination of conditions."""
@@ -182,7 +184,8 @@ class ASPProgram:
         for condition in conditions:
             if not isinstance(condition, Term):
                 raise TypeError(f"forbid() conditions must be Terms, got {type(condition).__name__}")
-        self._segment(segment).append(Rule(body=list(conditions), check_singletons=self._check_singletons))
+        rule = Rule(body=list(conditions), check_singletons=self._check_singletons)
+        self._segment(segment).append(rule)
 
     def require(self, *terms: Term, implies: Comparison | None = None, segment: str | None = None) -> None:
         """
@@ -330,6 +333,10 @@ class ASPProgram:
 
         Declare any predicates the block produces via predicates so that show
         directives cover them and solutions round-trip into typed instances.
+        A declaration covers the POSITIVE sign's visibility; raw text that
+        derives classically negated atoms (-p) needs its own visibility
+        channel — a raw "#show -p/n." line, or show_when with a negated
+        head — or those atoms stay silently absent from output.
         """
         if not isinstance(text, str):
             raise TypeError(f"raw_asp() text must be a string, got {type(text).__name__}")
@@ -397,7 +404,14 @@ class ASPProgram:
         self._show_overrides[predicate] = True
 
     def hide(self, predicate: type[Predicate]) -> None:
-        """Hide this predicate from output, overriding its default visibility."""
+        """
+        Hide this predicate from output, overriding its default visibility.
+
+        Hiding a class that only ever appears nested inside other atoms is
+        vacuous: argument-position data cannot be hidden, and no error is
+        raised (hide states an intent; show() of an underived class errors
+        because it states an expectation).
+        """
         self._show_overrides[predicate] = False
 
     def show_when(self, condition: ConditionalLiteral) -> None:
@@ -412,7 +426,10 @@ class ASPProgram:
         The directive covers the head's SIGN only: a positive head governs
         positive atoms, a classically negated head (-p(...)) governs the
         negated atoms, and the two may be registered independently — the
-        other sign falls back to the class's show()/hide()/default.
+        other sign falls back to the class's show()/hide()/default. For
+        its own sign a conditional outranks show()/hide() regardless of
+        call order (resolution is by kind, not time), and there is no
+        way to unregister one.
         """
         if not isinstance(condition, ConditionalLiteral):
             raise TypeError(f"show_when condition must be a ConditionalLiteral, got {type(condition).__name__}")
@@ -431,8 +448,15 @@ class ASPProgram:
         self._show_when_overrides[(type(head), head.negated)] = condition
 
     def _collect_predicates(self) -> set[type[Predicate]]:
-        """Collect all predicate classes used anywhere in the program, show_when conditions included."""
-        return {cls for cls, _negated, _is_atom in self._collect_predicate_signs()}
+        """
+        Every predicate class the program knows, by ANY door: segment
+        elements, show_when conditions, and show()/hide() overrides. This
+        set is the reconstruction registry and the declaration universe
+        for the raw_asp contract — naming a class to show() declares it
+        as fully as predicates= does, because the class object itself is
+        what a declaration provides.
+        """
+        return {cls for cls, _negated, _is_atom in self._collect_predicate_signs()} | set(self._show_overrides)
 
     def _collect_predicate_signs(self) -> set[AtomSign]:
         """(class, negated, is_atom) occurrences across the whole program."""
@@ -563,7 +587,10 @@ class ASPProgram:
         # draws a gringo info); an explicit show() counts as positive
         # presence only where a positive atom could exist — walked, or
         # possibly hiding in raw text.
-        signs = self._collect_predicate_signs()
+        # Presence comes from the program's own segments (raw declarations
+        # included) — the same evidence validation uses, so a show_when
+        # condition can never vouch a dangling directive past the check
+        signs = {sign for segment in self._segments.values() for sign in segment.collect_predicate_signs()}
         walked_positive = {cls for cls, negated, is_atom in signs if is_atom and not negated}
         has_raw = self._has_raw_asp()
         override_positive = {
@@ -703,9 +730,9 @@ class ASPProgram:
                 listing = ", ".join(f"{name}/{arity}" for name, arity in undeclared)
                 raise ValueError(
                     f"The grounded program contains predicates never declared to pyclingo: "
-                    f"{listing}. raw_asp blocks must declare every predicate they produce "
-                    f"via predicates=[...]; control visibility with show= on the class, "
-                    f"not by omitting it."
+                    f"{listing}. raw_asp blocks must declare every predicate occurring in "
+                    f"their text via predicates=[...]; control visibility with show= on "
+                    f"the class, not by omitting it."
                 )
 
         return GroundedProgram(
@@ -1074,21 +1101,18 @@ class GroundedProgram:
         on .proven for just the certified ones. bound starts the search
         from a known cost: a bare int for a single-tier program, or a
         {priority: value} mapping keyed by priority (required with
-        multiple tiers). A bound is a pruning hint — the optimum is
-        unchanged with or without it — so keys are applied best-effort:
-        the longest leading prefix of the surviving tiers (see
-        optimization_levels; clasp bounds are positional from the highest
-        tier) and the rest, dead tiers and typos alike, are silently
-        ignored. Only models at or below the bound are considered,
-        so a
-        too-tight bound is reported as unsatisfiable — clasp cannot tell
-        the difference. A maximization's bound lives in NEGATED-cost
-        space like everything else about its cost: to accept totals of
-        at least 9, pass bound=-9. MORE bounds than tiers is a caller
-        bug — clasp applies the leading entries and silently ignores
-        the excess — so it is rejected here when the tier count is
-        knowable from native directives; raw-text optimization blinds
-        the check, and going raw means the arity is yours to get right.
+        multiple tiers). Keys are applied best-effort — the longest
+        leading prefix of the surviving tiers (see optimization_levels;
+        clasp bounds are positional from the highest tier) — and the
+        rest, dead tiers and typos alike, are silently ignored: a
+        dropped key costs pruning, and clasp compares the WHOLE cost
+        tuple lexicographically against the applied bounds, not tier by
+        tier. An APPLIED bound changes what comes back when it bites:
+        only models at or below it are considered, so a too-tight bound
+        is reported as unsatisfiable (None) — clasp cannot tell the
+        difference. A maximization's bound lives in NEGATED-cost space
+        like everything else about its cost: to accept totals of at
+        least 9, pass bound=-9.
         """
         items: dict[int, int] | None = None
         if bound is not None and isinstance(bound, Mapping):

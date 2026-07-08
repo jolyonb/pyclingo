@@ -135,8 +135,9 @@ class CostedModel(Model):
     An answer set found during an optimization search, carrying its cost
     and its certificate.
 
-    cost has one entry per declared priority level, highest priority
-    first (priorities are ordinal keys — gaps do not pad the tuple). A
+    cost has one entry per SURVIVING ground priority level, highest
+    first (priorities are ordinal keys — gaps do not pad the tuple, and
+    a declared tier whose elements ground empty is absent). A
     maximization's cost is reported negated: clasp minimizes the negated
     weights, so maximizing a total of 9 reads cost=(-9,). Lower is better
     at every level, in every sense.
@@ -171,13 +172,14 @@ class Optimum(CostedModel):
     .path holds every emission in order — genuine answer sets, unlike
     consequence approximations, so an interrupted search's best is still
     a real solution. .proven means the search PROVED this model optimal;
-    a bound cutting the search short leaves proven=False, the anytime
-    reading: "best found so far".
+    a timeout or iteration cap cutting the search short leaves
+    proven=False, the anytime reading: "best found so far".
 
     .optima is every proven-optimal model when the search was asked for
     them (optimize(all_optima=True)), or None when it was not — the path
-    is still available either way. len(optimum.optima) == 1 answers
-    uniqueness. .complete means the search ran to full exhaustion: the
+    is still available either way; a capped all_optima run cut before
+    the proof holds optima=() (nothing certified yet — check .complete
+    before reading uniqueness off len(optimum.optima) == 1). .complete means the search ran to full exhaustion: the
     optimality proof finished and, with all_optima, every optimum was
     enumerated (a timeout mid-enumeration leaves genuine certified
     optima with complete=False).
@@ -309,6 +311,7 @@ class _ClosedCheckingIterator:
 
     def close(self) -> None:
         self._generator.close()
+        self._state.closed = True
 
 
 class SearchABC(ABC):
@@ -636,8 +639,8 @@ def _search_generator(
                         # mode. Refinement would aggregate the cost-descent
                         # path, not the optima; enumeration would stream one
                         # improving chain as if it were distinct solutions.
-                        # This backstops the static detection for any
-                        # optimization spelling the raw-text scan cannot see.
+                        # Unreachable through the API (detection is observer
+                        # ground truth); guards hand-constructed handles.
                         if refining:
                             raise ValueError(
                                 f"{mode} consequences over an optimizing program (#minimize/#maximize "
@@ -754,6 +757,12 @@ def convert_symbol_to_predicate(symbol: clingo.Symbol, predicate_types: PREDICAT
     Raises:
         ValueError: If the symbol's name/arity doesn't match any known predicate.
     """
+    if symbol.type != clingo.SymbolType.Function or symbol.name == "":
+        raise ValueError(
+            f"Model contains non-predicate output {symbol}: raw #show term forms "
+            f"(#show expr : condition) emit arbitrary terms, which pyclingo does not "
+            f"model — show atoms instead."
+        )
     pred_name = symbol.name
     key = (pred_name, len(symbol.arguments))
 

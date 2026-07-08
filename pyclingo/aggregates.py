@@ -146,9 +146,14 @@ class Aggregate(AggregateBase, ABC):
         return variables
 
     def collect_predicate_signs(self) -> set[AtomSign]:
+        # Tuple terms sit in argument positions — a predicate there is
+        # data, not an atom — while conditions hold real atoms
         signs: set[AtomSign] = set()
         for element in self._elements:
-            signs.update(element.collect_predicate_signs())
+            for target in element.targets:
+                signs.update((predicate, negated, False) for predicate, negated, _ in target.collect_predicate_signs())
+            for condition in element.conditions:
+                signs.update(condition.collect_predicate_signs())
         return signs
 
 

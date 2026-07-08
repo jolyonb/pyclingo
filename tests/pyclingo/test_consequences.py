@@ -164,7 +164,7 @@ def test_sequential_guard_covers_consequences() -> None:
 
 def test_optimizing_program_rejected() -> None:
     # The refinement would follow the cost descent and give a confidently
-    # wrong answer; the raw-text scan refuses statically, before grounding
+    # wrong answer; observer ground truth refuses at the verb
     program = build()
     program.raw_asp("#minimize{ 1,X : color(X) }.", predicates=[Color])
     with pytest.raises(ValueError, match="cost-descent"):

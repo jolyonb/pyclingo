@@ -5,7 +5,7 @@ remove_segment, and the segment-header rendering rules.
 
 import pytest
 
-from pyclingo import ASPProgram, Choice, Predicate, RangePool, Segment
+from pyclingo import ASPProgram, Choice, Predicate, RangePool, Segment, Variable
 from pyclingo.program_elements import Rule
 
 P = Predicate.define("p_seg", ["x"])
@@ -83,3 +83,16 @@ def test_headers_render_only_with_multiple_segments() -> None:
     assert "\n% ===== Rules =====\np_seg(1).\n\n\n% ===== Extra =====\np_seg(2).\n" in rendered
     assert "\n\n% ===== Rules" in rendered
     assert "\n\n\n% ===== Rules" not in rendered
+
+
+def test_rejected_rules_leave_no_phantom_segment() -> None:
+    # The rule validates before its segment is created, so a rejected rule
+    # cannot flip header rendering or block a later add_segment
+    program = ASPProgram()
+    P = Predicate.define("p_ph", ["x"])
+    program.fact(P(x=1))
+    with pytest.raises(ValueError, match="Singleton"):
+        program.when(P(x=Variable("Y")), let=P(x=2), segment="phantom")
+    assert [seg.name for seg in program.segments] == ["rules"]
+    assert "=====" not in program.render()  # single segment: no headers
+    program.add_segment("phantom")  # the name was never consumed

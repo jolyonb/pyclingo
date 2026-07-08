@@ -143,3 +143,35 @@ def test_show_when_on_underived_predicate_rejected_at_render() -> None:
     program.show_when(ConditionalLiteral(Ghost(x=X), Ghost(x=X)))
     with pytest.raises(ValueError, match="nothing derives them"):
         program.render()
+
+
+def test_aggregate_tuple_terms_are_data_not_atoms() -> None:
+    # A predicate used only as an aggregate tuple term must not emit a
+    # dangling #show (it is data, demoted like any argument position)
+    Island = Predicate.define("island_agg", ["loc"])
+    Q = Predicate.define("q_agg", ["x"], show=False)
+    Total = Predicate.define("total_agg", ["n"])
+    program = ASPProgram()
+    N, Y = Variable("N"), Variable("Y")
+    program.fact(Q(x=1), Q(x=2))
+    program.when(N == Count(Island(loc=Y), condition=Q(x=Y)), let=Total(n=N))
+    rendered = program.render()
+    assert "#show island_agg/1." not in rendered
+    model = next(iter(program.solve()))
+    assert [a["n"].value for a in model.atoms(Total)] == [2]
+
+
+def test_show_when_condition_cannot_self_vouch_a_directive() -> None:
+    # Emission uses the same derivation evidence as validation: a class
+    # mentioned only inside a show_when condition no longer vouches its
+    # own dangling signature directive into the render (the conditional
+    # itself still fails loud at ground via gringo's underived-atom info)
+    P = Predicate.define("p_sv", ["x"])
+    Ghost = Predicate.define("ghost_sv", ["x"])
+    program = ASPProgram()
+    X = Variable("X")
+    program.fact(P(x=1))
+    program.show_when(ConditionalLiteral(P(x=X), [P(x=X), Ghost(x=X)]))
+    assert "#show ghost_sv/1." not in program.render()  # no self-vouched directive
+    with pytest.raises(RuntimeError, match="ghost_sv"):
+        program.solve()  # the underived condition atom halts at ground, loudly

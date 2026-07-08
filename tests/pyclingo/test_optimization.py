@@ -183,7 +183,7 @@ def test_native_directive_refuses_solve_and_consequences() -> None:
 
 
 def test_weak_constraint_in_raw_detected() -> None:
-    # :~ is #minimize in disguise; the scan must catch it with no
+    # :~ is #minimize in disguise; the observer sees it with no
     # #minimize token anywhere in the text
     program = ASPProgram()
     program.fact(Pick(x=1))

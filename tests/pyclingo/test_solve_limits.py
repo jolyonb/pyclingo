@@ -238,3 +238,14 @@ def test_nan_timeout_rejected() -> None:
     grounded = make_choice_program(1).ground()
     with pytest.raises(ValueError, match="timeout"):
         grounded.solve(timeout=float("nan"))
+
+
+def test_iterator_direct_close_is_loud_too() -> None:
+    # contextlib.closing habits call close() on the iterator itself; that
+    # path must set the closed flag like the handle's close() does
+    result = make_choice_program(3).solve()
+    iterator = iter(result)
+    next(iterator)
+    iterator.close()  # type: ignore[attr-defined]
+    with pytest.raises(RuntimeError, match="was closed"):
+        next(iterator)
