@@ -160,8 +160,8 @@ Key features:
   the stream is unbounded (consume what you need; islice/break are the
   limits). satisfiable/exhausted/solution_count/statistics finalize when
   iteration ends on any path (exhaustion, close(), or a with-block).
-- **RefinementSteps**: the handle returned by refine(RefinementMode.BRAVE
-  or .CAUTIOUS) — iterate for successive approximations (claim-free
+- **RefinementSteps**: the handle returned by cautious_iter()/
+  brave_iter() — iterate for successive approximations (claim-free
   AtomCollections); only the last is the true union/intersection; break
   whenever your question is answered. TimeoutError raised mid-iteration
   on deadline; zero yields = UNSAT.

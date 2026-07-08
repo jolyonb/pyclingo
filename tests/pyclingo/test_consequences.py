@@ -18,7 +18,6 @@ from pyclingo import (
     Consequences,
     Predicate,
     RangePool,
-    RefinementMode,
     Variable,
 )
 
@@ -189,7 +188,7 @@ def test_optimizing_grounding_refuses_every_non_optimize_verb() -> None:
     with pytest.raises(ValueError, match="cost-descent"):
         grounded.brave()
     with pytest.raises(ValueError, match="cost-descent"):
-        grounded.refine(RefinementMode.BRAVE)
+        grounded.brave_iter()
     with pytest.raises(ValueError, match=r"optimize\(\)"):
         grounded.solve()
 
@@ -199,7 +198,7 @@ def test_steps_primitive_adaptive_early_exit() -> None:
     # Here: "is color(1) forced?" — certified no as soon as it drops out
     grounded = build().ground()
     answer = None
-    steps = grounded.refine(RefinementMode.CAUTIOUS)
+    steps = grounded.cautious_iter()
     for approximation in steps:
         if 1 not in {a["x"].value for a in approximation.atoms(Color)}:
             answer = "not forced"  # absence in ANY approximation is a certificate
@@ -210,7 +209,7 @@ def test_steps_primitive_adaptive_early_exit() -> None:
 
 
 def test_steps_natural_exhaustion_is_the_answer() -> None:
-    steps = build().ground().refine(RefinementMode.BRAVE)
+    steps = build().ground().brave_iter()
     approximations = list(steps)
     assert steps.exhausted
     assert steps.finished
@@ -220,7 +219,7 @@ def test_steps_natural_exhaustion_is_the_answer() -> None:
 
 def test_steps_register_with_the_sequential_guard() -> None:
     grounded = build().ground()
-    steps = grounded.refine(RefinementMode.BRAVE)
+    steps = grounded.brave_iter()
     next(iter(steps))
     with pytest.raises(RuntimeError, match="still open"):
         grounded.solve()
@@ -231,7 +230,7 @@ def test_steps_register_with_the_sequential_guard() -> None:
 
 
 def test_steps_already_consumed_guard() -> None:
-    steps = build().ground().refine(RefinementMode.BRAVE)
+    steps = build().ground().brave_iter()
     list(steps)
     with pytest.raises(RuntimeError, match="already consumed"):
         iter(steps)
@@ -242,14 +241,14 @@ def test_steps_unsat_yields_nothing_and_proves_it() -> None:
     program = ASPProgram()
     program.fact(P())
     program.forbid(P())
-    steps = program.ground().refine(RefinementMode.CAUTIOUS)
+    steps = program.ground().cautious_iter()
     assert list(steps) == []
     assert steps.exhausted  # proven UNSAT, not interrupted
 
 
 def test_steps_work_as_context_manager() -> None:
     grounded = build().ground()
-    with grounded.refine(RefinementMode.CAUTIOUS) as steps:
+    with grounded.cautious_iter() as steps:
         next(iter(steps))
     assert steps.finished
     assert len(list(grounded.solve())) == 5  # the with-block freed the grounding
@@ -258,7 +257,7 @@ def test_steps_work_as_context_manager() -> None:
 def test_refinements_carry_statistics() -> None:
     # Unification dividend: refinements snapshot statistics like any search
     grounded = build().ground()
-    steps = grounded.refine(RefinementMode.BRAVE)
+    steps = grounded.brave_iter()
     list(steps)
     assert steps.statistics is not None
     assert steps.statistics["wall_time"] > 0
@@ -307,7 +306,7 @@ def test_brave_timeout_with_zero_emissions_returns_empty_partial() -> None:
 
 def test_steps_timeout_leaves_consistent_state() -> None:
     grounded = _pigeonhole().ground()
-    steps = grounded.refine(RefinementMode.BRAVE, timeout=0.05)
+    steps = grounded.brave_iter(timeout=0.05)
     with pytest.raises(TimeoutError, match="did not finish"):
         list(steps)
     assert steps.finished  # the stream ended, loudly
@@ -316,12 +315,12 @@ def test_steps_timeout_leaves_consistent_state() -> None:
     assert steps.steps_taken == 0
     assert steps.statistics is not None  # the snapshot still lands
     # The grounding is freed: the next search begins without a guard error
-    grounded.refine(RefinementMode.CAUTIOUS, timeout=0.05).close()
+    grounded.cautious_iter(timeout=0.05).close()
 
 
 def test_abandon_mid_refinement_frees_the_grounding() -> None:
     grounded = build().ground()
-    steps = grounded.refine(RefinementMode.CAUTIOUS)
+    steps = grounded.cautious_iter()
     next(iter(steps))
     grounded.abandon()
     assert steps.finished

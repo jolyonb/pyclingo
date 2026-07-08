@@ -36,7 +36,7 @@ from collections.abc import Generator, Iterator
 from contextlib import suppress
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any, Self, cast, overload
+from typing import Any, Literal, Self, cast, overload
 
 import clingo
 
@@ -48,6 +48,12 @@ from pyclingo.statistics import format_statistics_clingo_style
 # Solution reconstruction is keyed by (name, arity): p/1 and p/2 are distinct
 # predicates in ASP
 type PREDICATE_TYPES = dict[tuple[str, int], type[Predicate]]
+
+
+# The search generator's full mode range: None enumerates models, a
+# RefinementMode refines consequences, OPTIMIZE descends a cost
+type SEARCH_MODE = RefinementMode | Literal["optimize"] | None
+OPTIMIZE: Literal["optimize"] = "optimize"
 
 
 class RefinementMode(StrEnum):
@@ -141,6 +147,32 @@ class CostedModel(Model):
     def __repr__(self) -> str:
         counts = ", ".join(f"{cls.get_name()}: {len(atoms)}" for cls, atoms in self._by_class.items())
         return f"{type(self).__name__}(cost={list(self.cost)}, {counts})"
+
+
+class Optimum(CostedModel):
+    """
+    The product of one optimization descent: the best answer set found,
+    its cost, and how it was reached.
+
+    .path holds every model of the descent in order (each strictly better
+    than the last; the final entry is this model) — genuine answer sets,
+    unlike consequence approximations, so an interrupted descent's best
+    is still a real solution. .proven means the search PROVED no better
+    model exists; a bound cutting the descent short leaves proven=False,
+    the anytime reading: "best found so far".
+    """
+
+    def __init__(
+        self,
+        atoms: list[Predicate],
+        cost: tuple[int, ...],
+        path: tuple[CostedModel, ...],
+        proven: bool,
+        messages: list[ClingoMessage] | None = None,
+    ) -> None:
+        super().__init__(atoms, cost, messages)
+        self.path = path
+        self.proven = proven
 
 
 class Consequences(AtomCollection):
@@ -308,6 +340,11 @@ class SolveResult(SearchABC):
     Each call to ASPProgram.solve() returns an independent SolveResult, so
     repeated solves never interfere. Each Model carries the message slice
     that arrived while it was being found.
+
+    A timeout with models in hand quietly ends iteration (exhausted stays
+    False; every yielded model was a true answer); a timeout before ANY
+    model raises TimeoutError — a silent empty stream would read as
+    unsatisfiable.
     """
 
     def __init__(
@@ -358,8 +395,8 @@ class RefinementSteps(SearchABC):
     iterate it to receive each successive approximation as a claim-free
     AtomCollection, and stop whenever your question is answered — each
     step is a full solver search, so control between steps is control
-    over real work. This is the consequences PRIMITIVE; cautious()/brave()
-    are eager sugar over it.
+    over real work. Returned by cautious_iter()/
+    brave_iter(); cautious() and brave() are the eager forms.
 
     Iteration ending naturally means the refinement completed: the last
     yielded approximation is the true intersection/union (zero yields
@@ -411,6 +448,63 @@ class RefinementSteps(SearchABC):
         return self._iterator
 
 
+class OptimizeSteps(SearchABC):
+    """
+    The handle for one optimization descent, consumed step by step:
+    iterate it to receive each strictly-better answer set as a
+    CostedModel. Every emission is a genuine solution — stopping early
+    keeps the best found so far (the anytime workflow); .exhausted
+    reports whether the optimum was PROVEN. Returned by optimize_iter();
+    optimize() is the eager form.
+
+    A timeout with models in hand quietly ends iteration with .exhausted
+    False: unlike a refinement approximation, the last emission is a real
+    solution, so no exception is needed to disown it. A timeout BEFORE
+    any model raises TimeoutError — with nothing usable in hand, a quiet
+    stop would read as unsatisfiable. Zero emissions ending naturally
+    mean genuinely unsatisfiable.
+    """
+
+    def __init__(
+        self,
+        control: clingo.Control,
+        predicate_types: PREDICATE_TYPES,
+        timeout: float,
+        message_handler: ClingoMessageHandler,
+        assumptions: list[tuple[clingo.Symbol, bool]],
+        check_all_atoms: bool = False,
+    ) -> None:
+        state = _SearchState()
+        super().__init__(
+            _search_generator(
+                control,
+                predicate_types,
+                timeout,
+                time.perf_counter(),
+                state,
+                message_handler,
+                check_all_atoms,
+                assumptions,
+                mode=OPTIMIZE,
+            ),
+            state,
+        )
+
+    @property
+    def exhausted(self) -> bool:
+        """Whether the search PROVED the last emission optimal."""
+        return self._state.exhausted
+
+    @property
+    def models_seen(self) -> int:
+        """Models yielded so far, each strictly better than the one before."""
+        return self._state.emission_count
+
+    def __iter__(self) -> Iterator[CostedModel]:
+        self._guard_consumed("call optimize_iter() again to restart")
+        return cast(Iterator[CostedModel], self._iterator)
+
+
 def _search_generator(
     control: clingo.Control,
     predicate_types: PREDICATE_TYPES,
@@ -420,7 +514,7 @@ def _search_generator(
     message_handler: ClingoMessageHandler,
     check_all_atoms: bool,
     assumptions: list[tuple[clingo.Symbol, bool]],
-    mode: RefinementMode | None,
+    mode: SEARCH_MODE,
 ) -> Generator[AtomCollection]:
     """
     One loop for every search mode, finalizing bookkeeping on every exit
@@ -432,7 +526,8 @@ def _search_generator(
     A free function rather than a handle method so that its frame never
     references the handle (see the module docstring).
     """
-    refining = mode is not None
+    refining = isinstance(mode, RefinementMode)
+    optimizing = mode == OPTIMIZE
     # The timeout clock starts here — at first iteration — not at the
     # originating call: time between constructing the handle and consuming
     # it belongs to the caller, and clingo does no work until we resume
@@ -463,7 +558,15 @@ def _search_generator(
                     model = handle.model()
                     if model is None:
                         break
-                    if model.cost:
+                    if optimizing and not model.cost:
+                        # Only reachable by constructing OptimizeSteps by hand
+                        # around a non-optimizing control: there is no cost
+                        # to descend
+                        raise ValueError(
+                            "optimize_iter() needs an optimizing program (the model carries no cost); "
+                            "add minimize()/maximize() to the program."
+                        )
+                    if model.cost and not optimizing:
                         # Variation point: costs are illegal outside optimize
                         # mode. Refinement would aggregate the cost-descent
                         # path, not the optima; enumeration would stream one
@@ -501,8 +604,14 @@ def _search_generator(
                         convert_symbol_to_predicate(symbol, predicate_types) for symbol in model.symbols(shown=True)
                     ]
                     # Variation point: an enumeration emission is an answer
-                    # set; a refinement emission is a claim-free approximation
-                    yield AtomCollection(atoms) if refining else Model(atoms, messages=new_messages)
+                    # set, a refinement emission a claim-free approximation,
+                    # a descent emission an answer set carrying its cost
+                    if refining:
+                        yield AtomCollection(atoms)
+                    elif optimizing:
+                        yield CostedModel(atoms, cost=tuple(model.cost), messages=new_messages)
+                    else:
+                        yield Model(atoms, messages=new_messages)
             finally:
                 # Also reached when the caller close()s mid-iteration and when
                 # an abandoned handle is torn down by refcount. Cancelling a
@@ -537,6 +646,15 @@ def _search_generator(
             f"{mode} refinement did not finish within {timeout}s; approximations yielded "
             f"so far form a {'superset' if mode is RefinementMode.CAUTIOUS else 'subset'} "
             f"bound on the true answer, not the answer."
+        )
+    if timed_out and state.emission_count == 0:
+        # One principle for every mode: a timeout is quiet while real
+        # answers are in hand, loud when empty-handed — a silent empty
+        # stream would read as unsatisfiable
+        raise TimeoutError(
+            f"the search found no model within {timeout}s; an empty result would "
+            f"read as unsatisfiable, and there is nothing usable to return. "
+            f"Raise the timeout."
         )
 
 

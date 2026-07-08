@@ -18,10 +18,15 @@ from pyclingo.predicate import Predicate
 from pyclingo.program_elements import BlankLine, Comment, ProgramElement, RawASP, Rule
 from pyclingo.scoping import validate_optimization_element, validate_rule
 from pyclingo.solve_result import (
+    OPTIMIZE,
+    SEARCH_MODE,
     AtomCollection,
     BraveConsequences,
     CautiousConsequences,
     Consequences,
+    CostedModel,
+    OptimizeSteps,
+    Optimum,
     RefinementMode,
     RefinementSteps,
     SearchABC,
@@ -658,7 +663,8 @@ class ASPProgram:
         Args:
             timeout: Wall-clock limit in seconds (0 for no limit), counted from the
                      start of iteration. On timeout, models found so far will have
-                     been yielded and 'exhausted' remains False.
+                     been yielded and 'exhausted' remains False; a timeout before
+                     ANY model raises TimeoutError.
             stop_on_log_level: Log level at which to abort — applies to parsing
                 and grounding. Solve-phase messages never halt; they are
                 captured on each Model (.messages) and the SolveResult
@@ -693,6 +699,12 @@ class ASPProgram:
         """The atoms true in at least one answer set; sugar for ground().brave(). See GroundedProgram.brave()."""
         return self.ground(stop_on_log_level=stop_on_log_level).brave(timeout=timeout, max_iterations=max_iterations)
 
+    def optimize(
+        self, timeout: float = 0, max_iterations: int = 0, stop_on_log_level: LogLevel = LogLevel.INFO
+    ) -> Optimum | None:
+        """The best answer set by the objectives; sugar for ground().optimize(). See GroundedProgram.optimize()."""
+        return self.ground(stop_on_log_level=stop_on_log_level).optimize(timeout=timeout, max_iterations=max_iterations)
+
 
 class GroundedProgram:
     """
@@ -705,9 +717,11 @@ class GroundedProgram:
     an independent SolveResult sharing this handle's single grounding, so
     the grounding step is paid once. One grounding answers many kinds of
     question: solve() enumerates answer sets, cautious()/brave() compute
-    the atoms true in every/some answer set (with refine() as their
-    step-by-step primitive), and assumptions parameterize any of them per
-    call.
+    the atoms true in every/some answer set, optimize() finds the best
+    answer set by the program's objectives, and every eager verb has a
+    lazy twin (cautious_iter, brave_iter, optimize_iter — the
+    findall/finditer pairing) for stepwise control. Assumptions
+    parameterize any of them per call.
 
     One contract, enforced loudly: solves are sequential. A Control cannot
     run overlapping searches, so solve() raises while a previous result is
@@ -773,7 +787,7 @@ class GroundedProgram:
 
     def _begin_solve(
         self,
-        mode: RefinementMode | None,
+        mode: SEARCH_MODE,
         timeout: float,
         assumptions: Sequence[Predicate | DefaultNegation] | None,
     ) -> list[tuple[clingo.Symbol, bool]] | None:
@@ -791,14 +805,20 @@ class GroundedProgram:
         """
         if timeout < 0:
             raise ValueError(f"timeout must be non-negative, got {timeout}")
-        if self._optimizes:
-            if mode is None:
-                raise ValueError("This program optimizes (#minimize/#maximize present). Solve it with optimize().")
+        if self._optimizes and mode is None:
+            raise ValueError("This program optimizes (#minimize/#maximize present). Solve it with optimize().")
+        if self._optimizes and isinstance(mode, RefinementMode):
             raise ValueError(
                 f"{mode.value} consequences over an optimizing program are computed "
                 f"against the solver's cost-descent path, not the set of optimal "
                 f"models — the result would be wrong. Remove the optimization "
                 f"directive to ask about all answer sets."
+            )
+        if mode == OPTIMIZE and not self._optimizes:
+            raise ValueError(
+                "Nothing to optimize: this program has no #minimize/#maximize. "
+                "Add minimize()/maximize() to state an objective, or enumerate "
+                "with solve()."
             )
         converted = self._convert_assumptions(assumptions) if assumptions else None
         if self._active is not None and not self._active.finished:
@@ -811,7 +831,7 @@ class GroundedProgram:
         solve_config = self._control.configuration.solve
         assert isinstance(solve_config, clingo.Configuration)
         solve_config.models = 0
-        solve_config.enum_mode = mode.value if mode is not None else "auto"
+        solve_config.enum_mode = mode.value if isinstance(mode, RefinementMode) else "auto"
         return converted
 
     def abandon(self) -> None:
@@ -860,23 +880,38 @@ class GroundedProgram:
         )
         return result
 
-    def refine(
+    def cautious_iter(
+        self, timeout: float = 0, assumptions: Sequence[Predicate | DefaultNegation] | None = None
+    ) -> RefinementSteps:
+        """
+        The iterator form of cautious() — findall/finditer, eager/lazy.
+        Iterate for successive approximations (claim-free AtomCollections)
+        shrinking toward the intersection, and stop whenever your question
+        is answered, e.g. the atom you care about has dropped out
+        (certified not-forced). Each step is a full solver search, so
+        control between steps is control over real work. See
+        RefinementSteps for the full contract.
+        """
+        return self._refine_iter(RefinementMode.CAUTIOUS, timeout, assumptions)
+
+    def brave_iter(
+        self, timeout: float = 0, assumptions: Sequence[Predicate | DefaultNegation] | None = None
+    ) -> RefinementSteps:
+        """
+        The iterator form of brave() — findall/finditer, eager/lazy.
+        Iterate for successive approximations (claim-free AtomCollections)
+        growing toward the union, every atom certified possible as it
+        arrives; stop whenever your question is answered. See
+        RefinementSteps for the full contract.
+        """
+        return self._refine_iter(RefinementMode.BRAVE, timeout, assumptions)
+
+    def _refine_iter(
         self,
         mode: RefinementMode,
         timeout: float = 0,
         assumptions: Sequence[Predicate | DefaultNegation] | None = None,
     ) -> RefinementSteps:
-        """
-        Step through a consequence refinement yourself: iterate for
-        successive approximations (claim-free AtomCollections) — CAUTIOUS
-        shrinking toward the intersection, BRAVE growing toward the union —
-        and stop whenever your question is answered, e.g. the atom you care
-        about has dropped out of a cautious approximation (certified
-        not-forced) or arrived in a brave one (certified possible). Each
-        step is a full solver search, so control between steps is control
-        over real work. See RefinementSteps for the full contract;
-        cautious()/brave() are the eager forms.
-        """
         converted = self._begin_solve(mode, timeout, assumptions)
         self._active = steps = RefinementSteps(
             self._control,
@@ -897,7 +932,7 @@ class GroundedProgram:
     ) -> CautiousConsequences | None:
         """
         The atoms true in EVERY answer set (the intersection) — "which cells
-        are forced" is this question. Eager sugar over refine(CAUTIOUS).
+        are forced" is this question. Eager sugar over cautious_iter().
         Returns None if the program is unsatisfiable.
 
         timeout (seconds) and max_iterations (refinement steps) each bound
@@ -918,7 +953,7 @@ class GroundedProgram:
     ) -> BraveConsequences | None:
         """
         The atoms true in AT LEAST ONE answer set (the union) — "which cells
-        are possible" is this question. Eager sugar over refine(BRAVE).
+        are possible" is this question. Eager sugar over brave_iter().
         Returns None if the program is unsatisfiable.
 
         timeout (seconds) and max_iterations (refinement steps) each bound
@@ -928,6 +963,74 @@ class GroundedProgram:
         optimizes (see cautious()).
         """
         return self._refine_eagerly(RefinementMode.BRAVE, BraveConsequences, timeout, max_iterations, assumptions)
+
+    def optimize_iter(
+        self, timeout: float = 0, assumptions: Sequence[Predicate | DefaultNegation] | None = None
+    ) -> OptimizeSteps:
+        """
+        The iterator form of optimize().
+        Iterate for strictly-better answer sets (CostedModels) and stop
+        whenever the current best is good enough: every emission is a
+        genuine solution, so early exit keeps a usable answer (the
+        anytime workflow). See OptimizeSteps for the full contract.
+        """
+        converted = self._begin_solve(OPTIMIZE, timeout, assumptions)
+        self._active = steps = OptimizeSteps(
+            self._control,
+            self._predicate_types,
+            timeout,
+            self._message_handler,
+            converted or [],
+            check_all_atoms=self._check_all_atoms,
+        )
+        return steps
+
+    def optimize(
+        self,
+        timeout: float = 0,
+        max_iterations: int = 0,
+        assumptions: Sequence[Predicate | DefaultNegation] | None = None,
+    ) -> Optimum | None:
+        """
+        The best answer set by the program's objectives. Eager sugar over
+        optimize_iter(). Returns None if the program is unsatisfiable.
+
+        timeout (seconds) and max_iterations (descent steps) each bound
+        the work, 0 meaning unbounded; a bounded run returns the best
+        model FOUND SO FAR with proven=False — a genuine solution, just
+        not a proven optimum. The full descent rides along as .path.
+        Raises TimeoutError only when the deadline lands before any model
+        at all (no best-so-far exists to return), and ValueError if the
+        program has no objective.
+        """
+        if max_iterations < 0:
+            raise ValueError(f"max_iterations must be non-negative (0 means unbounded), got {max_iterations}")
+        steps = self.optimize_iter(timeout, assumptions)
+        path: list[CostedModel] = []
+        proven = False
+        try:
+            for model in steps:
+                path.append(model)
+                if max_iterations and len(path) >= max_iterations:
+                    # Even a cap landing exactly on the optimum reports
+                    # unproven: the proof of optimality never ran
+                    break
+            else:
+                proven = steps.exhausted
+        finally:
+            steps.close()
+        if not path:
+            # A timeout before any model raised from the iteration itself;
+            # reaching here empty-handed means the search exhausted
+            return None  # proved unsatisfiable: no solutions at all
+        best = path[-1]
+        return Optimum(
+            atoms=best.atoms(),
+            cost=best.cost,
+            path=tuple(path),
+            proven=proven,
+            messages=steps.messages,
+        )
 
     def _refine_eagerly[C: Consequences](
         self,
@@ -948,7 +1051,7 @@ class GroundedProgram:
         """
         if max_iterations < 0:
             raise ValueError(f"max_iterations must be non-negative (0 means unbounded), got {max_iterations}")
-        steps = self.refine(mode, timeout, assumptions)
+        steps = self._refine_iter(mode, timeout, assumptions)
         path: list[AtomCollection] = []
         complete = False
         try:

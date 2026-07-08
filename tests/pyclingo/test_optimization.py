@@ -9,7 +9,19 @@ reports negated costs; priorities are ordinal keys with free gaps).
 import clingo
 import pytest
 
-from pyclingo import ANY, ASPProgram, Choice, Count, Predicate, SolveResult, String, Variable
+from pyclingo import (
+    ANY,
+    ASPProgram,
+    Choice,
+    CostedModel,
+    Count,
+    Optimum,
+    Predicate,
+    RangePool,
+    SolveResult,
+    String,
+    Variable,
+)
 from pyclingo.clingo_handler import ClingoMessageHandler, LogLevel
 
 
@@ -212,3 +224,133 @@ def test_runtime_backstop_catches_unscanned_costs() -> None:
     result = SolveResult(ctl, {("pick", 1): Pick}, 0, handler)
     with pytest.raises(ValueError, match="carries a cost"):
         list(result)
+
+
+def build_knapsack() -> ASPProgram:
+    # Choose at least one of picks 1..4, minimize the sum: optimum is {1}
+    program = ASPProgram()
+    X = Variable("X")
+    program.fact(Choice(Pick(x=1)).add(Pick(x=2)).add(Pick(x=3)).add(Pick(x=4)).at_least(1))
+    program.minimize(X, condition=Pick(x=X))
+    return program
+
+
+def test_optimize_finds_the_proven_optimum() -> None:
+    result = build_knapsack().optimize()
+    assert isinstance(result, Optimum)
+    assert isinstance(result, CostedModel)  # an optimum IS an answer set
+    assert result.proven
+    assert result.cost == (1,)
+    assert [a["x"].value for a in result.atoms(Pick)] == [1]
+    # The descent receipts: genuine models, strictly improving costs
+    assert all(isinstance(step, CostedModel) for step in result.path)
+    costs = [step.cost for step in result.path]
+    assert costs == sorted(costs, reverse=True)
+    assert len(set(costs)) == len(costs)
+    assert result.path[-1].cost == result.cost
+
+
+def test_optimize_nothing_to_optimize_rejected() -> None:
+    program = ASPProgram()
+    program.fact(Pick(x=1))
+    with pytest.raises(ValueError, match="Nothing to optimize"):
+        program.optimize()
+
+
+def test_optimize_unsat_returns_none() -> None:
+    program = build_knapsack()
+    program.forbid(Pick(x=ANY))  # picking is mandatory and forbidden
+    assert program.optimize() is None
+
+
+def test_optimize_max_iterations_returns_best_so_far() -> None:
+    result = build_knapsack().optimize(max_iterations=1)
+    assert result is not None
+    assert not result.proven  # one step: a genuine solution, no proof
+    assert len(result.path) == 1
+    assert result.cost == result.path[0].cost
+
+
+def test_optimize_cap_landing_on_optimum_stays_unproven() -> None:
+    full = build_knapsack().optimize()
+    assert full is not None and full.proven
+    capped = build_knapsack().optimize(max_iterations=len(full.path))
+    assert capped is not None
+    assert capped.cost == full.cost  # same best model
+    assert not capped.proven  # but optimality was never proven
+
+
+PigeonOpt = Predicate.define("pigeon_opt", ["p"], show=False)
+AssignOpt = Predicate.define("assign_opt", ["p", "h"])
+
+
+def _slow_unsat_optimizing() -> ASPProgram:
+    # 12 pigeons, 11 holes with an objective: UNSAT and slow, so a short
+    # deadline reliably lands before any model exists
+    program = ASPProgram()
+    P, P2, H = Variable("P"), Variable("P2"), Variable("H")
+    program.fact(*[PigeonOpt(p=i) for i in range(1, 13)])
+    program.when(PigeonOpt(p=P), let=Choice(AssignOpt(p=P, h=RangePool(1, 11))).exactly(1))
+    program.forbid(AssignOpt(p=P, h=H), AssignOpt(p=P2, h=H), P < P2)
+    program.minimize(1, P, condition=AssignOpt(p=P, h=ANY))
+    return program
+
+
+def test_optimize_timeout_before_any_model_raises() -> None:
+    with pytest.raises(TimeoutError, match="no model within"):
+        _slow_unsat_optimizing().optimize(timeout=0.05)
+
+
+def test_descend_early_exit_keeps_best_so_far() -> None:
+    grounded = build_knapsack().ground()
+    steps = grounded.optimize_iter()
+    best = next(iter(steps))
+    steps.close()
+    assert best.cost  # a genuine costed solution in hand
+    assert not steps.exhausted  # optimality unproven: we stopped
+    assert steps.models_seen == 1
+    assert steps.statistics is not None
+    result = grounded.optimize()  # the grounding is free for the next search
+    assert result is not None and result.proven
+
+
+def test_optimize_under_assumptions() -> None:
+    grounded = build_knapsack().ground()
+    result = grounded.optimize(assumptions=[Pick(x=3)])
+    assert result is not None
+    assert result.cost == (3,)  # pick(3) alone is the cheapest model containing it
+    unassumed = grounded.optimize()
+    assert unassumed is not None and unassumed.cost == (1,)  # nothing persists
+
+
+def test_maximize_optimum_reports_negated_cost() -> None:
+    program = ASPProgram()
+    X = Variable("X")
+    program.fact(Choice(Pick(x=1)).add(Pick(x=2)).add(Pick(x=3)).at_least(1).at_most(1))
+    program.maximize(X, condition=Pick(x=X))
+    result = program.optimize()
+    assert result is not None and result.proven
+    assert [a["x"].value for a in result.atoms(Pick)] == [3]
+    assert result.cost == (-3,)  # clasp minimizes the negation; lower is better
+
+
+def test_sequential_guard_covers_descent() -> None:
+    grounded = build_knapsack().ground()
+    steps = grounded.optimize_iter()
+    next(iter(steps))
+    with pytest.raises(RuntimeError, match="still open"):
+        grounded.optimize()
+    steps.close()
+    assert grounded.optimize() is not None
+
+
+def test_optimize_iter_timeout_before_any_model_raises() -> None:
+    # Empty-handed, a quiet stop would read as unsatisfiable; with a best
+    # in hand a timeout is quiet — the raise happens exactly when there is
+    # nothing usable to keep
+    program = _slow_unsat_optimizing()
+    steps = program.ground().optimize_iter(timeout=0.05)
+    with pytest.raises(TimeoutError, match="no model within"):
+        list(steps)
+    assert steps.finished
+    assert not steps.exhausted

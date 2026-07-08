@@ -194,3 +194,20 @@ def test_solve_phase_messages_attach_instead_of_halting() -> None:
     assert "mid-solve" in second.messages[0].message
     list(iterator)  # exhaust
     assert len(result.messages) == 1
+
+
+def test_timeout_before_any_model_raises() -> None:
+    # Quiet while real answers are in hand, loud when empty-handed: a
+    # silent empty stream would read as unsatisfiable
+    program = make_choice_program(1)
+    A = Predicate.define("h_pig", ["p", "h"])
+    B = Predicate.define("h_p", ["p"], show=False)
+    P, P2, H = Variable("P"), Variable("P2"), Variable("H")
+    program.fact(*[B(p=i) for i in range(1, 13)])
+    program.when(B(p=P), let=Choice(A(p=P, h=RangePool(1, 11))).exactly(1))
+    program.forbid(A(p=P, h=H), A(p=P2, h=H), P < P2)
+    result = program.solve(timeout=0.05)
+    with pytest.raises(TimeoutError, match="no model within"):
+        list(result)
+    assert result.satisfiable is None
+    assert not result.exhausted
