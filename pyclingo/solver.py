@@ -1,5 +1,4 @@
 import math
-from collections import defaultdict
 from collections.abc import Mapping, Sequence
 
 import clingo
@@ -17,7 +16,7 @@ from pyclingo.optimization import (
     WeakConstraint,
 )
 from pyclingo.predicate import Predicate
-from pyclingo.program_elements import BlankLine, Comment, ProgramElement, RawASP, Rule
+from pyclingo.program_elements import BlankLine, Comment, RawASP, Rule, Segment
 from pyclingo.scoping import validate_optimization_element, validate_rule, validate_weak_constraint
 from pyclingo.solve_result import (
     OPTIMIZE,
@@ -80,7 +79,7 @@ class ASPProgram:
         if header is not None and ("\n" in header or "\r" in header):
             raise ValueError("Program header must be a single line (it renders as one % comment)")
         self._check_singletons = not allow_singletons
-        self._segments: defaultdict[str, list[ProgramElement]] = defaultdict(list)
+        self._segments: dict[str, Segment] = {}
         self._defined_constants: dict[str, int | str] = {}
         self._show_overrides: dict[type[Predicate], bool] = {}
         # When True, solution identity is the SHOWN atoms: models agreeing on
@@ -104,6 +103,18 @@ class ASPProgram:
             raise ValueError("Segment names must be single-line (they render as section comments)")
         return segment.lower()
 
+    def _segment(self, segment: str | None) -> Segment:
+        """The named segment (None means the default), created on first use."""
+        key = self._segment_key(segment)
+        if key not in self._segments:
+            self._segments[key] = Segment(key)
+        return self._segments[key]
+
+    @property
+    def segments(self) -> tuple[Segment, ...]:
+        """The program's segments, in rendering order."""
+        return tuple(self._segments.values())
+
     def add_segment(self, segment: str) -> None:
         """
         Pre-declare an empty segment, fixing its position in the rendered output.
@@ -116,7 +127,21 @@ class ASPProgram:
         normalized_segment = self._segment_key(segment)
         if normalized_segment in self._segments:
             raise ValueError(f"Segment '{segment}' already exists")
-        self._segments[normalized_segment] = []
+        self._segments[normalized_segment] = Segment(normalized_segment)
+
+    def remove_segment(self, segment: str) -> None:
+        """
+        Remove a segment and everything in it.
+
+        Raises:
+            ValueError: If no such segment exists (the message names the
+                existing segments).
+        """
+        normalized_segment = self._segment_key(segment)
+        if normalized_segment not in self._segments:
+            existing = ", ".join(f"'{name}'" for name in self._segments) or "none"
+            raise ValueError(f"Segment '{segment}' does not exist; existing segments: {existing}")
+        del self._segments[normalized_segment]
 
     def fact(self, *facts: Predicate | Choice, segment: str | None = None) -> None:
         """
@@ -137,8 +162,7 @@ class ASPProgram:
                     f"variable(s) {variables}. Use when(conditions, let=...) to derive predicates."
                 )
         for statement in facts:
-            segment_key = self._segment_key(segment)
-            self._segments[segment_key].append(Rule(head=statement, check_singletons=self._check_singletons))
+            self._segment(segment).append(Rule(head=statement, check_singletons=self._check_singletons))
 
     def when(self, *conditions: Term, let: Term, segment: str | None = None) -> None:
         """Create a clingo rule which sets the let term when all conditions are satisfied."""
@@ -149,10 +173,7 @@ class ASPProgram:
                 raise TypeError(f"when() conditions must be Terms, got {type(condition).__name__}")
         if not isinstance(let, Term):
             raise TypeError(f"when() let must be a Term, got {type(let).__name__}")
-        segment_key = self._segment_key(segment)
-        self._segments[segment_key].append(
-            Rule(head=let, body=list(conditions), check_singletons=self._check_singletons)
-        )
+        self._segment(segment).append(Rule(head=let, body=list(conditions), check_singletons=self._check_singletons))
 
     def forbid(self, *conditions: Term, segment: str | None = None) -> None:
         """Creates a clingo constraint which forbids the specified combination of conditions."""
@@ -161,8 +182,7 @@ class ASPProgram:
         for condition in conditions:
             if not isinstance(condition, Term):
                 raise TypeError(f"forbid() conditions must be Terms, got {type(condition).__name__}")
-        segment_key = self._segment_key(segment)
-        self._segments[segment_key].append(Rule(body=list(conditions), check_singletons=self._check_singletons))
+        self._segment(segment).append(Rule(body=list(conditions), check_singletons=self._check_singletons))
 
     def require(self, *terms: Term, implies: Comparison | None = None, segment: str | None = None) -> None:
         """
@@ -267,7 +287,7 @@ class ASPProgram:
         directive = OptimizationDirective(sense, weight, tuple_terms, condition, priority)
         validate_optimization_element(directive.element, directive.render(), check_singletons=self._check_singletons)
         directive.element.freeze()
-        self._segments[self._segment_key(segment)].append(directive)
+        self._segment(segment).append(directive)
 
     def penalize(
         self,
@@ -301,7 +321,7 @@ class ASPProgram:
             weak.targets, list(weak.conditions), weak.render(), check_singletons=self._check_singletons
         )
         weak.freeze()
-        self._segments[self._segment_key(segment)].append(weak)
+        self._segment(segment).append(weak)
 
     def raw_asp(self, text: str, segment: str | None = None, predicates: Sequence[type[Predicate]] = ()) -> None:
         """
@@ -313,18 +333,15 @@ class ASPProgram:
         """
         if not isinstance(text, str):
             raise TypeError(f"raw_asp() text must be a string, got {type(text).__name__}")
-        segment_key = self._segment_key(segment)
-        self._segments[segment_key].append(RawASP(text, predicates))
+        self._segment(segment).append(RawASP(text, predicates))
 
     def comment(self, text: str, segment: str | None = None) -> None:
         """Add a comment to the program."""
-        segment_key = self._segment_key(segment)
-        self._segments[segment_key].append(Comment(text))
+        self._segment(segment).append(Comment(text))
 
     def blank_line(self, segment: str | None = None) -> None:
         """Add a blank line to the program for formatting."""
-        segment_key = self._segment_key(segment)
-        self._segments[segment_key].append(BlankLine())
+        self._segment(segment).append(BlankLine())
 
     def section(self, title: str, segment: str | None = None) -> None:
         """Add a blank line and title comment as a section header."""
@@ -415,26 +432,20 @@ class ASPProgram:
 
     def _collect_predicates(self) -> set[type[Predicate]]:
         """Collect all predicate classes used anywhere in the program, show_when conditions included."""
-        predicates = set()
-
-        for _segment_name, elements in self._segments.items():
-            for element in elements:
-                predicates.update(element.collect_predicates())
-
-        for condition in self._show_when_overrides.values():
-            predicates.update(condition.collect_predicates())
-
-        return predicates
+        return {cls for cls, _negated, _is_atom in self._collect_predicate_signs()}
 
     def _collect_predicate_signs(self) -> set[AtomSign]:
         """(class, negated, is_atom) occurrences across the whole program."""
         signs: set[AtomSign] = set()
-        for elements in self._segments.values():
-            for element in elements:
-                signs.update(element.collect_predicate_signs())
+        for segment in self._segments.values():
+            signs.update(segment.collect_predicate_signs())
         for condition in self._show_when_overrides.values():
             signs.update(condition.collect_predicate_signs())
         return signs
+
+    def _has_raw_asp(self) -> bool:
+        """Whether any segment contains a RawASP block (raw text is invisible to the tree walkers)."""
+        return any(isinstance(element, RawASP) for segment in self._segments.values() for element in segment)
 
     def _validate_shown_predicates(self) -> None:
         """
@@ -443,16 +454,14 @@ class ASPProgram:
         walkers, so with raw blocks present an uncollected predicate may
         still be derived (that is what raw_asp's predicates= is for).
         """
-        has_raw = any(isinstance(element, RawASP) for elements in self._segments.values() for element in elements)
-        if has_raw:
+        if self._has_raw_asp():
             return
         # Derivation evidence comes from the program's own rules: a show_when
         # condition's atoms must not vouch for themselves
         segment_signs = {
             (cls, negated)
-            for elements in self._segments.values()
-            for element in elements
-            for cls, negated, is_atom in element.collect_predicate_signs()
+            for segment in self._segments.values()
+            for cls, negated, is_atom in segment.collect_predicate_signs()
             if is_atom
         }
         atom_classes = {cls for cls, _negated in segment_signs}
@@ -531,17 +540,17 @@ class ASPProgram:
             else:
                 lines.append(f"#const {name} = {value}.")  # Integer values are not
 
-        # 3. Program segments
+        # 3. Program segments: headers only when more than one segment exists,
+        # with a blank line between rendered segments (none before the first)
+        with_headers = len(self._segments) > 1
         first_segment = True
-        for segment_name, elements in self._segments.items():
-            if len(self._segments) > 1 and len(elements) > 0:
-                # Don't put double newlines for the first segment
-                if not first_segment:
-                    lines.append("")
-                else:
-                    first_segment = False
-                lines.extend(("", f"% ===== {segment_name.replace('_', ' ').title()} ====="))
-            lines.extend(element.render() for element in elements)
+        for segment in self._segments.values():
+            if len(segment) == 0:
+                continue
+            if with_headers and not first_segment:
+                lines.append("")
+            first_segment = False
+            lines.append(segment.render(with_header=with_headers))
 
         # 4. #show directives: program overrides first, class defaults second.
         # The bare "#show." must be emitted whenever ANY predicate is hidden, even if
@@ -556,7 +565,7 @@ class ASPProgram:
         # possibly hiding in raw text.
         signs = self._collect_predicate_signs()
         walked_positive = {cls for cls, negated, is_atom in signs if is_atom and not negated}
-        has_raw = any(isinstance(element, RawASP) for elements in self._segments.values() for element in elements)
+        has_raw = self._has_raw_asp()
         override_positive = {
             cls
             for cls, visibility in self._show_overrides.items()
@@ -589,9 +598,8 @@ class ASPProgram:
         """Collect all defined constant names used anywhere in the program."""
         constants = set()
 
-        for _segment_name, elements in self._segments.items():
-            for element in elements:
-                constants.update(element.collect_defined_constants())
+        for segment in self._segments.values():
+            constants.update(segment.collect_defined_constants())
 
         for condition in self._show_when_overrides.values():
             constants.update(condition.collect_defined_constants())
@@ -680,8 +688,7 @@ class ASPProgram:
         # the raw_asp contract (exhaustive declaration) is enforced here,
         # against gringo's own signature table: every ground signature must
         # be a declared class.
-        has_raw = any(isinstance(element, RawASP) for elements in self._segments.values() for element in elements)
-        if has_raw:
+        if self._has_raw_asp():
             undeclared = sorted(
                 {(name, arity) for name, arity, _positive in control.symbolic_atoms.signatures} - set(predicate_types)
             )

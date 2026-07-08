@@ -40,6 +40,7 @@ from .core import (
 from .operators import ComparisonOperator
 from .optimization import OptStrategy
 from .predicate import Field, Predicate, PredicateField
+from .program_elements import Segment
 from .solve_result import (
     AtomCollection,
     BraveConsequences,
@@ -59,6 +60,7 @@ from .version import __version__
 __all__ = [  # noqa: RUF022 (categorized deliberately, not sorted)
     # The program and its results
     "ASPProgram",
+    "Segment",
     "GroundedProgram",
     "SolveResult",
     "Model",
