@@ -410,12 +410,14 @@ class Variable(Value):
         of related variables (a helper building rule fragments derives
         locals from a base it owns, instead of string-suffix plumbing);
         chains naturally (X[1]["lo"] is X_1_lo). The derived name passes
-        Variable's own validation, so bad suffixes fail loudly.
+        Variable's own validation, so bad suffixes fail loudly. The empty
+        string is the identity — X[""] is X — so an optional suffix needs
+        no special-casing.
         """
         if isinstance(index, bool) or not isinstance(index, (int, str)) or (isinstance(index, int) and index < 0):
             raise TypeError(f"Variable index must be a non-negative int or a str, got {index!r}")
         if index == "":
-            raise TypeError("Variable index cannot be an empty string")
+            return self
         return Variable(f"{self._name}_{index}")
 
     def in_(self, pool_or_range: Pool | list | tuple | range) -> Comparison:

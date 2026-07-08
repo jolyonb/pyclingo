@@ -100,8 +100,7 @@ def test_derived_and_factory_names_inherit_variable_validation() -> None:
         X["ünter"]
     with pytest.raises(ValueError, match="letters, digits, and underscores"):
         X["a-b"]
-    with pytest.raises(TypeError, match="empty string"):
-        X[""]  # would silently mint "X_"
+    assert X[""] is X  # the empty suffix is the identity, so an optional suffix needs no guard
     with pytest.raises(ValueError, match="ASCII"):
         V.Ünter  # noqa: B018 (the attribute access is the act under test)
 
