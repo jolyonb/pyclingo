@@ -183,8 +183,9 @@ def test_solve_phase_messages_attach_instead_of_halting() -> None:
     first = next(iterator)
     assert first.messages == []
 
-    # The Iterator annotation hides the generator's frame; the runtime type is known
-    frame = cast(Any, result._iterator).gi_frame
+    # Reach through the close-checking wrapper to the generator's frame;
+    # the runtime types are known
+    frame = cast(Any, result._iterator)._generator.gi_frame
     handler = frame.f_locals["message_handler"]
     assert isinstance(handler, ClingoMessageHandler)
     handler.on_message(clingo.MessageCode.Other, "info: something mid-solve")
@@ -211,3 +212,29 @@ def test_timeout_before_any_model_raises() -> None:
         list(result)
     assert result.satisfiable is None
     assert not result.exhausted
+
+
+def test_held_iterator_is_loud_after_close() -> None:
+    # A generator closed early can only StopIteration on resume, which a
+    # held iterator would read as exhaustion; the wrapper raises instead
+    result = make_choice_program(3).solve()
+    iterator = iter(result)
+    next(iterator)
+    result.close()
+    with pytest.raises(RuntimeError, match="was closed"):
+        next(iterator)
+    # Natural exhaustion keeps normal iterator protocol: StopIteration forever
+    finished = make_choice_program(1).solve()
+    iterator = iter(finished)
+    assert len(list(iterator)) == 2
+    with pytest.raises(StopIteration):
+        next(iterator)
+    finished.close()  # close after natural end changes nothing
+    with pytest.raises(StopIteration):
+        next(iterator)
+
+
+def test_nan_timeout_rejected() -> None:
+    grounded = make_choice_program(1).ground()
+    with pytest.raises(ValueError, match="timeout"):
+        grounded.solve(timeout=float("nan"))

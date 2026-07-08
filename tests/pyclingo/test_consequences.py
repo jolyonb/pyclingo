@@ -16,6 +16,7 @@ from pyclingo import (
     CautiousConsequences,
     Choice,
     Consequences,
+    Count,
     Predicate,
     RangePool,
     Variable,
@@ -326,3 +327,32 @@ def test_abandon_mid_refinement_frees_the_grounding() -> None:
     assert steps.finished
     assert steps.statistics is not None  # early close still snapshots
     assert len(list(grounded.solve())) == 5
+
+
+def test_refinement_timeout_mid_stream_raises() -> None:
+    # Refinement ALWAYS raises on timeout, even with approximations in
+    # hand — they are scaffolding, not answers. This program refines
+    # quickly at first (free atoms union in fast) but cannot finish: the
+    # last atom's impossibility needs a slow pigeonhole UNSAT proof.
+    Free = Predicate.define("free_mid", [])
+    Hard = Predicate.define("hard_mid", [])
+    PigeonM = Predicate.define("pigeon_mid", ["p"], show=False)
+    AssignM = Predicate.define("assign_mid", ["p", "h"])
+    program = ASPProgram()
+    P, P2, H = Variable("P"), Variable("P2"), Variable("H")
+    program.fact(Choice(Free()))
+    program.fact(*[PigeonM(p=i) for i in range(1, 13)])
+    program.when(PigeonM(p=P), let=Choice(AssignM(p=P, h=RangePool(1, 11))).at_most(1))
+    program.forbid(AssignM(p=P, h=H), AssignM(p=P2, h=H), P < P2)
+    # hard_mid needs all 12 pigeons placed in 11 distinct holes: impossible,
+    # but proving that is the slow step
+    program.when(
+        Count((P, H), condition=AssignM(p=P, h=H)) >= 12,
+        let=Hard(),
+    )
+    steps = program.ground().brave_iter(timeout=0.1)
+    with pytest.raises(TimeoutError, match="did not finish"):
+        list(steps)
+    assert steps.steps_taken >= 1  # approximations were in hand — raised anyway
+    assert not steps.exhausted
+    assert steps.statistics is not None

@@ -208,7 +208,7 @@ def test_project_shown_collapses_helper_variants() -> None:
 def test_project_shown_off_by_default() -> None:
     program = ASPProgram()
     assert program.project_shown is False
-    assert "--project=show" not in program.render() or True  # no stamp when off
+    assert "--project=show" not in program.render()  # no stamp when off
     P = Predicate.define("p_projd", ["x"])
     program.fact(P(x=1))
     assert "project" not in program.render()

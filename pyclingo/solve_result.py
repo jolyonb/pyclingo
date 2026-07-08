@@ -28,6 +28,12 @@ copy), and the Control is freed last. Concretely:
 - The native solver thread (async solving) exists only when a wall-clock
   timeout demands it; without one, solving is synchronous and there is no
   second thread to race during teardown.
+
+One nuance: a GroundedProgram keeps a strong reference to its most recent
+handle (the sequential guard's _active), so an abandoned mid-flight handle
+tears down by refcount only once the GroundedProgram itself is dropped or
+abandon() is called — until then the suspended native search stays alive,
+and the next solve attempt raises the loud still-open error.
 """
 
 import time
@@ -263,7 +269,46 @@ class _SearchState:
     emission_count: int = 0
     statistics: dict[str, Any] | None = None
     finished: bool = False
+    closed: bool = False
     messages: list[ClingoMessage] = field(default_factory=list)
+
+
+class _ClosedCheckingIterator:
+    """
+    The iterator handed out by every search handle. A generator closed
+    early can only raise StopIteration on resume — Python's protocol —
+    which would make a PRE-HELD iterator read as "no more results", the
+    exact silent-empty failure the consumed guard exists to prevent.
+    This thin wrapper distinguishes natural exhaustion (StopIteration
+    forever after, as iterators must) from early close (loud
+    RuntimeError). Holds the generator and state only, never the handle:
+    cycle-free.
+    """
+
+    __slots__ = ("_ended", "_generator", "_state")
+
+    def __init__(self, generator: Generator[Any], state: _SearchState) -> None:
+        self._generator = generator
+        self._state = state
+        self._ended = False
+
+    def __iter__(self) -> _ClosedCheckingIterator:
+        return self
+
+    def __next__(self) -> Any:
+        if self._state.closed and not self._ended:
+            raise RuntimeError(
+                "This search was closed; a held iterator does not quietly end (it would "
+                "read as exhaustion). Start a fresh search."
+            )
+        try:
+            return next(self._generator)
+        except StopIteration:
+            self._ended = True
+            raise
+
+    def close(self) -> None:
+        self._generator.close()
 
 
 class SearchABC(ABC):
@@ -278,7 +323,7 @@ class SearchABC(ABC):
 
     def __init__(self, iterator: Generator[Any], state: _SearchState) -> None:
         self._state = state
-        self._iterator = iterator
+        self._iterator = _ClosedCheckingIterator(iterator, state)
 
     @abstractmethod
     def __iter__(self) -> Iterator[AtomCollection]:
@@ -300,8 +345,9 @@ class SearchABC(ABC):
         """Stop the search early; flags and statistics are finalized."""
         self._iterator.close()
         # Closing a never-started generator skips its finally, so mark
-        # finished here as well
+        # finished here as well; closed makes pre-held iterators loud
         self._state.finished = True
+        self._state.closed = True
 
     def __enter__(self) -> Self:
         return self

@@ -17,6 +17,7 @@ tests/pyclingo/test_scoping.py.
 """
 
 from collections import Counter
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
@@ -365,36 +366,82 @@ def body_global_variables(conditions: list[Term]) -> set[str]:
     return set(scopes.global_occurrences())
 
 
-def validate_weak_constraint(
-    targets: tuple[Term, ...], conditions: list[Term], rule_text: str, check_singletons: bool = True
-) -> None:
+def _check_scopes(scopes: RuleScopes, kind: str, rule_text: Callable[[], str], check_singletons: bool) -> None:
     """
-    Validate a weak constraint: the body binds exactly as a rule body does
-    (aggregate comparisons included), and the weight and tuple terms must
-    be bound by it, exactly as a head must be.
+    The checks every rule-shaped statement shares, run on an analyzed and
+    locality-resolved RuleScopes: aggregate tuples sharing globals, unsafe
+    globals, unsafe construct locals, and the singleton lint. `kind` names
+    the statement in errors ("rule" or "weak constraint").
     """
-    scopes = analyze(None, conditions)
-    for target in targets:
-        _count_variables(target, scopes.head_counts)
-    _resolve_localities(scopes)
+    if scopes.globals_in_aggregate_tuples:
+        listing = "; ".join(f"{name} in {description}" for name, description in scopes.globals_in_aggregate_tuples)
+        raise ValueError(
+            f"Aggregate tuple shares variable(s) with the rest of the {kind} ({listing}): {rule_text()}\n"
+            f"With the variable fixed by the {kind}, the aggregate's element set collapses "
+            f"to at most one element per ground instance — almost never the intent. "
+            f"Use a fresh variable inside the aggregate."
+        )
+
     bound = _bind_fixpoint(scopes.global_binders, scopes.equality_edges, scopes.directed_edges)
     unsafe = sorted(set(scopes.global_occurrences()) - bound)
     if unsafe:
         names = ", ".join(unsafe)
         raise ValueError(
-            f"Unsafe variable(s) {names} in weak constraint: {rule_text}\n"
-            f"The weight and tuple terms must be bound by a positive body literal."
+            f"Unsafe variable(s) {names} in {kind}: {rule_text()}\n"
+            f"Every variable must be bound by a positive body literal "
+            f"(or an equality with something bound)."
         )
+
+    for scope in scopes.local_scopes:
+        local_bound = _bind_fixpoint(scope.binders | bound, scope.equality_edges, scope.directed_edges)
+        local_unsafe = sorted((set(scope.target_counts) | set(scope.condition_counts)) - local_bound)
+        if local_unsafe:
+            names = ", ".join(local_unsafe)
+            raise ValueError(
+                f"Unsafe local variable(s) {names} in {scope.description} of {kind}: {rule_text()}\n"
+                f"Local variables must be bound by a positive condition inside "
+                f"the same element."
+            )
+
     if not check_singletons:
         return
-    singletons = sorted(name for name, count in scopes.global_occurrences().items() if count == 1)
+    singletons = sorted(
+        [name for name, count in scopes.global_occurrences().items() if count == 1]
+        + [
+            name
+            for scope in scopes.local_scopes
+            for name, count in (scope.target_counts + scope.condition_counts).items()
+            if count == 1
+        ]
+    )
     if singletons:
         names = ", ".join(singletons)
         raise ValueError(
-            f"Singleton variable(s) {names} in weak constraint: {rule_text}\n"
+            f"Singleton variable(s) {names} in {kind}: {rule_text()}\n"
             f"A variable used exactly once is usually a typo; use ANY for an "
             f"intentional don't-care."
         )
+
+
+def validate_weak_constraint(
+    targets: tuple[Term, ...], conditions: list[Term], rule_text: str, check_singletons: bool = True
+) -> None:
+    """
+    Validate a weak constraint with EXACTLY a rule's checks: the body binds
+    as a rule body does (aggregate comparisons and conditional literals
+    included), the weight and tuple terms must be bound by it exactly as a
+    head must be, and the aggregate-tuple/local/singleton checks all apply.
+    """
+    scopes = analyze(None, conditions)
+    for target in targets:
+        if "_" in target.collect_variables():
+            raise ValueError(
+                f"The anonymous variable '_' cannot appear in a weak-constraint "
+                f"tuple (gringo makes it unsafe): {rule_text}"
+            )
+        _count_variables(target, scopes.head_counts)
+    _resolve_localities(scopes)
+    _check_scopes(scopes, "weak constraint", lambda: rule_text, check_singletons)
 
 
 def validate_rule(head: Term | None, body: list[Term], rule: str | Rule, check_singletons: bool = True) -> None:
@@ -420,51 +467,4 @@ def validate_rule(head: Term | None, body: list[Term], rule: str | Rule, check_s
     if scopes.anonymous_in_head:
         raise ValueError(f"The anonymous variable '_' cannot appear in a rule head (unsafe): {rule_text()}")
 
-    if scopes.globals_in_aggregate_tuples:
-        listing = "; ".join(f"{name} in {description}" for name, description in scopes.globals_in_aggregate_tuples)
-        raise ValueError(
-            f"Aggregate tuple shares variable(s) with the rest of the rule ({listing}): {rule_text()}\n"
-            f"With the variable fixed by the rule, the aggregate's element set collapses "
-            f"to at most one element per ground instance — almost never the intent. "
-            f"Use a fresh variable inside the aggregate."
-        )
-
-    bound = _bind_fixpoint(scopes.global_binders, scopes.equality_edges, scopes.directed_edges)
-    unsafe = sorted(set(scopes.global_occurrences()) - bound)
-    if unsafe:
-        names = ", ".join(unsafe)
-        raise ValueError(
-            f"Unsafe variable(s) {names} in rule: {rule_text()}\n"
-            f"Every variable must be bound by a positive body literal "
-            f"(or an equality with something bound)."
-        )
-
-    for scope in scopes.local_scopes:
-        local_bound = _bind_fixpoint(scope.binders | bound, scope.equality_edges, scope.directed_edges)
-        local_unsafe = sorted((set(scope.target_counts) | set(scope.condition_counts)) - local_bound)
-        if local_unsafe:
-            names = ", ".join(local_unsafe)
-            raise ValueError(
-                f"Unsafe local variable(s) {names} in {scope.description} of rule: {rule_text()}\n"
-                f"Local variables must be bound by a positive condition inside "
-                f"the same element."
-            )
-
-    if not check_singletons:
-        return
-    singletons = sorted(
-        [name for name, count in scopes.global_occurrences().items() if count == 1]
-        + [
-            name
-            for scope in scopes.local_scopes
-            for name, count in (scope.target_counts + scope.condition_counts).items()
-            if count == 1
-        ]
-    )
-    if singletons:
-        names = ", ".join(singletons)
-        raise ValueError(
-            f"Singleton variable(s) {names} in rule: {rule_text()}\n"
-            f"A variable used exactly once is usually a typo; use ANY for an "
-            f"intentional don't-care."
-        )
+    _check_scopes(scopes, "rule", rule_text, check_singletons)

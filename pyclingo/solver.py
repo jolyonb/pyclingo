@@ -1,5 +1,6 @@
+import math
 from collections import defaultdict
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 
 import clingo
 
@@ -14,7 +15,6 @@ from pyclingo.optimization import (
     OptimizationDirective,
     OptStrategy,
     WeakConstraint,
-    raw_text_optimizes,
 )
 from pyclingo.predicate import Predicate
 from pyclingo.program_elements import BlankLine, Comment, ProgramElement, RawASP, Rule
@@ -36,6 +36,24 @@ from pyclingo.solve_result import (
     convert_predicate_to_symbol,
 )
 from pyclingo.version import __version__
+
+
+class _MinimizeLevelObserver(clingo.Observer):
+    """
+    Ground-program observer overriding ONLY minimize(): clingo registers a
+    null callback for every method left on the base class, so grounding
+    pays a Python call solely per ground optimization statement. The
+    collected priorities are gringo's ground truth — exactly the levels
+    clasp's cost tuple will have, empty tiers already dropped, raw text
+    included. Note this captures all optimizations - minimize, maximize,
+    and weak constraints - they all ground to minimize.
+    """
+
+    def __init__(self) -> None:
+        self.priorities: set[int] = set()
+
+    def minimize(self, priority: int, literals: Sequence[tuple[int, int]]) -> None:
+        self.priorities.add(priority)
 
 
 class ASPProgram:
@@ -453,35 +471,6 @@ class ASPProgram:
                     f"but no such atoms occur anywhere in the program — nothing derives them."
                 )
 
-    def _optimization_tiers(self) -> int | None:
-        """
-        The number of declared priority tiers, or None when raw text
-        optimizes (the walkers cannot count what they cannot see).
-        """
-        priorities: set[int] = set()
-        for elements in self._segments.values():
-            for element in elements:
-                if isinstance(element, (OptimizationDirective, WeakConstraint)):
-                    priorities.add(element.priority)
-                elif isinstance(element, RawASP) and raw_text_optimizes(element.text):
-                    return None
-        return len(priorities)
-
-    def _optimizes(self) -> bool:
-        """
-        Whether this program optimizes: a native minimize()/maximize()
-        directive, or a raw block containing #minimize/#maximize/:~ (the
-        scanner ignores comments and strings; the solve-time cost check
-        backstops anything it cannot see).
-        """
-        for elements in self._segments.values():
-            for element in elements:
-                if isinstance(element, (OptimizationDirective, WeakConstraint)):
-                    return True
-                if isinstance(element, RawASP) and raw_text_optimizes(element.text):
-                    return True
-        return False
-
     def _validate_names(self) -> None:
         """
         Raise on naming collisions that would corrupt solving:
@@ -639,6 +628,11 @@ class ASPProgram:
 
         message_handler = ClingoMessageHandler(asp_source, stop_on_level=stop_on_log_level)
         control = clingo.Control(logger=message_handler.on_message, arguments=["--stats"])
+        # Ground truth for optimization: the observer receives gringo's own
+        # minimize statements as they ground, so the surviving priority
+        # levels are known exactly — raw text included, empty tiers dropped
+        observer = _MinimizeLevelObserver()
+        control.register_observer(observer)
 
         try:
             control.add("base", [], asp_source)
@@ -666,8 +660,9 @@ class ASPProgram:
                 f"{message_handler.format_all_messages(verb='grounding')}"
             )
 
-        optimizes = self._optimizes()
-        if self.project_shown and optimizes:
+        # Cost-tuple and bound positions follow these levels, highest first
+        ground_levels = tuple(sorted(observer.priorities, reverse=True))
+        if self.project_shown and ground_levels:
             raise ValueError(
                 "project_shown cannot be combined with optimization: clasp warns that "
                 "optimization may depend on enumeration order under projection, so the "
@@ -692,8 +687,7 @@ class ASPProgram:
             message_handler,
             check_all_atoms=has_raw,
             defined_constants=dict(self._defined_constants),
-            optimizes=optimizes,
-            optimization_tiers=self._optimization_tiers() if optimizes else 0,
+            ground_levels=ground_levels,
         )
 
     def solve(self, timeout: float = 0, stop_on_log_level: LogLevel = LogLevel.INFO) -> SolveResult:
@@ -756,7 +750,7 @@ class ASPProgram:
         max_iterations: int = 0,
         strategy: OptStrategy = OptStrategy.BB,
         all_optima: bool = False,
-        bound: int | Sequence[int] | None = None,
+        bound: int | Mapping[int, int] | None = None,
         stop_on_log_level: LogLevel = LogLevel.INFO,
     ) -> Optimum | None:
         """The best answer set by the objectives; sugar for ground().optimize(). See GroundedProgram.optimize()."""
@@ -799,8 +793,7 @@ class GroundedProgram:
         message_handler: ClingoMessageHandler,
         check_all_atoms: bool,
         defined_constants: dict[str, int | str] | None = None,
-        optimizes: bool = False,
-        optimization_tiers: int | None = 0,
+        ground_levels: tuple[int, ...] = (),
     ) -> None:
         self._text = text
         self._control = control
@@ -808,14 +801,25 @@ class GroundedProgram:
         self._message_handler = message_handler
         self._check_all_atoms = check_all_atoms
         self._defined_constants = defined_constants or {}
-        self._optimizes = optimizes
-        self._optimization_tiers = optimization_tiers
+        # Ground truth from the minimize observer: the surviving priority
+        # levels, highest first — bool(levels) IS "does this program optimize?"
+        self._ground_levels = ground_levels
         self._active: SearchABC | None = None
 
     @property
     def text(self) -> str:
         """The rendered ASP program this grounding solves."""
         return self._text
+
+    @property
+    def optimization_levels(self) -> tuple[int, ...]:
+        """
+        The SURVIVING optimization priority levels, highest first — ground
+        truth from gringo (a declared tier whose elements ground empty is
+        absent). Empty means the program does not optimize. Cost tuples
+        and bounds follow these levels.
+        """
+        return self._ground_levels
 
     def _convert_assumptions(
         self, assumptions: Sequence[Predicate | DefaultNegation]
@@ -864,18 +868,18 @@ class GroundedProgram:
         cap would silently truncate refinements. Returns the converted
         assumptions.
         """
-        if timeout < 0:
+        if timeout < 0 or math.isnan(timeout):
             raise ValueError(f"timeout must be non-negative, got {timeout}")
-        if self._optimizes and mode is None:
+        if self._ground_levels and mode is None:
             raise ValueError("This program optimizes (#minimize/#maximize present). Solve it with optimize().")
-        if self._optimizes and isinstance(mode, RefinementMode):
+        if self._ground_levels and isinstance(mode, RefinementMode):
             raise ValueError(
                 f"{mode.value} consequences over an optimizing program are computed "
                 f"against the solver's cost-descent path, not the set of optimal "
                 f"models — the result would be wrong. Remove the optimization "
                 f"directive to ask about all answer sets."
             )
-        if mode == OPTIMIZE and not self._optimizes:
+        if mode == OPTIMIZE and not self._ground_levels:
             raise ValueError(
                 "Nothing to optimize: this program has no #minimize/#maximize. "
                 "Add minimize()/maximize() to state an objective, or enumerate "
@@ -1031,7 +1035,7 @@ class GroundedProgram:
         assumptions: Sequence[Predicate | DefaultNegation] | None = None,
         strategy: OptStrategy = OptStrategy.BB,
         all_optima: bool = False,
-        bound: int | Sequence[int] | None = None,
+        bound: int | Mapping[int, int] | None = None,
     ) -> OptimizeSteps:
         """
         The iterator form of optimize().
@@ -1045,29 +1049,65 @@ class GroundedProgram:
         all_optima the stream continues past the optimality proof and
         re-emits EVERY optimal model, certified (.proven True) — filter
         on .proven for just the certified ones. bound starts the search
-        from a known cost (one int per priority level, highest first;
-        fewer bounds than tiers is fine — they apply to the leading
-        tiers): only models at or below it are considered, so a
+        from a known cost: a bare int for a single-tier program, or a
+        {priority: value} mapping keyed by priority (required with
+        multiple tiers). A bound is a pruning hint — the optimum is
+        unchanged with or without it — so keys are applied best-effort:
+        the longest leading prefix of the surviving tiers (see
+        optimization_levels; clasp bounds are positional from the highest
+        tier) and the rest, dead tiers and typos alike, are silently
+        ignored. Only models at or below the bound are considered,
+        so a
         too-tight bound is reported as unsatisfiable — clasp cannot tell
-        the difference. MORE bounds than tiers would be silently ignored
-        wholesale by clasp, so it is rejected here when the tier count
-        is knowable from native directives; raw-text optimization blinds
+        the difference. A maximization's bound lives in NEGATED-cost
+        space like everything else about its cost: to accept totals of
+        at least 9, pass bound=-9. MORE bounds than tiers is a caller
+        bug — clasp applies the leading entries and silently ignores
+        the excess — so it is rejected here when the tier count is
+        knowable from native directives; raw-text optimization blinds
         the check, and going raw means the arity is yours to get right.
         """
-        bounds = [] if bound is None else [bound] if isinstance(bound, int) else list(bound)
-        if bound is not None and (
-            not bounds or not all(isinstance(b, int) and not isinstance(b, bool) for b in bounds)
-        ):
-            raise TypeError(f"bound must be an int or a non-empty sequence of ints, got {bound!r}")
-        if bounds and self._optimization_tiers is not None and len(bounds) > self._optimization_tiers:
-            # clasp SILENTLY discards the whole bound list when it is longer
-            # than the program's tier count — no message, no pruning
-            raise ValueError(
-                f"{len(bounds)} bounds for {self._optimization_tiers} priority tier(s): clasp "
-                f"would silently ignore the ENTIRE bound list. Give at most one bound per "
-                f"declared priority (leading tiers first)."
+        items: dict[int, int] | None = None
+        if bound is not None and isinstance(bound, Mapping):
+            items = dict(bound)
+            if not items or not all(
+                isinstance(v, int) and not isinstance(v, bool) for pair in items.items() for v in pair
+            ):
+                raise TypeError(f"priority-keyed bounds must map int priorities to int bounds, got {bound!r}")
+        elif bound is not None and (isinstance(bound, bool) or not isinstance(bound, int)):
+            # Positional lists are deliberately unsupported: their meaning
+            # silently shifts when a declared tier grounds empty
+            raise TypeError(
+                f"bound must be an int (single-tier programs) or a {{priority: bound}} mapping, got {bound!r}"
             )
+        candidates = list(items.values()) if items is not None else ([bound] if isinstance(bound, int) else [])
+        for b in candidates:
+            if not -(2**63) <= b < 2**63:
+                raise ValueError(
+                    f"bound value {b} is outside clasp's 64-bit cost range [-9223372036854775808, 9223372036854775807]"
+                )
         converted = self._begin_solve(OPTIMIZE, timeout, assumptions)
+        bounds: list[int] = []
+        if items is not None:
+            # A bound is a pruning hint, not a semantic constraint: the
+            # optimum is the same with or without it. So keys are applied
+            # best-effort against gringo's surviving levels — the longest
+            # leading prefix they cover (clasp bounds are positional from
+            # the highest tier) — and everything else drops silently:
+            # a key on a dead tier, a typo, or an inexpressible trailing
+            # bound costs search time, never correctness
+            for level in self._ground_levels:
+                if level not in items:
+                    break
+                bounds.append(items[level])
+        elif isinstance(bound, int):
+            # A bare int is only unambiguous when exactly one tier survived
+            if len(self._ground_levels) != 1:
+                raise ValueError(
+                    f"a bare int bound is ambiguous here (surviving tiers "
+                    f"{list(self._ground_levels)}); name the tier: bound={{priority: value}}."
+                )
+            bounds = [bound]
         solve_config = self._control.configuration.solve
         assert isinstance(solve_config, clingo.Configuration)
         # Stated on every entry: optN re-emits certified optima after the
@@ -1097,7 +1137,7 @@ class GroundedProgram:
         assumptions: Sequence[Predicate | DefaultNegation] | None = None,
         strategy: OptStrategy = OptStrategy.BB,
         all_optima: bool = False,
-        bound: int | Sequence[int] | None = None,
+        bound: int | Mapping[int, int] | None = None,
     ) -> Optimum | None:
         """
         The best answer set by the program's objectives. Eager sugar over

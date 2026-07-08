@@ -585,15 +585,23 @@ def test_bound_starts_the_search_at_a_known_cost() -> None:
     assert unbounded is not None and unbounded.cost == (1,)
 
 
-def test_multi_priority_bound() -> None:
+def test_multi_priority_bound_is_priority_keyed() -> None:
     program = ASPProgram()
     X = Variable("X")
     program.fact(Choice(Pick(x=1)).add(Pick(x=2)).add(Pick(x=3)).at_least(1).at_most(2))
     program.minimize(1, X, condition=Pick(x=X), priority=2)
     program.minimize(X, condition=Pick(x=X), priority=1)
-    result = program.optimize(bound=[1, 1])
+    grounded = program.ground()
+    assert grounded.optimization_levels == (2, 1)
+    result = grounded.optimize(bound={2: 1, 1: 1})
     assert result is not None and result.proven
     assert result.cost == (1, 1)
+    # A bare int is ambiguous with two tiers; a trailing-only key is
+    # inexpressible (clasp bounds are a leading prefix) so it drops
+    with pytest.raises(ValueError, match="name the tier"):
+        grounded.optimize(bound=1)
+    trailing_only = grounded.optimize(bound={1: 1})  # no leading cover: no hint
+    assert trailing_only is not None and trailing_only.cost == (1, 1)
 
 
 def test_bound_type_validated() -> None:
@@ -601,7 +609,11 @@ def test_bound_type_validated() -> None:
     with pytest.raises(TypeError, match="bound must be"):
         grounded.optimize(bound="cheap")  # type: ignore[arg-type]
     with pytest.raises(TypeError, match="bound must be"):
-        grounded.optimize(bound=[])
+        grounded.optimize(bound=[1, 0])  # type: ignore[arg-type]  # positional lists are gone
+    with pytest.raises(TypeError, match="priority-keyed"):
+        grounded.optimize(bound={})
+    with pytest.raises(TypeError, match="priority-keyed"):
+        grounded.optimize(bound={0: "cheap"})  # type: ignore[dict-item]
 
 
 def test_optima_mode_never_leaks_between_searches() -> None:
@@ -632,23 +644,130 @@ def test_all_optima_re_emits_the_descents_final_model() -> None:
     assert len(result.optima) == len({tuple(a) for a in certified_atomsets})  # certified are distinct
 
 
-def test_excess_bounds_rejected_when_tiers_are_knowable() -> None:
-    # clasp silently discards the whole bound list when it has more
-    # entries than the program has tiers — even a would-be-UNSAT bound
-    # like 0 prunes nothing. Statically knowable, so statically refused.
-    grounded = build_knapsack().ground()  # one tier
-    with pytest.raises(ValueError, match="silently ignore"):
-        grounded.optimize(bound=[1, 0])
-    assert grounded.optimize(bound=1) is not None  # exact count is fine
+def test_bound_keys_are_best_effort_hints() -> None:
+    # A bound is a pruning hint: keys on surviving tiers apply, everything
+    # else drops silently — the optimum is unchanged either way
+    grounded = build_knapsack().ground()  # one ground tier: priority 0
+    assert grounded.optimization_levels == (0,)
+    applied = grounded.optimize(bound={0: 1, 2: 0})  # 2 names nothing: ignored
+    assert applied is not None and applied.cost == (1,)
+    assert [m.cost for m in applied.path] == [(1,)]  # tier-0 bound still pruned
+    assert grounded.optimize(bound={0: 1}) is not None
+    assert grounded.optimize(bound=1) is not None  # single tier: bare int fine
 
 
-def test_excess_bounds_with_raw_optimization_hit_clasps_silence() -> None:
-    # With raw optimization the tier count is unknowable: the guard skips,
-    # and this pins clasp's actual behavior — the bounds vanish silently
-    # (bound 0 would otherwise make this unsatisfiable)
+def test_raw_optimization_gets_ground_truth_guarding_too() -> None:
+    # The observer counts what the text walkers never could: raw
+    # optimization gets the same exact tier guard as native directives
+    def build_raw() -> ASPProgram:
+        program = ASPProgram()
+        program.fact(Choice(Pick(x=1)).add(Pick(x=2)).at_least(1))
+        program.raw_asp("#minimize{ X,X : pick(X) }.", predicates=[Pick])
+        return program
+
+    hinted = build_raw().ground().optimize(bound={0: 1, 2: 0})  # 2 ignored
+    assert hinted is not None and [m.cost for m in hinted.path] == [(1,)]
+    pruned = build_raw().ground().optimize(bound=1)
+    assert pruned is not None and pruned.proven
+    assert [m.cost for m in pruned.path] == [(1,)]  # the bound pruned the search
+    assert build_raw().ground().optimize(bound=0) is None  # hard ceiling applied
+
+
+def test_oversized_bound_rejected_with_range() -> None:
+    grounded = build_knapsack().ground()
+    with pytest.raises(ValueError, match="64-bit cost range"):
+        grounded.optimize(bound=2**63)
+    with pytest.raises(ValueError, match="64-bit cost range"):
+        grounded.optimize(bound={0: -(2**63) - 1})
+
+
+def test_bound_on_non_optimizing_program_teaches_the_right_lesson() -> None:
+    # The optimizing gate fires before bound-arity: the error is about the
+    # missing objective, not a confusing zero-tier arity complaint
     program = ASPProgram()
+    program.fact(Pick(x=1))
+    with pytest.raises(ValueError, match="Nothing to optimize"):
+        program.ground().optimize(bound=1)
+
+
+def test_nested_block_comments_do_not_deadlock() -> None:
+    # gringo NESTS block comments; a weak constraint inside a nested block
+    # is pure comment — the program does not optimize and solves normally
+    program = ASPProgram()
+    program.fact(Pick(x=1))
+    program.raw_asp("%* outer %* inner *% :~ pick(1). [1] *%")
+    result = program.solve()
+    assert len(list(result)) == 1  # solvable: no false-positive refusal
+
+
+def test_penalize_validation_matches_forbid_exactly() -> None:
+    # The three parity gaps: aggregate-tuple-shares-global (which could
+    # silently DROP the penalty at a relaxed threshold), local singletons,
+    # and the anonymous variable in tuple terms
+    program = ASPProgram()
+    X, Y = Variable("X"), Variable("Y")
+    with pytest.raises(ValueError, match="Aggregate tuple shares"):
+        program.penalize(Pick(x=X), Count(X, condition=Pick(x=X)) >= 2, terms=[X])
+    Cell2 = Predicate.define("cell_ps", ["x", "y"])
+    with pytest.raises(ValueError, match="Singleton variable"):
+        program.penalize(
+            ConditionalLiteral(Pick(x=X), [Cell2(x=X, y=Y)]),
+            Pick(x=1),
+            terms=[],
+        )
+    with pytest.raises(ValueError, match="anonymous variable"):
+        program.penalize(Pick(x=X), weight=1, terms=[X, ANY])
+
+
+def test_vanished_tier_bound_keys_drop_silently() -> None:
+    # A declared tier whose elements never hold VANISHES from clasp's
+    # levels with no message. Its bound key names nothing, so it drops —
+    # a hint that cannot prune, not an error
+    program = ASPProgram()
+    X = Variable("X")
     program.fact(Choice(Pick(x=1)).add(Pick(x=2)).at_least(1))
-    program.raw_asp("#minimize{ X,X : pick(X) }.", predicates=[Pick])
-    result = program.ground().optimize(bound=[1, 0])
+    program.minimize(1, X, condition=[Pick(x=X), X > 100], priority=2)  # grounds empty
+    program.minimize(X, condition=Pick(x=X), priority=1)
+    grounded = program.ground()
+    assert grounded.optimization_levels == (1,)  # tier 2 vanished
+    dead_key = grounded.optimize(bound={2: 0, 1: 5})  # dead tier 2: ignored
+    assert dead_key is not None and dead_key.cost == (1,)
+    # Naming only the survivor is the same hint
+    informed = grounded.optimize(bound={1: 5})
+    assert informed is not None and informed.proven
+    assert informed.cost == (1,)
+    # A bare int works here: exactly one tier survived
+    assert grounded.optimize(bound=5) is not None
+    # Without bounds the program is still perfectly optimizable
+    result = grounded.optimize()
     assert result is not None and result.proven
-    assert result.cost == (1,)  # the whole bound list was ignored
+    assert result.cost == (1,)  # ONE entry: the cost tuple follows ground levels
+
+
+def test_fully_empty_objectives_mean_not_optimizing() -> None:
+    # Ground truth over declarations: if every objective grounds empty,
+    # the program does not optimize — solve() works, optimize() teaches
+    program = ASPProgram()
+    X = Variable("X")
+    program.fact(Choice(Pick(x=1)).add(Pick(x=2)))
+    program.minimize(X, condition=[Pick(x=X), X > 100])  # grounds empty
+    grounded = program.ground()
+    assert len(list(grounded.solve())) == 4  # not optimizing: enumeration allowed
+    with pytest.raises(ValueError, match="Nothing to optimize"):
+        grounded.optimize()
+
+
+def test_observer_catches_every_optimization_spelling() -> None:
+    # gringo lowers #maximize (negated weights) and weak constraints into
+    # minimize statements before the ASPIF stream, so the ground-truth
+    # observer sees all three spellings — raw text included
+    for raw in ("#minimize{ X,X : pick(X) }.", "#maximize{ X,X : pick(X) }.", ":~ pick(X). [X@0, X]"):
+        program = ASPProgram()
+        program.fact(Choice(Pick(x=1)).add(Pick(x=2)).at_least(1))
+        program.raw_asp(raw)
+        grounded = program.ground()
+        assert grounded.optimization_levels == (0,), raw
+        with pytest.raises(ValueError, match=r"optimize\(\)"):
+            grounded.solve()
+        result = grounded.optimize()
+        assert result is not None and result.proven, raw

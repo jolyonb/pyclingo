@@ -16,7 +16,6 @@ constraint) produced them — and the weight sums over the distinct set,
 so accumulating elements into one statement would be cosmetic only.
 """
 
-import re
 from enum import StrEnum
 
 from pyclingo.conditioned_element import CONDITION_TYPE, ConditionedElement
@@ -27,22 +26,6 @@ from pyclingo.scoping import body_global_variables
 
 # What may be aggregated over: the same universe as aggregate tuple terms
 type OPTIMIZATION_TERM_TYPE = Value | Expression | Predicate
-
-
-# Matching, in order: quoted strings (with escapes), block comments, line
-# comments — everything the optimization-token scan must NOT look inside
-_INERT_TEXT = re.compile(r'"(?:[^"\\]|\\.)*"|%\*.*?\*%|%[^\n]*', re.DOTALL)
-_OPTIMIZATION_TOKENS = re.compile(r"#minimize\b|#maximize\b|:~")
-
-
-def raw_text_optimizes(text: str) -> bool:
-    """
-    Whether a raw ASP block makes the program an optimizing one: #minimize,
-    #maximize, or a weak constraint (:~ — the same directive in disguise;
-    gringo translates it to a minimize construct). Quoted strings and
-    comments are stripped first so mentions there do not count.
-    """
-    return _OPTIMIZATION_TOKENS.search(_INERT_TEXT.sub("", text)) is not None
 
 
 class WeakConstraint(ProgramElement):
