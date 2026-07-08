@@ -48,14 +48,14 @@ def test_take_one_model() -> None:
 
 def test_timeout_yields_partial_results() -> None:
     # 2^60 models: unlimited enumeration can never finish, so the timeout must fire
-    result = make_choice_program(60).solve(timeout=1)
+    result = make_choice_program(60).solve(timeout=0.2)
     start = time.monotonic()
     models = list(result)
     elapsed = time.monotonic() - start
     assert len(models) > 0  # models found before the deadline were yielded
     assert result.exhausted is False
     assert result.satisfiable is True  # learned from the yielded models
-    assert elapsed < 3  # cancelled promptly rather than enumerating forever
+    assert elapsed < 2  # cancelled promptly rather than enumerating forever
 
 
 def test_no_timeout_unaffected() -> None:
@@ -131,8 +131,8 @@ def test_negative_timeout_rejected() -> None:
 def test_timeout_anchors_at_first_iteration() -> None:
     # Time between solve() and iteration belongs to the caller: the budget
     # must not burn while clingo sits idle
-    result = make_choice_program(3).solve(timeout=1)
-    time.sleep(1.3)  # longer than the entire timeout
+    result = make_choice_program(3).solve(timeout=0.2)
+    time.sleep(0.4)  # longer than the entire timeout
     assert len(list(result)) == 8
     assert result.exhausted is True
 
