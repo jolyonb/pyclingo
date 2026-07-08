@@ -97,12 +97,13 @@ def test_empty_segment_names_rejected_everywhere() -> None:
         program.fact(P(x=1), segment="  ")
 
 
-def test_snake_case_segment_headers_render_as_words() -> None:
+def test_segment_headers_render_the_name_verbatim() -> None:
     program = ASPProgram()
     P = Predicate.define("p_seg2", ["x"])
+    program.add_segment("grid_stuff")
     program.fact(P(x=1), segment="grid_stuff")
     program.fact(P(x=2))  # second segment so headers render
-    assert "% ===== Grid Stuff =====" in program.render()
+    assert "% ===== grid_stuff =====" in program.render()
 
 
 def test_define_constant_rejects_bool_and_non_ascii() -> None:

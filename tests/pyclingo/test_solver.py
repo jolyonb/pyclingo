@@ -3,54 +3,38 @@ import pytest
 from pyclingo import ASPProgram, Predicate
 
 
-def test_case_insensitive_segments() -> None:
-    """Test that segment names are case-insensitive to prevent duplicates."""
+def test_segment_names_are_exact() -> None:
+    # A segment's name is taken verbatim — no case folding, no munging.
+    # Exact duplicates error; different casings are different segments.
     program = ASPProgram()
-
-    # Add a segment with mixed case
     program.add_segment("Symbols")
 
-    # Attempting to add the same segment with different case should fail
-    with pytest.raises(ValueError, match="Segment 'symbols' already exists"):
-        program.add_segment("symbols")
+    with pytest.raises(ValueError, match="Segment 'Symbols' already exists"):
+        program.add_segment("Symbols")
 
-    with pytest.raises(ValueError, match="Segment 'SYMBOLS' already exists"):
-        program.add_segment("SYMBOLS")
+    program.add_segment("symbols")  # a distinct segment
+    assert [segment.name for segment in program.segments] == ["Symbols", "symbols"]
 
 
-def test_case_insensitive_segment_content_merging() -> None:
-    """Test that content added to segments with different cases gets merged."""
+def test_writes_address_segments_by_exact_name() -> None:
     program = ASPProgram()
-
-    # Create a test predicate
     TestPred = Predicate.define("test", ["value"])
-
-    # Add segment and initial content
     program.add_segment("Symbols")
     program.fact(TestPred(value=1), segment="Symbols")
 
-    # Add content using different case - should go to same segment
-    program.fact(TestPred(value=2), segment="symbols")
-    program.fact(TestPred(value=3), segment="SYMBOLS")
+    # A different casing is a different (nonexistent) segment
+    with pytest.raises(ValueError, match="Segment 'SYMBOLS' does not exist"):
+        program.fact(TestPred(value=2), segment="SYMBOLS")
 
-    # Render and check that all facts are together
-    rendered = program.render()
-
-    # All facts should appear in the output
-    assert "test(1)." in rendered
-    assert "test(2)." in rendered
-    assert "test(3)." in rendered
+    assert "test(1)." in program.render()
 
 
-def test_default_segment_case_normalization() -> None:
-    """Test that default segment is also normalized to lowercase."""
+def test_default_segment_name_is_verbatim() -> None:
     program = ASPProgram(default_segment="MyRules")
-
     TestPred = Predicate.define("test", ["value"])
+    program.fact(TestPred(value=1))  # the default segment self-creates
 
-    # Add fact to default segment
-    program.fact(TestPred(value=1))
-
-    # Try to add a segment with the same name in different case - should fail
-    with pytest.raises(ValueError, match="Segment 'myrules' already exists"):
-        program.add_segment("myrules")
+    with pytest.raises(ValueError, match="Segment 'MyRules' already exists"):
+        program.add_segment("MyRules")
+    with pytest.raises(KeyError, match="'myrules' does not exist"):
+        program["myrules"]

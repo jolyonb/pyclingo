@@ -45,7 +45,7 @@ def test_respects_segments() -> None:
     program.add_segment("extras")
     program.raw_asp("foo(1).", segment="extras")
     rendered = program.render()
-    assert rendered.index("===== Extras =====") < rendered.index("foo(1).")
+    assert rendered.index("===== extras =====") < rendered.index("foo(1).")
 
 
 def test_constants_used_only_in_raw_text_are_emitted() -> None:

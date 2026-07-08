@@ -13,13 +13,14 @@ P = Predicate.define("p_seg", ["x"])
 
 def test_segments_property_reflects_insertion_order_and_contents() -> None:
     program = ASPProgram()
-    program.fact(P(x=1))  # creates the default segment on first write
+    program.fact(P(x=1))  # the default segment alone self-creates on first write
+    program.add_segment("grid")
     program.fact(P(x=2), segment="grid")
     program.fact(P(x=3), segment="grid")
 
     segments = program.segments
     assert isinstance(segments, tuple)
-    assert [segment.name for segment in segments] == ["rules", "grid"]
+    assert [segment.name for segment in segments] == ["Rules", "grid"]
     assert [len(segment) for segment in segments] == [1, 2]
     assert all(isinstance(element, Rule) for segment in segments for element in segment)
 
@@ -27,9 +28,56 @@ def test_segments_property_reflects_insertion_order_and_contents() -> None:
 def test_add_segment_fixes_position() -> None:
     program = ASPProgram()
     program.add_segment("later")
+    program.add_segment("other")
     program.fact(P(x=1), segment="other")
     program.fact(P(x=2), segment="later")
     assert [segment.name for segment in program.segments] == ["later", "other"]
+
+
+def test_writes_require_the_segment_to_exist() -> None:
+    # add_segment is the one creation point: the verbs' segment= refuses
+    # unknown names instead of quietly creating them (typos stay loud)
+    program = ASPProgram()
+    with pytest.raises(ValueError, match="create it first with add_segment"):
+        program.fact(P(x=1), segment="grid")
+    program.fact(P(x=1))  # the default segment alone self-creates
+
+
+def test_getitem_reads_segments_and_never_creates() -> None:
+    program = ASPProgram()
+    grid = program.add_segment("grid")
+    program.fact(P(x=1), segment="grid")
+    assert program["grid"] is grid
+    assert len(program["grid"]) == 1
+    with pytest.raises(KeyError, match="existing segments: 'grid'"):
+        program["typo"]
+    with pytest.raises(KeyError, match="'Grid' does not exist"):
+        program["Grid"]  # names are exact — no case folding
+    assert [segment.name for segment in program.segments] == ["grid"]  # the reads created nothing
+
+
+def test_add_segment_attaches_a_prebuilt_segment() -> None:
+    # A Segment built standalone attaches as-is: the program holds the
+    # object it was given, so appends through any handle are visible
+    program = ASPProgram()
+    grid = Segment("grid")
+    returned = program.add_segment(grid)
+    assert returned is grid
+    assert program["grid"] is grid
+    program.fact(P(x=1), segment="grid")
+    assert len(grid) == 1
+    assert "p_seg(1)." in program.render()
+    with pytest.raises(ValueError, match="Segment 'grid' already exists"):
+        program.add_segment(Segment("grid"))
+    program.add_segment(Segment("Grid"))  # a different name: case is significant
+
+
+def test_segment_names_are_verbatim() -> None:
+    assert Segment("GriD").name == "GriD"
+    with pytest.raises(ValueError, match="cannot be empty"):
+        Segment("   ")
+    with pytest.raises(ValueError, match="single-line"):
+        Segment("a\nb")
 
 
 def test_segment_is_a_container_not_a_builder() -> None:
@@ -42,20 +90,22 @@ def test_segment_is_a_container_not_a_builder() -> None:
 def test_remove_segment_drops_content() -> None:
     program = ASPProgram()
     program.fact(P(x=1))
+    program.add_segment("extra")
     program.fact(P(x=2), segment="extra")
     assert "p_seg(2)." in program.render()
     program.remove_segment("extra")
     rendered = program.render()
     assert "p_seg(2)." not in rendered
     assert "p_seg(1)." in rendered
-    assert [segment.name for segment in program.segments] == ["rules"]
+    assert [segment.name for segment in program.segments] == ["Rules"]
 
 
 def test_remove_segment_unknown_name_lists_existing() -> None:
     program = ASPProgram()
     program.fact(P(x=1))
+    program.add_segment("grid")
     program.fact(P(x=2), segment="grid")
-    with pytest.raises(ValueError, match="Segment 'nope' does not exist; existing segments: 'rules', 'grid'"):
+    with pytest.raises(ValueError, match="Segment 'nope' does not exist; existing segments: 'Rules', 'grid'"):
         program.remove_segment("nope")
 
 
@@ -64,6 +114,7 @@ def test_ground_then_remove_segment_gives_ab_comparison() -> None:
     # between groundings compares the program with and without it
     program = ASPProgram()
     program.fact(Choice(P(x=RangePool(1, 2))))  # 4 models unconstrained
+    program.add_segment("extra")
     program.forbid(P(x=1), segment="extra")  # 2 models with the constraint
     full = program.ground()
     program.remove_segment("extra")
@@ -77,10 +128,11 @@ def test_headers_render_only_with_multiple_segments() -> None:
     program.fact(P(x=1))
     assert "=====" not in program.render()
 
+    program.add_segment("extra")
     program.fact(P(x=2), segment="extra")
     rendered = program.render()
     # One blank line before the first header, two between segments
-    assert "\n% ===== Rules =====\np_seg(1).\n\n\n% ===== Extra =====\np_seg(2).\n" in rendered
+    assert "\n% ===== Rules =====\np_seg(1).\n\n\n% ===== extra =====\np_seg(2).\n" in rendered
     assert "\n\n% ===== Rules" in rendered
     assert "\n\n\n% ===== Rules" not in rendered
 
@@ -91,8 +143,7 @@ def test_rejected_rules_leave_no_phantom_segment() -> None:
     program = ASPProgram()
     P = Predicate.define("p_ph", ["x"])
     program.fact(P(x=1))
+    program.add_segment("phantom")
     with pytest.raises(ValueError, match="Singleton"):
         program.when(P(x=Variable("Y")), let=P(x=2), segment="phantom")
-    assert [seg.name for seg in program.segments] == ["rules"]
-    assert "=====" not in program.render()  # single segment: no headers
-    program.add_segment("phantom")  # the name was never consumed
+    assert [len(seg) for seg in program.segments] == [1, 0]  # nothing was appended

@@ -108,5 +108,5 @@ def test_scoping_counts_signed_atoms() -> None:
     program = ASPProgram()
     X, Y = Variable("X"), Variable("Y")
     with pytest.raises(ValueError, match="Singleton"):
-        program.when(-P(x=X), let=Q(x=X), segment="a")
+        program.when(-P(x=X), let=Q(x=X))
         program.when(P(x=X), -Q(x=Y), let=Q(x=X))

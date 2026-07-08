@@ -32,15 +32,35 @@ class ProgramElement(ABC):
 
 
 class Segment:
-    """One named block of program elements, rendered under its header."""
+    """
+    One named block of program elements, rendered under its header.
+
+    add_segment is the one creation point: it pre-declares a named
+    segment, or attaches one built standalone — the program holds the
+    object you gave it, so appends through any handle are visible.
+    program["name"] reads a segment back (KeyError if absent); the
+    verbs' segment= writes into existing segments only. The default
+    segment alone self-creates: it is the program's own room.
+    """
 
     def __init__(self, name: str) -> None:
-        self._name = name
+        self._name = self.validate_name(name)
         self._elements: list[ProgramElement] = []
+
+    @staticmethod
+    def validate_name(name: str) -> str:
+        """The name, exactly as given; rejects empty or multi-line ones."""
+        if not isinstance(name, str):
+            raise TypeError(f"Segment name must be a string, got {type(name).__name__}")
+        if not name.strip():
+            raise ValueError("Segment names cannot be empty")
+        if "\n" in name or "\r" in name:
+            raise ValueError("Segment names must be single-line (they render as section comments)")
+        return name
 
     @property
     def name(self) -> str:
-        """The segment's normalized (lowercase) name."""
+        """The segment's name."""
         return self._name
 
     def append(self, element: ProgramElement) -> None:
@@ -56,12 +76,11 @@ class Segment:
     def render(self, with_header: bool) -> str:
         """
         Render the segment's elements, one per line. With with_header, a
-        blank line and a "% ===== Title =====" section comment (the name,
-        underscores as spaces, title-cased) precede them.
+        blank line and a "% ===== name =====" section comment precede them.
         """
         lines = [element.render() for element in self._elements]
         if with_header:
-            lines = ["", f"% ===== {self._name.replace('_', ' ').title()} =====", *lines]
+            lines = ["", f"% ===== {self._name} =====", *lines]
         return "\n".join(lines)
 
     def collect_predicate_signs(self) -> set[AtomSign]:

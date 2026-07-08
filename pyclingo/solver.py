@@ -91,23 +91,41 @@ class ASPProgram:
         # its conditional override, else the class's bool override/default.
         self._show_when_overrides: dict[tuple[type[Predicate], bool], ConditionalLiteral] = {}
         self.header: str | None = header
-        self.default_segment: str = default_segment.lower()
+        self.default_segment: str = Segment.validate_name(default_segment)
 
     def _segment_key(self, segment: str | None) -> str:
-        """Normalize a segment name (None means the default segment), rejecting invalid names."""
+        """The segment name (None means the default segment); rejects invalid names."""
         if segment is None:
             return self.default_segment
-        if not segment.strip():
-            raise ValueError("Segment names cannot be empty")
-        if "\n" in segment or "\r" in segment:
-            raise ValueError("Segment names must be single-line (they render as section comments)")
-        return segment.lower()
+        return Segment.validate_name(segment)
 
     def _segment(self, segment: str | None) -> Segment:
-        """The named segment (None means the default), created on first use."""
+        """
+        The verbs' write target. A named segment must already exist (see
+        add_segment); only the DEFAULT segment self-creates — it is the
+        program's own room.
+        """
         key = self._segment_key(segment)
         if key not in self._segments:
+            if segment is not None:
+                existing = ", ".join(f"'{name}'" for name in self._segments) or "(none)"
+                raise ValueError(
+                    f"Segment '{segment}' does not exist — create it first with "
+                    f"add_segment('{segment}'); existing segments: {existing}"
+                )
             self._segments[key] = Segment(key)
+        return self._segments[key]
+
+    def __getitem__(self, segment: str) -> Segment:
+        """
+        The named segment. Reading never creates: an unknown name raises
+        KeyError naming the existing segments (add_segment is the one
+        creation point; the default segment self-creates on first write).
+        """
+        key = Segment.validate_name(segment)
+        if key not in self._segments:
+            existing = ", ".join(f"'{name}'" for name in self._segments) or "none"
+            raise KeyError(f"Segment '{segment}' does not exist; existing segments: {existing}")
         return self._segments[key]
 
     @property
@@ -115,19 +133,24 @@ class ASPProgram:
         """The program's segments, in rendering order."""
         return tuple(self._segments.values())
 
-    def add_segment(self, segment: str) -> None:
+    def add_segment(self, segment: str | Segment) -> Segment:
         """
-        Pre-declare an empty segment, fixing its position in the rendered output.
+        Add a segment, fixing its position in the rendered output, and
+        return it: a string pre-declares an empty segment, a Segment
+        object attaches it as-is (the program holds the object you gave
+        it — appends through any handle are visible).
 
-        Declaration is optional: writing to a new segment name (fact/when/forbid/
-        comment) creates it on first use, ordered by first write. Declaring an
-        already-existing segment is an error, because its position is already set
-        and the request can't be honored.
+        This is the one creation point: the verbs' segment= writes into
+        existing segments only, and program["name"] reads without
+        creating. Adding a name that already exists is an error, because
+        its position is already set and the request can't be honored.
         """
-        normalized_segment = self._segment_key(segment)
-        if normalized_segment in self._segments:
-            raise ValueError(f"Segment '{segment}' already exists")
-        self._segments[normalized_segment] = Segment(normalized_segment)
+        attached = segment if isinstance(segment, Segment) else Segment(segment)
+        if attached.name in self._segments:
+            given = segment if isinstance(segment, str) else segment.name
+            raise ValueError(f"Segment '{given}' already exists")
+        self._segments[attached.name] = attached
+        return attached
 
     def remove_segment(self, segment: str) -> None:
         """
