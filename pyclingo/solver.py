@@ -12,6 +12,7 @@ from pyclingo.optimization import (
     OPTIMIZATION_TERM_TYPE,
     Optimization,
     OptimizationDirective,
+    OptStrategy,
     WeakConstraint,
     raw_text_optimizes,
 )
@@ -735,10 +736,16 @@ class ASPProgram:
         return self.ground(stop_on_log_level=stop_on_log_level).brave(timeout=timeout, max_iterations=max_iterations)
 
     def optimize(
-        self, timeout: float = 0, max_iterations: int = 0, stop_on_log_level: LogLevel = LogLevel.INFO
+        self,
+        timeout: float = 0,
+        max_iterations: int = 0,
+        strategy: OptStrategy = OptStrategy.BB,
+        stop_on_log_level: LogLevel = LogLevel.INFO,
     ) -> Optimum | None:
         """The best answer set by the objectives; sugar for ground().optimize(). See GroundedProgram.optimize()."""
-        return self.ground(stop_on_log_level=stop_on_log_level).optimize(timeout=timeout, max_iterations=max_iterations)
+        return self.ground(stop_on_log_level=stop_on_log_level).optimize(
+            timeout=timeout, max_iterations=max_iterations, strategy=strategy
+        )
 
 
 class GroundedProgram:
@@ -1000,7 +1007,10 @@ class GroundedProgram:
         return self._refine_eagerly(RefinementMode.BRAVE, BraveConsequences, timeout, max_iterations, assumptions)
 
     def optimize_iter(
-        self, timeout: float = 0, assumptions: Sequence[Predicate | DefaultNegation] | None = None
+        self,
+        timeout: float = 0,
+        assumptions: Sequence[Predicate | DefaultNegation] | None = None,
+        strategy: OptStrategy = OptStrategy.BB,
     ) -> OptimizeSteps:
         """
         The iterator form of optimize().
@@ -1008,8 +1018,15 @@ class GroundedProgram:
         whenever the current best is good enough: every emission is a
         genuine solution, so early exit keeps a usable answer (the
         anytime workflow). See OptimizeSteps for the full contract.
+
+        strategy selects clasp's optimization algorithm — see OptStrategy;
+        under USC the stream may be just the final optimum.
         """
         converted = self._begin_solve(OPTIMIZE, timeout, assumptions)
+        solver_config = self._control.configuration.solver
+        assert isinstance(solver_config, clingo.Configuration)
+        # Stated on every entry, like enum_mode: the strategy is per-solve
+        solver_config.opt_strategy = strategy.value
         self._active = steps = OptimizeSteps(
             self._control,
             self._predicate_types,
@@ -1025,10 +1042,13 @@ class GroundedProgram:
         timeout: float = 0,
         max_iterations: int = 0,
         assumptions: Sequence[Predicate | DefaultNegation] | None = None,
+        strategy: OptStrategy = OptStrategy.BB,
     ) -> Optimum | None:
         """
         The best answer set by the program's objectives. Eager sugar over
         optimize_iter(). Returns None if the program is unsatisfiable.
+        strategy selects clasp's algorithm (see OptStrategy: USC can be
+        night-and-day faster when branch and bound stalls).
 
         timeout (seconds) and max_iterations (descent steps) each bound
         the work, 0 meaning unbounded; a bounded run returns the best
@@ -1040,7 +1060,7 @@ class GroundedProgram:
         """
         if max_iterations < 0:
             raise ValueError(f"max_iterations must be non-negative (0 means unbounded), got {max_iterations}")
-        steps = self.optimize_iter(timeout, assumptions)
+        steps = self.optimize_iter(timeout, assumptions, strategy)
         path: list[CostedModel] = []
         proven = False
         try:

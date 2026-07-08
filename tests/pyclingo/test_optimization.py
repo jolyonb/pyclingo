@@ -17,6 +17,7 @@ from pyclingo import (
     CostedModel,
     Count,
     Optimum,
+    OptStrategy,
     Predicate,
     RangePool,
     SolveResult,
@@ -508,3 +509,13 @@ def test_auto_terms_exclude_construct_locals() -> None:
     program.fact(Choice(Pick(x=1)).add(Pick(x=2)), Tag(t=1), Tag(t=2))
     program.penalize(Tag(t=T), Count(X, condition=Pick(x=X)) >= 2)
     assert ":~ tag_at(T), #count{ X : pick(X) } >= 2. [1, T]" in program.render()
+
+
+def test_usc_strategy_finds_the_same_optimum() -> None:
+    grounded = build_knapsack().ground()
+    bb = grounded.optimize(strategy=OptStrategy.BB)
+    usc = grounded.optimize(strategy=OptStrategy.USC)
+    default = grounded.optimize()  # strategy resets to BB per entry
+    assert bb is not None and usc is not None and default is not None
+    assert bb.cost == usc.cost == default.cost == (1,)
+    assert bb.proven and usc.proven and default.proven

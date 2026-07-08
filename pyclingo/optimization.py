@@ -138,6 +138,22 @@ class WeakConstraint(ProgramElement):
         return signs
 
 
+class OptStrategy(StrEnum):
+    """
+    clasp's optimization strategy; values are the config spellings.
+
+    BB (branch and bound, the default) descends from above: every
+    emission is a solution, each better than the last — the anytime
+    workflow. USC (unsatisfiable cores) proves from below: often
+    dramatically faster on hard combinatorial optima, but its emission
+    stream is sparse (frequently just the optimum), so best-so-far
+    visibility degrades. Try USC whenever branch and bound stalls.
+    """
+
+    BB = "bb"
+    USC = "usc"
+
+
 class Optimization(StrEnum):
     """Which way the total weight is preferred; values are the directive names."""
 
