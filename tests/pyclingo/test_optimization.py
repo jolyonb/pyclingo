@@ -6,6 +6,8 @@ against clasp (same-priority statements merge additively; maximize
 reports negated costs; priorities are ordinal keys with free gaps).
 """
 
+from itertools import islice
+
 import clingo
 import pytest
 
@@ -519,3 +521,134 @@ def test_usc_strategy_finds_the_same_optimum() -> None:
     assert bb is not None and usc is not None and default is not None
     assert bb.cost == usc.cost == default.cost == (1,)
     assert bb.proven and usc.proven and default.proven
+
+
+def build_three_optima() -> ASPProgram:
+    # Exactly one pick, every choice costs 1: three optimal models
+    program = ASPProgram()
+    X = Variable("X")
+    program.fact(Choice(Pick(x=1)).add(Pick(x=2)).add(Pick(x=3)).at_least(1).at_most(1))
+    program.penalize(Pick(x=X))
+    return program
+
+
+def test_all_optima_collects_every_certified_model() -> None:
+    result = build_three_optima().optimize(all_optima=True)
+    assert result is not None
+    assert result.proven and result.complete
+    assert result.optima is not None and len(result.optima) == 3
+    assert all(model.proven for model in result.optima)
+    assert all(model.cost == (1,) for model in result.optima)
+    picks = sorted(model.atoms(Pick)[0]["x"].value for model in result.optima)
+    assert picks == [1, 2, 3]
+    # The descent prefix is unproven; the certified tail is the optima
+    assert not result.path[0].proven
+
+
+def test_plain_optimize_has_no_optima_but_keeps_the_path() -> None:
+    result = build_knapsack().optimize()
+    assert result is not None and result.proven and result.complete
+    assert result.optima is None  # not asked
+    assert result.path  # the receipts remain
+    assert all(not model.proven for model in result.path)  # plain emissions are uncertified
+
+
+def test_uniqueness_via_the_certified_stream() -> None:
+    unique = build_knapsack().optimize(all_optima=True)
+    assert unique is not None and unique.optima is not None
+    assert len(unique.optima) == 1
+
+    # The islice form: stop as soon as a second certified optimum appears
+    steps = build_three_optima().ground().optimize_iter(all_optima=True)
+    certified = list(islice((m for m in steps if m.proven), 2))
+    steps.close()
+    assert len(certified) == 2  # not unique, proven with two models' work
+    assert not steps.exhausted
+
+
+def test_all_optima_unsat_returns_none() -> None:
+    program = build_three_optima()
+    program.forbid(Pick(x=ANY))
+    assert program.optimize(all_optima=True) is None
+
+
+def test_bound_starts_the_search_at_a_known_cost() -> None:
+    grounded = build_knapsack().ground()
+    bounded = grounded.optimize(bound=3)
+    assert bounded is not None and bounded.proven
+    assert bounded.cost == (1,)  # same optimum, shorter search
+    # A too-tight bound is reported as unsatisfiable — clasp cannot
+    # distinguish it from a genuinely unsatisfiable program
+    assert grounded.optimize(bound=0) is None
+    # and the bound never leaks into the next search
+    unbounded = grounded.optimize()
+    assert unbounded is not None and unbounded.cost == (1,)
+
+
+def test_multi_priority_bound() -> None:
+    program = ASPProgram()
+    X = Variable("X")
+    program.fact(Choice(Pick(x=1)).add(Pick(x=2)).add(Pick(x=3)).at_least(1).at_most(2))
+    program.minimize(1, X, condition=Pick(x=X), priority=2)
+    program.minimize(X, condition=Pick(x=X), priority=1)
+    result = program.optimize(bound=[1, 1])
+    assert result is not None and result.proven
+    assert result.cost == (1, 1)
+
+
+def test_bound_type_validated() -> None:
+    grounded = build_knapsack().ground()
+    with pytest.raises(TypeError, match="bound must be"):
+        grounded.optimize(bound="cheap")  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match="bound must be"):
+        grounded.optimize(bound=[])
+
+
+def test_optima_mode_never_leaks_between_searches() -> None:
+    # optN is stated per entry: a plain optimize() after all_optima sees
+    # only uncertified descent emissions
+    grounded = build_three_optima().ground()
+    everything = grounded.optimize(all_optima=True)
+    assert everything is not None and everything.optima is not None and len(everything.optima) == 3
+    plain = grounded.optimize()
+    assert plain is not None and plain.proven
+    assert plain.optima is None
+    assert all(not model.proven for model in plain.path)
+    again = grounded.optimize(all_optima=True)
+    assert again is not None and again.optima is not None and len(again.optima) == 3
+
+
+def test_all_optima_re_emits_the_descents_final_model() -> None:
+    # The descent ends on an optimal model (uncertified — the proof lands
+    # after it); the re-enumeration emits that same model again with its
+    # certificate. Filtering on .proven sees each optimum exactly once.
+    result = build_three_optima().optimize(all_optima=True)
+    assert result is not None and result.optima is not None
+    unproven = [m for m in result.path if not m.proven]
+    assert unproven  # a descent happened
+    last_descent = sorted(str(a) for a in unproven[-1].atoms())
+    certified_atomsets = [sorted(str(a) for a in m.atoms()) for m in result.optima]
+    assert last_descent in certified_atomsets  # the same model, now certified
+    assert len(result.optima) == len({tuple(a) for a in certified_atomsets})  # certified are distinct
+
+
+def test_excess_bounds_rejected_when_tiers_are_knowable() -> None:
+    # clasp silently discards the whole bound list when it has more
+    # entries than the program has tiers — even a would-be-UNSAT bound
+    # like 0 prunes nothing. Statically knowable, so statically refused.
+    grounded = build_knapsack().ground()  # one tier
+    with pytest.raises(ValueError, match="silently ignore"):
+        grounded.optimize(bound=[1, 0])
+    assert grounded.optimize(bound=1) is not None  # exact count is fine
+
+
+def test_excess_bounds_with_raw_optimization_hit_clasps_silence() -> None:
+    # With raw optimization the tier count is unknowable: the guard skips,
+    # and this pins clasp's actual behavior — the bounds vanish silently
+    # (bound 0 would otherwise make this unsatisfiable)
+    program = ASPProgram()
+    program.fact(Choice(Pick(x=1)).add(Pick(x=2)).at_least(1))
+    program.raw_asp("#minimize{ X,X : pick(X) }.", predicates=[Pick])
+    result = program.ground().optimize(bound=[1, 0])
+    assert result is not None and result.proven
+    assert result.cost == (1,)  # the whole bound list was ignored

@@ -104,6 +104,10 @@ class WeakConstraint(ProgramElement):
         return self._targets
 
     @property
+    def priority(self) -> int:
+        return self._priority
+
+    @property
     def conditions(self) -> list[Term]:
         """The body (a defensive copy)."""
         return self._conditions.copy()
@@ -201,6 +205,10 @@ class OptimizationDirective(ProgramElement):
     @property
     def optimization(self) -> Optimization:
         return self._optimization
+
+    @property
+    def priority(self) -> int:
+        return self._priority
 
     @property
     def element(self) -> ConditionedElement:

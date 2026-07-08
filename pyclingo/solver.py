@@ -453,6 +453,20 @@ class ASPProgram:
                     f"but no such atoms occur anywhere in the program — nothing derives them."
                 )
 
+    def _optimization_tiers(self) -> int | None:
+        """
+        The number of declared priority tiers, or None when raw text
+        optimizes (the walkers cannot count what they cannot see).
+        """
+        priorities: set[int] = set()
+        for elements in self._segments.values():
+            for element in elements:
+                if isinstance(element, (OptimizationDirective, WeakConstraint)):
+                    priorities.add(element.priority)
+                elif isinstance(element, RawASP) and raw_text_optimizes(element.text):
+                    return None
+        return len(priorities)
+
     def _optimizes(self) -> bool:
         """
         Whether this program optimizes: a native minimize()/maximize()
@@ -679,6 +693,7 @@ class ASPProgram:
             check_all_atoms=has_raw,
             defined_constants=dict(self._defined_constants),
             optimizes=optimizes,
+            optimization_tiers=self._optimization_tiers() if optimizes else 0,
         )
 
     def solve(self, timeout: float = 0, stop_on_log_level: LogLevel = LogLevel.INFO) -> SolveResult:
@@ -740,11 +755,13 @@ class ASPProgram:
         timeout: float = 0,
         max_iterations: int = 0,
         strategy: OptStrategy = OptStrategy.BB,
+        all_optima: bool = False,
+        bound: int | Sequence[int] | None = None,
         stop_on_log_level: LogLevel = LogLevel.INFO,
     ) -> Optimum | None:
         """The best answer set by the objectives; sugar for ground().optimize(). See GroundedProgram.optimize()."""
         return self.ground(stop_on_log_level=stop_on_log_level).optimize(
-            timeout=timeout, max_iterations=max_iterations, strategy=strategy
+            timeout=timeout, max_iterations=max_iterations, strategy=strategy, all_optima=all_optima, bound=bound
         )
 
 
@@ -783,6 +800,7 @@ class GroundedProgram:
         check_all_atoms: bool,
         defined_constants: dict[str, int | str] | None = None,
         optimizes: bool = False,
+        optimization_tiers: int | None = 0,
     ) -> None:
         self._text = text
         self._control = control
@@ -791,6 +809,7 @@ class GroundedProgram:
         self._check_all_atoms = check_all_atoms
         self._defined_constants = defined_constants or {}
         self._optimizes = optimizes
+        self._optimization_tiers = optimization_tiers
         self._active: SearchABC | None = None
 
     @property
@@ -1011,6 +1030,8 @@ class GroundedProgram:
         timeout: float = 0,
         assumptions: Sequence[Predicate | DefaultNegation] | None = None,
         strategy: OptStrategy = OptStrategy.BB,
+        all_optima: bool = False,
+        bound: int | Sequence[int] | None = None,
     ) -> OptimizeSteps:
         """
         The iterator form of optimize().
@@ -1020,9 +1041,41 @@ class GroundedProgram:
         anytime workflow). See OptimizeSteps for the full contract.
 
         strategy selects clasp's optimization algorithm — see OptStrategy;
-        under USC the stream may be just the final optimum.
+        under USC the stream may be just the final optimum. With
+        all_optima the stream continues past the optimality proof and
+        re-emits EVERY optimal model, certified (.proven True) — filter
+        on .proven for just the certified ones. bound starts the search
+        from a known cost (one int per priority level, highest first;
+        fewer bounds than tiers is fine — they apply to the leading
+        tiers): only models at or below it are considered, so a
+        too-tight bound is reported as unsatisfiable — clasp cannot tell
+        the difference. MORE bounds than tiers would be silently ignored
+        wholesale by clasp, so it is rejected here when the tier count
+        is knowable from native directives; raw-text optimization blinds
+        the check, and going raw means the arity is yours to get right.
         """
+        bounds = [] if bound is None else [bound] if isinstance(bound, int) else list(bound)
+        if bound is not None and (
+            not bounds or not all(isinstance(b, int) and not isinstance(b, bool) for b in bounds)
+        ):
+            raise TypeError(f"bound must be an int or a non-empty sequence of ints, got {bound!r}")
+        if bounds and self._optimization_tiers is not None and len(bounds) > self._optimization_tiers:
+            # clasp SILENTLY discards the whole bound list when it is longer
+            # than the program's tier count — no message, no pruning
+            raise ValueError(
+                f"{len(bounds)} bounds for {self._optimization_tiers} priority tier(s): clasp "
+                f"would silently ignore the ENTIRE bound list. Give at most one bound per "
+                f"declared priority (leading tiers first)."
+            )
         converted = self._begin_solve(OPTIMIZE, timeout, assumptions)
+        solve_config = self._control.configuration.solve
+        assert isinstance(solve_config, clingo.Configuration)
+        # Stated on every entry: optN re-emits certified optima after the
+        # proof; a bound rides along as clasp's initial cost ceiling
+        opt_mode = "optN" if all_optima else "opt"
+        if bounds:
+            opt_mode += "," + ",".join(str(b) for b in bounds)
+        solve_config.opt_mode = opt_mode
         solver_config = self._control.configuration.solver
         assert isinstance(solver_config, clingo.Configuration)
         # Stated on every entry, like enum_mode: the strategy is per-solve
@@ -1043,26 +1096,34 @@ class GroundedProgram:
         max_iterations: int = 0,
         assumptions: Sequence[Predicate | DefaultNegation] | None = None,
         strategy: OptStrategy = OptStrategy.BB,
+        all_optima: bool = False,
+        bound: int | Sequence[int] | None = None,
     ) -> Optimum | None:
         """
         The best answer set by the program's objectives. Eager sugar over
-        optimize_iter(). Returns None if the program is unsatisfiable.
-        strategy selects clasp's algorithm (see OptStrategy: USC can be
-        night-and-day faster when branch and bound stalls).
+        optimize_iter(). Returns None if the program is unsatisfiable —
+        or, with bound=, if no model exists within the bound (clasp
+        reports the two identically). strategy selects clasp's algorithm
+        (see OptStrategy: USC can be night-and-day faster when branch and
+        bound stalls).
 
-        timeout (seconds) and max_iterations (descent steps) each bound
-        the work, 0 meaning unbounded; a bounded run returns the best
-        model FOUND SO FAR with proven=False — a genuine solution, just
-        not a proven optimum. The full descent rides along as .path.
-        Raises TimeoutError only when the deadline lands before any model
-        at all (no best-so-far exists to return), and ValueError if the
-        program has no objective.
+        With all_optima the search continues past the optimality proof
+        and the result's .optima holds EVERY certified optimal model
+        (len 1 answers uniqueness); without it, .optima is None and the
+        descent is still available as .path.
+
+        timeout (seconds) and max_iterations (emissions) each bound the
+        work, 0 meaning unbounded; a bounded run returns the best model
+        FOUND SO FAR with proven=False — a genuine solution, just not a
+        proven optimum. Raises TimeoutError only when the deadline lands
+        before any model at all (no best-so-far exists to return), and
+        ValueError if the program has no objective.
         """
         if max_iterations < 0:
             raise ValueError(f"max_iterations must be non-negative (0 means unbounded), got {max_iterations}")
-        steps = self.optimize_iter(timeout, assumptions, strategy)
+        steps = self.optimize_iter(timeout, assumptions, strategy, all_optima=all_optima, bound=bound)
         path: list[CostedModel] = []
-        proven = False
+        complete = False
         try:
             for model in steps:
                 path.append(model)
@@ -1071,20 +1132,25 @@ class GroundedProgram:
                     # unproven: the proof of optimality never ran
                     break
             else:
-                proven = steps.exhausted
+                complete = steps.exhausted
         finally:
             steps.close()
         if not path:
             # A timeout before any model raised from the iteration itself;
             # reaching here empty-handed means the search exhausted
-            return None  # proved unsatisfiable: no solutions at all
-        best = path[-1]
+            return None  # unsatisfiable (or nothing within the bound)
+        certified = [model for model in path if model.proven]
+        best = certified[0] if certified else path[-1]
         return Optimum(
             atoms=best.atoms(),
             cost=best.cost,
             path=tuple(path),
-            proven=proven,
+            # A certificate proves the best directly; a plain search's
+            # proof is exhaustion (its emissions are never certified)
+            proven=bool(certified) or (not all_optima and complete),
             messages=steps.messages,
+            optima=tuple(certified) if all_optima else None,
+            complete=complete,
         )
 
     def _refine_eagerly[C: Consequences](

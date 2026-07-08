@@ -126,40 +126,55 @@ class Model(AtomCollection):
 
 class CostedModel(Model):
     """
-    An answer set found during an optimization descent, carrying its cost.
+    An answer set found during an optimization search, carrying its cost
+    and its certificate.
 
     cost has one entry per declared priority level, highest priority
     first (priorities are ordinal keys — gaps do not pad the tuple). A
     maximization's cost is reported negated: clasp minimizes the negated
     weights, so maximizing a total of 9 reads cost=(-9,). Lower is better
     at every level, in every sense.
+
+    proven is the per-model certificate: True means clasp has PROVED this
+    model optimal (only the all_optima re-enumeration emits such models —
+    a plain descent's emissions are all unproven, even the one that turns
+    out to be the optimum: the proof lands after the last emission).
     """
 
     def __init__(
         self,
         atoms: list[Predicate],
         cost: tuple[int, ...],
+        proven: bool = False,
         messages: list[ClingoMessage] | None = None,
     ) -> None:
         super().__init__(atoms, messages)
         self.cost = cost
+        self.proven = proven
 
     def __repr__(self) -> str:
         counts = ", ".join(f"{cls.get_name()}: {len(atoms)}" for cls, atoms in self._by_class.items())
-        return f"{type(self).__name__}(cost={list(self.cost)}, {counts})"
+        return f"{type(self).__name__}(cost={list(self.cost)}, proven={self.proven}, {counts})"
 
 
 class Optimum(CostedModel):
     """
-    The product of one optimization descent: the best answer set found,
+    The product of one optimization search: the best answer set found,
     its cost, and how it was reached.
 
-    .path holds every model of the descent in order (each strictly better
-    than the last; the final entry is this model) — genuine answer sets,
-    unlike consequence approximations, so an interrupted descent's best
-    is still a real solution. .proven means the search PROVED no better
-    model exists; a bound cutting the descent short leaves proven=False,
-    the anytime reading: "best found so far".
+    .path holds every emission in order — genuine answer sets, unlike
+    consequence approximations, so an interrupted search's best is still
+    a real solution. .proven means the search PROVED this model optimal;
+    a bound cutting the search short leaves proven=False, the anytime
+    reading: "best found so far".
+
+    .optima is every proven-optimal model when the search was asked for
+    them (optimize(all_optima=True)), or None when it was not — the path
+    is still available either way. len(optimum.optima) == 1 answers
+    uniqueness. .complete means the search ran to full exhaustion: the
+    optimality proof finished and, with all_optima, every optimum was
+    enumerated (a timeout mid-enumeration leaves genuine certified
+    optima with complete=False).
     """
 
     def __init__(
@@ -169,10 +184,13 @@ class Optimum(CostedModel):
         path: tuple[CostedModel, ...],
         proven: bool,
         messages: list[ClingoMessage] | None = None,
+        optima: tuple[CostedModel, ...] | None = None,
+        complete: bool = False,
     ) -> None:
-        super().__init__(atoms, cost, messages)
+        super().__init__(atoms, cost, proven, messages)
         self.path = path
-        self.proven = proven
+        self.optima = optima
+        self.complete = complete
 
 
 class Consequences(AtomCollection):
@@ -457,6 +475,14 @@ class OptimizeSteps(SearchABC):
     reports whether the optimum was PROVEN. Returned by optimize_iter();
     optimize() is the eager form.
 
+    Each emission carries its certificate: a plain search's emissions are
+    all proven=False (the optimality proof lands after the last one);
+    under optimize_iter(all_optima=True) the stream continues past the
+    proof and re-emits every optimal model with proven=True — including
+    the descent's own final model, which therefore appears twice (once
+    uncertified, once certified). Filter on .proven to consume each
+    optimum exactly once.
+
     A timeout with models in hand quietly ends iteration with .exhausted
     False: unlike a refinement approximation, the last emission is a real
     solution, so no exception is needed to disown it. A timeout BEFORE
@@ -609,7 +635,9 @@ def _search_generator(
                     if refining:
                         yield AtomCollection(atoms)
                     elif optimizing:
-                        yield CostedModel(atoms, cost=tuple(model.cost), messages=new_messages)
+                        yield CostedModel(
+                            atoms, cost=tuple(model.cost), proven=model.optimality_proven, messages=new_messages
+                        )
                     else:
                         yield Model(atoms, messages=new_messages)
             finally:
