@@ -18,21 +18,24 @@ repos:
         language: system
         types: [python]
 
-      # Run mypy
+      # Run mypy once over the pyproject file list: passing filenames fans
+      # out into parallel batched invocations that thrash the shared cache
       - id: mypy
         name: mypy
         description: "Run 'mypy' to get static type checking"
         entry: uv run mypy
         language: system
         types: [python]
+        pass_filenames: false
 
-      # Run pyright
+      # Run pyright once over the pyproject include list (same reasoning)
       - id: pyright
         name: pyright
         description: "Run 'pyright' to get static type checking"
         entry: uv run pyright
         language: system
         types: [python]
+        pass_filenames: false
 
       # Run pytest
       - id: pytest
