@@ -1,6 +1,7 @@
 """
-Tests for the Segment container: the segments property, add_segment/
-remove_segment, and the segment-header rendering rules.
+Tests for the Segment container: the segments property, add_segment, the
+mapping protocol (program["x"] / assignment / del), and the
+segment-header rendering rules.
 """
 
 import pytest
@@ -72,6 +73,32 @@ def test_add_segment_attaches_a_prebuilt_segment() -> None:
     program.add_segment(Segment("Grid"))  # a different name: case is significant
 
 
+def test_setitem_assigns_and_replaces_in_place() -> None:
+    # Dict-style assignment: a new name appends; an existing name swaps
+    # the segment in place, position preserved — the variant-swap workflow
+    program = ASPProgram()
+    program.fact(P(x=1))
+    program["extra"] = Segment("extra")
+    program.fact(P(x=2), segment="extra")
+    program.add_segment("tail")
+    program.fact(P(x=3), segment="tail")
+    assert [segment.name for segment in program.segments] == ["Rules", "extra", "tail"]
+
+    variant = Segment("extra")
+    variant.append(Rule(head=P(x=9)))
+    program["extra"] = variant
+    assert [segment.name for segment in program.segments] == ["Rules", "extra", "tail"]  # position kept
+    assert program["extra"] is variant
+    rendered = program.render()
+    assert "p_seg(9)." in rendered and "p_seg(2)." not in rendered
+    assert rendered.index("p_seg(9).") < rendered.index("p_seg(3).")  # still mid-program
+
+    with pytest.raises(ValueError, match="does not match the segment's name"):
+        program["extra"] = Segment("other")
+    with pytest.raises(TypeError, match="Expected a Segment"):
+        program["extra"] = "not a segment"  # type: ignore[assignment]
+
+
 def test_segment_names_are_verbatim() -> None:
     assert Segment("GriD").name == "GriD"
     with pytest.raises(ValueError, match="cannot be empty"):
@@ -87,29 +114,29 @@ def test_segment_is_a_container_not_a_builder() -> None:
     assert list(segment) == []
 
 
-def test_remove_segment_drops_content() -> None:
+def test_delitem_drops_content() -> None:
     program = ASPProgram()
     program.fact(P(x=1))
     program.add_segment("extra")
     program.fact(P(x=2), segment="extra")
     assert "p_seg(2)." in program.render()
-    program.remove_segment("extra")
+    del program["extra"]
     rendered = program.render()
     assert "p_seg(2)." not in rendered
     assert "p_seg(1)." in rendered
     assert [segment.name for segment in program.segments] == ["Rules"]
 
 
-def test_remove_segment_unknown_name_lists_existing() -> None:
+def test_delitem_unknown_name_lists_existing() -> None:
     program = ASPProgram()
     program.fact(P(x=1))
     program.add_segment("grid")
     program.fact(P(x=2), segment="grid")
-    with pytest.raises(ValueError, match="Segment 'nope' does not exist; existing segments: 'Rules', 'grid'"):
-        program.remove_segment("nope")
+    with pytest.raises(KeyError, match="Segment 'nope' does not exist; existing segments: 'Rules', 'grid'"):
+        del program["nope"]
 
 
-def test_ground_then_remove_segment_gives_ab_comparison() -> None:
+def test_ground_then_delete_segment_gives_ab_comparison() -> None:
     # Each ground() is an independent snapshot, so removing a segment
     # between groundings compares the program with and without it
     program = ASPProgram()
@@ -117,7 +144,7 @@ def test_ground_then_remove_segment_gives_ab_comparison() -> None:
     program.add_segment("extra")
     program.forbid(P(x=1), segment="extra")  # 2 models with the constraint
     full = program.ground()
-    program.remove_segment("extra")
+    del program["extra"]
     reduced = program.ground()
     assert len(list(full.solve())) == 2  # unaffected by the removal
     assert len(list(reduced.solve())) == 4

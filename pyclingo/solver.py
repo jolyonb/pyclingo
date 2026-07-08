@@ -128,6 +128,23 @@ class ASPProgram:
             raise KeyError(f"Segment '{segment}' does not exist; existing segments: {existing}")
         return self._segments[key]
 
+    def __setitem__(self, segment: str, value: Segment) -> None:
+        """
+        Assign a segment, dict-style: a new name appends, an existing
+        name REPLACES the segment with its rendering position preserved.
+        The segment's own name must match the key: names are never
+        rebound.
+        """
+        key = Segment.validate_name(segment)
+        if not isinstance(value, Segment):
+            raise TypeError(f"Expected a Segment, got {type(value).__name__}")
+        if value.name != key:
+            raise ValueError(
+                f"Key '{key}' does not match the segment's name '{value.name}'; "
+                f"names are never rebound — construct the Segment with the name you mean"
+            )
+        self._segments[key] = value
+
     @property
     def segments(self) -> tuple[Segment, ...]:
         """The program's segments, in rendering order."""
@@ -152,19 +169,16 @@ class ASPProgram:
         self._segments[attached.name] = attached
         return attached
 
-    def remove_segment(self, segment: str) -> None:
+    def __delitem__(self, segment: str) -> None:
         """
-        Remove a segment and everything in it.
-
-        Raises:
-            ValueError: If no such segment exists (the message names the
-                existing segments).
+        Remove a segment and everything in it; KeyError (naming the
+        existing segments) if absent. Existing groundings are unaffected.
         """
-        normalized_segment = self._segment_key(segment)
-        if normalized_segment not in self._segments:
+        key = Segment.validate_name(segment)
+        if key not in self._segments:
             existing = ", ".join(f"'{name}'" for name in self._segments) or "none"
-            raise ValueError(f"Segment '{segment}' does not exist; existing segments: {existing}")
-        del self._segments[normalized_segment]
+            raise KeyError(f"Segment '{segment}' does not exist; existing segments: {existing}")
+        del self._segments[key]
 
     def fact(self, *facts: Predicate | Choice, segment: str | None = None) -> None:
         """
