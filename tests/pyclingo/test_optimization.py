@@ -13,6 +13,7 @@ from pyclingo import (
     ANY,
     ASPProgram,
     Choice,
+    ConditionalLiteral,
     CostedModel,
     Count,
     Optimum,
@@ -354,3 +355,156 @@ def test_optimize_iter_timeout_before_any_model_raises() -> None:
         list(steps)
     assert steps.finished
     assert not steps.exhausted
+
+
+def test_penalize_renders_weak_constraint() -> None:
+    program = ASPProgram()
+    C, S = Variable("C"), Variable("S")
+    Island = Predicate.define("island_wc", ["loc", "size"])
+    program.fact(Island(loc=1, size=3))
+    program.penalize(Island(loc=C, size=S), weight=S, terms=[C], priority=2)
+    assert ":~ island_wc(C, S). [S@2, C]" in program.render()
+    program2 = ASPProgram()
+    program2.fact(Island(loc=1, size=3))
+    program2.penalize(Island(loc=C, size=S), weight=S, terms=[C])  # bare priority
+    assert ":~ island_wc(C, S). [S, C]" in program2.render()
+
+
+def test_penalize_is_minimize_in_disguise() -> None:
+    # The two spellings share one tuple set: identical tuples dedup, and
+    # the optima agree
+    X = Variable("X")
+
+    def build_with(spelling: str) -> ASPProgram:
+        program = ASPProgram()
+        program.fact(Choice(Pick(x=1)).add(Pick(x=2)).add(Pick(x=3)).at_least(1))
+        if spelling == "penalize":
+            program.penalize(Pick(x=X), weight=X, terms=[X])
+        else:
+            program.minimize(X, X, condition=Pick(x=X))
+        return program
+
+    assert optimal_cost(build_with("penalize")) == optimal_cost(build_with("minimize")) == [1]
+
+    both = ASPProgram()
+    both.fact(Pick(x=1), Pick(x=2))
+    both.penalize(Pick(x=X), weight=1, terms=[X])
+    both.minimize(1, X, condition=Pick(x=X))  # identical tuples across spellings
+    assert optimal_cost(both) == [2]
+
+
+def test_penalize_detected_as_optimizing() -> None:
+    program = ASPProgram()
+    X = Variable("X")
+    program.fact(Choice(Pick(x=1)).add(Pick(x=2)).at_least(1))
+    program.penalize(Pick(x=X), weight=X, terms=[X])
+    with pytest.raises(ValueError, match=r"optimize\(\)"):
+        program.solve()
+    result = program.optimize()
+    assert result is not None and result.proven
+    assert result.cost == (1,)
+
+
+def test_penalize_scoping_is_rule_shaped() -> None:
+    # The body binds like a rule body; weight/terms must be bound by it
+    program = ASPProgram()
+    W, X = Variable("W"), Variable("X")
+    with pytest.raises(ValueError, match="Unsafe variable"):
+        program.penalize(Pick(x=X), weight=W, terms=[X])
+    with pytest.raises(ValueError, match="Singleton variable"):
+        Pair = Predicate.define("pair_wc", ["a", "b"])
+        program.penalize(Pair(a=X, b=Variable("Y")), weight=1, terms=[X])
+
+
+def test_penalize_weight_types_validated() -> None:
+    program = ASPProgram()
+    with pytest.raises(TypeError, match="integer-valued"):
+        program.penalize(Pick(x=ANY), weight=String("w"))
+    with pytest.raises(TypeError, match="priority must be an int"):
+        program.penalize(Pick(x=ANY), weight=1, priority="high")  # type: ignore[arg-type]
+
+
+def test_penalize_defaults_charge_per_match() -> None:
+    # The default tuple is the conditions' variables, written out in the
+    # render: each ground match charges separately (gringo's bare tuple
+    # would silently collapse them all into one charge)
+    program = ASPProgram()
+    X = Variable("X")
+    program.fact(Pick(x=1), Pick(x=2), Pick(x=3))
+    program.penalize(Pick(x=X))
+    assert ":~ pick(X). [1, X]" in program.render()
+    assert optimal_cost(program) == [3]  # one charge per match
+
+
+def test_penalize_empty_terms_collapse_deliberately() -> None:
+    # terms=[] is the explicit opt-in to gringo's single-charge semantics;
+    # the singleton lint pushes the condition variable to ANY, which reads
+    # correctly: "if any pick exists, charge once"
+    program = ASPProgram()
+    program.fact(Pick(x=1), Pick(x=2), Pick(x=3))
+    program.penalize(Pick(x=ANY), terms=[])
+    assert ":~ pick(_). [1]" in program.render()
+    assert optimal_cost(program) == [1]  # every match, one charge
+
+
+def test_penalize_accepts_aggregate_comparisons() -> None:
+    # A weak constraint's conditions form a rule body, exactly as in
+    # forbid(): aggregate comparisons are legal there
+    program = ASPProgram()
+    X = Variable("X")
+    program.fact(Choice(Pick(x=1)).add(Pick(x=2)).add(Pick(x=3)))
+    program.penalize(Count(X, condition=Pick(x=X)) >= 2, terms=[])
+    assert ":~ #count{ X : pick(X) } >= 2. [1]" in program.render()
+    result = program.optimize()
+    assert result is not None and result.proven
+    assert result.cost == (0,)  # the optimum picks at most one, dodging the charge
+    assert len(result.atoms(Pick)) <= 1
+
+
+def test_penalize_requires_conditions() -> None:
+    program = ASPProgram()
+    with pytest.raises(ValueError, match="at least one condition"):
+        program.penalize(weight=1)
+
+
+def test_choice_in_body_teaches_the_count_spelling() -> None:
+    # clingo's body braces are a cardinality test, not a choice; the two
+    # meanings get two spellings (Choice for heads, Count comparisons for
+    # bodies) and the error teaches the translation
+    program = ASPProgram()
+    X = Variable("X")
+    with pytest.raises(ValueError, match="Count comparison"):
+        program.forbid(Choice(Pick(x=X)).at_least(2))
+    with pytest.raises(ValueError, match="Count comparison"):
+        program.penalize(Choice(Pick(x=X)).at_least(2))  # forbid parity: same teacher
+
+
+def test_penalize_accepts_conditional_literals() -> None:
+    # forbid parity: a CL is a legal body term, and the separator AFTER it
+    # is a semicolon (Rule's own rendering rule, shared)
+    Cell = Predicate.define("cell_wc", ["x"], show=False)
+    Covered = Predicate.define("covered_wc", ["x"])
+    program = ASPProgram()
+    X = Variable("X")
+    program.fact(Cell(x=1), Cell(x=2))
+    program.fact(Choice(Covered(x=1)).add(Covered(x=2)))
+    program.penalize(
+        ConditionalLiteral(Covered(x=X), [Cell(x=X), Covered(x=X)]),
+        Covered(x=1),
+        terms=[],
+    )
+    assert ":~ covered_wc(X) : cell_wc(X), covered_wc(X); covered_wc(1). [1]" in program.render()
+    result = program.optimize()
+    assert result is not None and result.proven
+    assert result.cost == (0,)  # skip covering everything (or cell 1) and pay nothing
+
+
+def test_auto_terms_exclude_construct_locals() -> None:
+    # The auto-tuple takes only GLOBAL body variables: an aggregate's local
+    # X must not leak into the tuple (it would be unsafe there)
+    Tag = Predicate.define("tag_at", ["t"])
+    program = ASPProgram()
+    X, T = Variable("X"), Variable("T")
+    program.fact(Choice(Pick(x=1)).add(Pick(x=2)), Tag(t=1), Tag(t=2))
+    program.penalize(Tag(t=T), Count(X, condition=Pick(x=X)) >= 2)
+    assert ":~ tag_at(T), #count{ X : pick(X) } >= 2. [1, T]" in program.render()

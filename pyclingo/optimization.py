@@ -20,9 +20,10 @@ import re
 from enum import StrEnum
 
 from pyclingo.conditioned_element import CONDITION_TYPE, ConditionedElement
-from pyclingo.core import AtomSign, Expression, Number, String, Value
+from pyclingo.core import AtomSign, Expression, Number, String, Term, Value, Variable
 from pyclingo.predicate import Predicate
-from pyclingo.program_elements import ProgramElement
+from pyclingo.program_elements import ProgramElement, render_body_terms
+from pyclingo.scoping import body_global_variables
 
 # What may be aggregated over: the same universe as aggregate tuple terms
 type OPTIMIZATION_TERM_TYPE = Value | Expression | Predicate
@@ -42,6 +43,99 @@ def raw_text_optimizes(text: str) -> bool:
     comments are stripped first so mentions there do not count.
     """
     return _OPTIMIZATION_TOKENS.search(_INERT_TEXT.sub("", text)) is not None
+
+
+class WeakConstraint(ProgramElement):
+    """
+    A constraint that charges instead of forbidding: ":~ conditions. [W@P, T]".
+
+    Semantically identical to a #minimize statement — gringo translates
+    both to the same construct, and their tuples share the one global set —
+    but the spelling states intent: penalize() reads as forbid() that
+    negotiates. Constructed via ASPProgram.penalize(), not directly.
+    """
+
+    def __init__(
+        self,
+        conditions: tuple[Term, ...],
+        weight: int | OPTIMIZATION_TERM_TYPE,
+        tuple_terms: tuple[OPTIMIZATION_TERM_TYPE, ...] | None,
+        priority: int,
+    ) -> None:
+        if isinstance(weight, int):
+            weight = Number(weight)
+        if isinstance(weight, String):
+            raise TypeError("Weak-constraint weight must be integer-valued, got a String")
+        if not isinstance(weight, (Value, Expression)):
+            raise TypeError(f"Weak-constraint weight must be an int, Value, or Expression, got {type(weight).__name__}")
+        if tuple_terms is None:
+            # Per-match charging by default: the tuple gets the conditions'
+            # global variables, spelled out in the render. gringo's bare
+            # tuple collapses every match to ONE charge (the ASP-Core-2
+            # standard specifies this implicit extension; gringo omits it,
+            # so we write it explicitly). Pass terms=[] to collapse on
+            # purpose.
+            names = sorted(body_global_variables(list(conditions)))
+            tuple_terms = tuple(Variable(name) for name in names)
+        for term in tuple_terms:
+            if not isinstance(term, (Value, Expression, Predicate)):
+                raise TypeError(
+                    f"Weak-constraint tuple terms must be Values, Expressions, or Predicates, got {type(term).__name__}"
+                )
+        if not isinstance(priority, int) or isinstance(priority, bool):
+            raise TypeError(f"Weak-constraint priority must be an int, got {type(priority).__name__}")
+        if not conditions:
+            raise ValueError("A weak constraint requires at least one condition")
+        # The conditions form a RULE BODY: everything forbid() accepts is
+        # legal here, validated the same way (a Choice raises its own
+        # teaching error about body braces)
+        for cond in conditions:
+            if not isinstance(cond, Term):
+                raise TypeError(f"Weak-constraint conditions must be Terms, got {type(cond).__name__}")
+            cond.validate_in_context(is_in_head=False)
+
+        self._priority = priority
+        self._targets: tuple[Value | Expression | Predicate, ...] = (weight, *tuple_terms)
+        self._conditions = list(conditions)
+
+    @property
+    def targets(self) -> tuple[Value | Expression | Predicate, ...]:
+        """The weight followed by the tuple terms."""
+        return self._targets
+
+    @property
+    def conditions(self) -> list[Term]:
+        """The body (a defensive copy)."""
+        return self._conditions.copy()
+
+    def freeze(self) -> None:
+        for target in self._targets:
+            target.freeze()
+        for cond in self._conditions:
+            cond.freeze()
+
+    def render(self) -> str:
+        weight_str = self._targets[0].render()
+        if self._priority != 0:
+            weight_str = f"{weight_str}@{self._priority}"
+        tuple_str = ", ".join([weight_str, *(term.render() for term in self._targets[1:])])
+        return f":~ {render_body_terms(self._conditions)}. [{tuple_str}]"
+
+    def collect_defined_constants(self) -> set[str]:
+        constants: set[str] = set()
+        for term in (*self._targets, *self._conditions):
+            constants.update(term.collect_defined_constants())
+        return constants
+
+    def collect_predicate_signs(self) -> set[AtomSign]:
+        # The body holds atoms; weight and tuple terms sit in argument
+        # positions — demote their predicate occurrences to non-atoms
+        signs: set[AtomSign] = set()
+        for target in self._targets:
+            signs.update((predicate, negated, False) for predicate, negated, _ in target.collect_predicate_signs())
+        for cond in self._conditions:
+            signs.update(cond.collect_predicate_signs())
+        return signs
 
 
 class Optimization(StrEnum):

@@ -12,11 +12,12 @@ from pyclingo.optimization import (
     OPTIMIZATION_TERM_TYPE,
     Optimization,
     OptimizationDirective,
+    WeakConstraint,
     raw_text_optimizes,
 )
 from pyclingo.predicate import Predicate
 from pyclingo.program_elements import BlankLine, Comment, ProgramElement, RawASP, Rule
-from pyclingo.scoping import validate_optimization_element, validate_rule
+from pyclingo.scoping import validate_optimization_element, validate_rule, validate_weak_constraint
 from pyclingo.solve_result import (
     OPTIMIZE,
     SEARCH_MODE,
@@ -249,6 +250,40 @@ class ASPProgram:
         directive.element.freeze()
         self._segments[self._segment_key(segment)].append(directive)
 
+    def penalize(
+        self,
+        *conditions: Term,
+        weight: int | OPTIMIZATION_TERM_TYPE = 1,
+        terms: Sequence[OPTIMIZATION_TERM_TYPE] | None = None,
+        priority: int = 0,
+        segment: str | None = None,
+    ) -> None:
+        """
+        A forbid() that charges instead of forbidding: each ground match of
+        the conditions adds weight to the cost, and optimize() prefers
+        answer sets paying least. Renders as a weak constraint,
+        ":~ conditions. [weight@priority, terms]" — semantically identical
+        to minimize() (one shared tuple set; duplicate tuples count once),
+        so the spelling is intent: penalize() for soft constraints,
+        minimize() for objectives.
+
+        By default each ground match is charged separately: the tuple gets
+        the conditions' variables, written out in the render. Pass terms=
+        to charge by a different identity — terms=[] deliberately collapses
+        EVERY match into one charge (gringo's own bare-tuple semantics).
+        Every weight/terms variable must be bound by the conditions.
+
+            penalize(Island(loc=C, size=S), weight=S)
+
+        charges each island its size.
+        """
+        weak = WeakConstraint(conditions, weight, tuple(terms) if terms is not None else None, priority)
+        validate_weak_constraint(
+            weak.targets, list(weak.conditions), weak.render(), check_singletons=self._check_singletons
+        )
+        weak.freeze()
+        self._segments[self._segment_key(segment)].append(weak)
+
     def raw_asp(self, text: str, segment: str | None = None, predicates: Sequence[type[Predicate]] = ()) -> None:
         """
         Add a verbatim block of ASP text: the escape hatch for constructs
@@ -426,7 +461,7 @@ class ASPProgram:
         """
         for elements in self._segments.values():
             for element in elements:
-                if isinstance(element, OptimizationDirective):
+                if isinstance(element, (OptimizationDirective, WeakConstraint)):
                     return True
                 if isinstance(element, RawASP) and raw_text_optimizes(element.text):
                     return True

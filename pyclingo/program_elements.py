@@ -89,6 +89,21 @@ class BlankLine(ProgramElement):
         return ""
 
 
+def render_body_terms(terms: list[Term]) -> str:
+    """
+    Render a rule body's terms with the correct separators: a conditional
+    literal's condition extends through commas, so the separator FOLLOWING
+    one must be a semicolon — otherwise the next literal is absorbed into
+    the condition. Shared by Rule and WeakConstraint.
+    """
+    parts = []
+    for i, term in enumerate(terms):
+        parts.append(term.render())
+        if i < len(terms) - 1:
+            parts.append("; " if isinstance(term, ConditionalLiteral) else ", ")
+    return "".join(parts)
+
+
 class Rule(ProgramElement):
     """Represents an ASP rule."""
 
@@ -143,15 +158,7 @@ class Rule(ProgramElement):
 
         if self.body:
             result += " :- " if self.head is not None else ":- "
-            # A conditional literal's condition extends through commas, so the
-            # separator FOLLOWING a conditional literal must be a semicolon —
-            # otherwise the next body literal is absorbed into the condition
-            parts = []
-            for i, term in enumerate(self.body):
-                parts.append(term.render())
-                if i < len(self.body) - 1:
-                    parts.append("; " if isinstance(term, ConditionalLiteral) else ", ")
-            result += "".join(parts)
+            result += render_body_terms(self.body)
 
         result += "."
 

@@ -232,9 +232,13 @@ class Choice(Term):
         return f"{type(self).__name__}({self.render()!r})"
 
     def validate_in_context(self, is_in_head: bool) -> None:
-        """Choice rules are head-only: raises in bodies."""
+        """Choice rules are head-only: raises in bodies, teaching the body spelling."""
         if not is_in_head:
-            raise ValueError("Choice rules can only be used in rule heads, not in rule bodies")
+            raise ValueError(
+                "A Choice belongs in a rule head, where braces CHOOSE. In a body, "
+                "clingo's braces mean a cardinality TEST — a different construct "
+                "pyclingo spells as a Count comparison: Count(X, condition=...) >= n."
+            )
 
     def collect_defined_constants(self) -> set[str]:
         constants = set()

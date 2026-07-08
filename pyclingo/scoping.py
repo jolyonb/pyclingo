@@ -354,6 +354,49 @@ def validate_optimization_element(element: ConditionedElement, rule_text: str, c
         )
 
 
+def body_global_variables(conditions: list[Term]) -> set[str]:
+    """
+    The genuinely GLOBAL variables of a rule body: everything a construct
+    (conditional literal, aggregate) keeps local is excluded. This is what
+    a weak constraint's auto-tuple may safely contain.
+    """
+    scopes = analyze(None, conditions)
+    _resolve_localities(scopes)
+    return set(scopes.global_occurrences())
+
+
+def validate_weak_constraint(
+    targets: tuple[Term, ...], conditions: list[Term], rule_text: str, check_singletons: bool = True
+) -> None:
+    """
+    Validate a weak constraint: the body binds exactly as a rule body does
+    (aggregate comparisons included), and the weight and tuple terms must
+    be bound by it, exactly as a head must be.
+    """
+    scopes = analyze(None, conditions)
+    for target in targets:
+        _count_variables(target, scopes.head_counts)
+    _resolve_localities(scopes)
+    bound = _bind_fixpoint(scopes.global_binders, scopes.equality_edges, scopes.directed_edges)
+    unsafe = sorted(set(scopes.global_occurrences()) - bound)
+    if unsafe:
+        names = ", ".join(unsafe)
+        raise ValueError(
+            f"Unsafe variable(s) {names} in weak constraint: {rule_text}\n"
+            f"The weight and tuple terms must be bound by a positive body literal."
+        )
+    if not check_singletons:
+        return
+    singletons = sorted(name for name, count in scopes.global_occurrences().items() if count == 1)
+    if singletons:
+        names = ", ".join(singletons)
+        raise ValueError(
+            f"Singleton variable(s) {names} in weak constraint: {rule_text}\n"
+            f"A variable used exactly once is usually a typo; use ANY for an "
+            f"intentional don't-care."
+        )
+
+
 def validate_rule(head: Term | None, body: list[Term], rule: str | Rule, check_singletons: bool = True) -> None:
     """
     Raise ValueError for unsafe or singleton variables, at rule construction
