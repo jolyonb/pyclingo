@@ -877,6 +877,19 @@ class GroundedProgram:
         return self._text
 
     @property
+    def control(self) -> clingo.Control:
+        """
+        The underlying clingo Control: the escape hatch to clingo internals
+        (configuration, externals, theory atoms, observers) — at your own
+        risk. pyclingo's guarantees stop here: direct mutations bypass the
+        sequential-solve guard, the per-solve configuration the verbs
+        restate on every entry, and the message bookkeeping. Reconfigure
+        between solves, never during one, and prefer the pyclingo verbs
+        where they exist.
+        """
+        return self._control
+
+    @property
     def optimization_levels(self) -> tuple[int, ...]:
         """
         The SURVIVING optimization priority levels, highest first — ground

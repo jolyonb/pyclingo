@@ -249,3 +249,16 @@ def test_racing_solves_admit_exactly_one() -> None:
             thread.join()
         assert sorted(outcomes) == ["admitted", "refused"]
         grounded.abandon()
+
+
+def test_control_escape_hatch_exposes_clingo_internals() -> None:
+    # Use-at-your-own-risk access to the underlying Control: pyclingo's
+    # guarantees stop at this property, but the internals are reachable —
+    # here, the grounding's own atom table
+    program = ASPProgram()
+    P = Predicate.define("p_ctl", ["x"])
+    program.fact(P(x=1), P(x=2))
+    grounded = program.ground()
+    assert isinstance(grounded.control, clingo.Control)
+    assert len(list(grounded.control.symbolic_atoms)) == 2
+    assert next(iter(grounded.solve())).atoms(P)  # the verbs still work alongside
