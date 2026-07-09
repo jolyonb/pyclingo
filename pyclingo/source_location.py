@@ -124,6 +124,25 @@ def _module_is_plumbing(module_name: object) -> bool:
     return any(module_name == prefix or module_name.startswith(prefix + ".") for prefix in _skip_prefixes)
 
 
+def _first_user_frame(frame: FrameType | None) -> FrameType | None:
+    """
+    The first frame outward that is not plumbing, or None. A non-string
+    __name__ (exec with hand-built globals) is not identifiable as
+    plumbing, so it counts as user code. Frozen interpreter frames
+    (import machinery) are never user code: skip them, so an import-time
+    statement lands on the importing line.
+    """
+    while frame is not None:
+        if (
+            not _module_is_plumbing(frame.f_globals.get("__name__"))
+            and id(frame.f_code) not in _skip_code_objects
+            and not frame.f_code.co_filename.startswith("<frozen")
+        ):
+            return frame
+        frame = frame.f_back
+    return None
+
+
 def capture_location() -> SourceLocation | None:
     """
     The first stack frame outward that is not plumbing, as a
@@ -133,18 +152,20 @@ def capture_location() -> SourceLocation | None:
     override = _override.get()
     if override is not None:
         return override
-    frame: FrameType | None = sys._getframe(1)
-    while frame is not None:
-        filename = frame.f_code.co_filename
-        # A non-string __name__ (exec with hand-built globals) is not
-        # identifiable as plumbing, so it counts as user code. Frozen
-        # interpreter frames (import machinery) are never user code: skip
-        # them, so an import-time statement lands on the importing line.
-        if (
-            not _module_is_plumbing(frame.f_globals.get("__name__"))
-            and id(frame.f_code) not in _skip_code_objects
-            and not filename.startswith("<frozen")
-        ):
-            return SourceLocation(filename, frame.f_lineno)
-        frame = frame.f_back
-    return None
+    frame = _first_user_frame(sys._getframe(1))
+    return SourceLocation(frame.f_code.co_filename, frame.f_lineno) if frame is not None else None
+
+
+def capture_module() -> str | None:
+    """
+    The __name__ of the first non-plumbing stack frame outward, or None
+    when every frame is plumbing or the frame has no usable __name__ —
+    the module a runtime-built class should claim as its own, matching
+    where capture_location points. location_override() does not apply:
+    it carries a location, not a module.
+    """
+    frame = _first_user_frame(sys._getframe(1))
+    if frame is None:
+        return None
+    name = frame.f_globals.get("__name__")
+    return name if isinstance(name, str) else None

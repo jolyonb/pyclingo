@@ -79,14 +79,16 @@ class Comment(ProgramElement):
         return f"%*\n{self.text}\n*%" if "\n" in self.text else f"% {self.text}"
 
 
-def _find_part_directive(text: str) -> str | None:
+def _find_unsupported_directive(text: str) -> str | None:
     """
-    The first #program/#include directive in the text — outside string
-    literals, comments, and #script blocks — or None. Both directives
+    The first #program/#include/#external directive in the text — outside
+    string literals, comments, and #script blocks — or None. The first two
     restructure the program itself (parts, files), which a single-base-part
-    grounding cannot honor. Block comments NEST in gringo (see Comment), so
-    only depth 0 is code; a character scan is required because a line can
-    close a comment and resume code, and % may sit inside a string.
+    grounding cannot honor; #external declares atoms whose truth is set
+    through an API no pyclingo verb speaks. Block comments NEST in gringo
+    (see Comment), so only depth 0 is code; a character scan is required
+    because a line can close a comment and resume code, and % may sit
+    inside a string.
     """
     i, n = 0, len(text)
     depth = 0
@@ -124,6 +126,8 @@ def _find_part_directive(text: str) -> str | None:
             return "#program"
         elif text.startswith("#include", i):
             return "#include"
+        elif text.startswith("#external", i):
+            return "#external"
         else:
             i += 1
     return None
@@ -156,7 +160,16 @@ class RawASP(ProgramElement):
         # A subclass converts to its natural plain str first: what the scan
         # below inspects is exactly what will render
         self.text = str(text)
-        if directive := _find_part_directive(self.text):
+        if directive := _find_unsupported_directive(self.text):
+            if directive == "#external":
+                raise ValueError(
+                    "raw_asp() text contains #external, which pyclingo cannot honor: an "
+                    "external atom's truth is set per solve through Control.assign_external, "
+                    "which no pyclingo verb speaks — left unassigned the atom is false, and "
+                    "every rule through it silently drops from the model. For a per-solve "
+                    "switch, state the atom with choose(Choice(...)) and pin it with "
+                    "assumptions= on solve()."
+                )
             raise ValueError(
                 f"raw_asp() text contains {directive}, which pyclingo cannot honor: the program "
                 f"grounds a single 'base' part, so every statement rendered after a part "

@@ -335,9 +335,35 @@ class Search(ABC):
     counters in their mode's vocabulary.
     """
 
-    def __init__(self, iterator: Generator[Any], state: _SearchState) -> None:
+    def __init__(
+        self,
+        control: clingo.Control,
+        predicate_types: PredicateTypes,
+        timeout: float,
+        message_handler: ClingoMessageHandler,
+        assumptions: list[tuple[clingo.Symbol, bool]] | None,
+        mode: SearchMode,
+    ) -> None:
+        """
+        One constructor for every handle: builds the shared state and the
+        mode's generator, clocking wall time from here. Subclasses fix the
+        mode that defines them and add nothing else.
+        """
+        state = _SearchState()
         self._state = state
-        self._iterator = _ClosedCheckingIterator(iterator, state)
+        self._iterator = _ClosedCheckingIterator(
+            _search_generator(
+                control,
+                predicate_types,
+                timeout,
+                time.perf_counter(),
+                state,
+                message_handler,
+                assumptions or [],
+                mode=mode,
+            ),
+            state,
+        )
 
     @abstractmethod
     def __iter__(self) -> Iterator[AtomCollection]:
@@ -432,20 +458,7 @@ class SolveResult(Search):
         message_handler: ClingoMessageHandler,
         assumptions: list[tuple[clingo.Symbol, bool]] | None = None,
     ) -> None:
-        state = _SearchState()
-        super().__init__(
-            _search_generator(
-                control,
-                predicate_types,
-                timeout,
-                time.perf_counter(),
-                state,
-                message_handler,
-                assumptions or [],
-                mode=None,
-            ),
-            state,
-        )
+        super().__init__(control, predicate_types, timeout, message_handler, assumptions, mode=None)
 
     @property
     def exhausted(self) -> bool:
@@ -491,20 +504,7 @@ class RefinementSteps(Search):
         assumptions: list[tuple[clingo.Symbol, bool]],
         mode: RefinementMode,
     ) -> None:
-        state = _SearchState()
-        super().__init__(
-            _search_generator(
-                control,
-                predicate_types,
-                timeout,
-                time.perf_counter(),
-                state,
-                message_handler,
-                assumptions,
-                mode=mode,
-            ),
-            state,
-        )
+        super().__init__(control, predicate_types, timeout, message_handler, assumptions, mode)
 
     @property
     def exhausted(self) -> bool:
@@ -554,20 +554,7 @@ class OptimizeSteps(Search):
         message_handler: ClingoMessageHandler,
         assumptions: list[tuple[clingo.Symbol, bool]],
     ) -> None:
-        state = _SearchState()
-        super().__init__(
-            _search_generator(
-                control,
-                predicate_types,
-                timeout,
-                time.perf_counter(),
-                state,
-                message_handler,
-                assumptions,
-                mode=OPTIMIZE,
-            ),
-            state,
-        )
+        super().__init__(control, predicate_types, timeout, message_handler, assumptions, mode=OPTIMIZE)
 
     @property
     def exhausted(self) -> bool:

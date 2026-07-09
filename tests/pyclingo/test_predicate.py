@@ -1,3 +1,6 @@
+import copy
+import pickle
+
 import pytest
 
 from pyclingo import ASPProgram, Comparison, DefaultNegation, Field, Number, Predicate, Variable
@@ -17,6 +20,41 @@ def test_definition_sites_are_recorded_for_both_syntaxes() -> None:
     assert defined._defined_at is not None and defined._defined_at.filename == __file__
     cloned = defined.in_namespace("ns_site")
     assert cloned._defined_at is not None and cloned._defined_at.filename == __file__
+
+
+def test_runtime_built_classes_claim_the_callers_module() -> None:
+    # Like _defined_at, __module__ must point at user code, not the
+    # class-creation machinery (repr and pickle errors name it)
+    defined = Predicate.define("p_mod", ["x"])
+    assert defined.__module__ == __name__
+    assert defined.in_namespace("ns_mod").__module__ == __name__
+
+
+def test_atoms_refuse_pickle_with_teaching() -> None:
+    # Un-interned Values and unfindable runtime classes make pickle unsound;
+    # the wall teaches render()-based transport
+    defined = Predicate.define("p_pkl", ["x"])
+    with pytest.raises(TypeError, match=r"do not pickle.*render\(\)"):
+        pickle.dumps(defined(x=1))
+    with pytest.raises(TypeError, match=r"do not pickle"):
+        pickle.dumps(CluePred(loc="a1", value=7))  # class syntax hits the same wall
+
+
+def test_copies_of_an_atom_are_the_atom() -> None:
+    # Predicates are immutable data: copy and deepcopy return the original,
+    # exactly as for interned Values
+    atom = CluePred(loc="a1", value=7)
+    assert copy.copy(atom) is atom
+    assert copy.deepcopy(atom) is atom
+
+
+def test_negation_builds_a_distinct_atom_despite_copy_identity() -> None:
+    # __neg__ makes its own duplicate for the sign flip; __copy__ returning
+    # self must never let the flip mutate the original
+    atom = CluePred(loc="a1", value=7)
+    negated = -atom
+    assert negated is not atom
+    assert negated.negated is True and atom.negated is False
 
 
 def test_predicate_default_negation_operator() -> None:

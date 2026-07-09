@@ -209,6 +209,24 @@ def test_part_directives_in_comments_and_scripts_are_inert() -> None:
     throwaway.raw_asp("#script (python)\n#program fake.")
 
 
+def test_external_rejected_with_teaching() -> None:
+    # An #external atom's truth needs Control.assign_external, which no
+    # pyclingo verb speaks: left unassigned it is false and rules through
+    # it silently drop — rejected at construction, pointing at the
+    # choice + assumptions spelling
+    program = ASPProgram()
+    with pytest.raises(ValueError, match=r"#external.*assign_external.*choose\(Choice\(\.\.\.\)\).*assumptions="):
+        program.raw_asp("#external toggle(1).")
+
+
+def test_external_in_comments_and_strings_is_inert() -> None:
+    program = ASPProgram()
+    P = Predicate.define("p_ext", ["x"])
+    program.raw_asp("% #external note.\np_ext(1).", predicates=[P])
+    program.raw_asp('p_ext("#external in a string").')
+    assert "p_ext(1)." in program.render()
+
+
 def test_part_directives_are_found_when_code_resumes_mid_line() -> None:
     # The scan is character-level: a directive after a same-line comment
     # close, or after a string containing %, is still live code

@@ -1,4 +1,3 @@
-import copy
 import keyword
 import re
 import threading
@@ -6,7 +5,7 @@ import types
 from abc import ABCMeta
 from dataclasses import Field as DataclassField
 from dataclasses import dataclass, fields
-from typing import Any, ClassVar, Self, cast, dataclass_transform, get_args, get_origin, overload
+from typing import Any, ClassVar, NoReturn, Self, cast, dataclass_transform, get_args, get_origin, overload
 
 from pyclingo.core import (
     DefinedConstant,
@@ -21,7 +20,7 @@ from pyclingo.core import (
     Value,
     Variable,
 )
-from pyclingo.source_location import SourceLocation, capture_location
+from pyclingo.source_location import SourceLocation, capture_location, capture_module
 
 # Type aliases. PredicateField is any argument a predicate accepts, and doubles
 # as the field annotation for class-syntax predicates
@@ -345,7 +344,12 @@ class Predicate(PredicateBase, Negatable, metaclass=_PredicateMeta):
                     kwds={"name": cls._predicate_name, "namespace": namespace, "show": cls._show},
                 )
                 assert issubclass(clone, Predicate)
-                clone._defined_at = capture_location()  # the in_namespace() call, not types.new_class
+                # Attribute to the caller, not types.new_class's frame: the
+                # location AND the module (unfixed, __module__ blames the
+                # class-creation machinery in every repr and pickle error)
+                clone._defined_at = capture_location()
+                if (module := capture_module()) is not None:
+                    clone.__module__ = module
                 clones[namespace] = clone
         return cast(type[Self], clone)
 
@@ -424,7 +428,12 @@ class Predicate(PredicateBase, Negatable, metaclass=_PredicateMeta):
             exec_body=set_annotations,
         )
         assert issubclass(new_class, cls)
-        new_class._defined_at = capture_location()  # the define() call, not types.new_class
+        # Attribute to the caller, not types.new_class's frame: the location
+        # AND the module (unfixed, __module__ blames the class-creation
+        # machinery in every repr and pickle error)
+        new_class._defined_at = capture_location()
+        if (module := capture_module()) is not None:
+            new_class.__module__ = module
         return cast(type[Self], new_class)
 
     def __post_init__(self) -> None:
@@ -598,9 +607,37 @@ class Predicate(PredicateBase, Negatable, metaclass=_PredicateMeta):
         UNSAT. The sign is part of the atom, exactly as in clingo's own
         symbol model; negating a negated atom gives back the positive one.
         """
-        negation = copy.copy(self)
+        # A field-sharing duplicate, built directly: __copy__ returns self
+        # (predicates are immutable data), so it cannot make the distinct
+        # object the sign flip needs
+        negation = object.__new__(type(self))
+        for key, value in self.__dict__.items():
+            object.__setattr__(negation, key, value)
         object.__setattr__(negation, "_negated", not self.negated)
         return negation
+
+    def __copy__(self) -> Self:
+        """Predicates are immutable data: the copy IS the original (as for Values)."""
+        return self
+
+    def __deepcopy__(self, memo: dict[int, Any]) -> Self:
+        """
+        Immutable, holding interned Values: the deep copy IS the original.
+        A distinct copy would carry equal-but-not-identical Values past
+        their cache, breaking the same-object guarantee identity hashing
+        rests on.
+        """
+        return self
+
+    def __reduce__(self) -> NoReturn:
+        """Copy goes through the hooks above; this one is pickle's, and it refuses loudly."""
+        raise TypeError(
+            f"{type(self).__name__} atoms do not pickle: a runtime-built class "
+            f"(Predicate.define()) cannot be found by name on import, and the interned "
+            f"Values inside would come back un-interned, silently losing their identity "
+            f"guarantees. Transport atoms as text instead: render() them out and rebuild "
+            f"with {type(self).__name__}(...) on the other side."
+        )
 
     def collect_predicate_occurrences(self, *, as_argument: bool) -> set[PredicateOccurrence]:
         # The one node that reads as_argument: this occurrence is an atom
