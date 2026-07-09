@@ -860,6 +860,16 @@ class Expression(ComparableTerm):
     unary operations (e.g., -X).
     """
 
+    # Nesting cap: the tree walkers (rendering, scoping, collection) recurse
+    # per level, and Python's default frame limit kills a ~1000-level chain
+    # with a raw RecursionError mid-walk — nearer 500 when a test harness
+    # wraps render(). Capping construction at half the worst case turns it
+    # into a teaching error on the accumulation line.
+    MAX_DEPTH = 250
+
+    # Nesting depth of this node: 1 + its deepest Expression operand
+    _depth: int
+
     def __init__(
         self,
         first_term: ExpressionFieldType | None,
@@ -881,6 +891,18 @@ class Expression(ComparableTerm):
         self._first_term = None if first_term is None else self._convert_if_needed(first_term)
         self._operator = operator
         self._second_term = self._convert_if_needed(second_term)
+
+        self._depth = 1 + max(
+            (term._depth for term in (self._first_term, self._second_term) if isinstance(term, Expression)),
+            default=0,
+        )
+        if self._depth > self.MAX_DEPTH:
+            raise ValueError(
+                f"This expression nests more than {self.MAX_DEPTH} operators deep — almost "
+                f"certainly accumulated in a loop (total = total + ...). Deeper chains overflow "
+                f"Python's recursion inside the tree walkers; express the accumulation as an "
+                f"aggregate instead (e.g. Sum over a predicate holding the addends)."
+            )
 
     @staticmethod
     def _convert_if_needed(value: ExpressionFieldType) -> ValueExpressionType:

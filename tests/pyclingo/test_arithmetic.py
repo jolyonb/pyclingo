@@ -312,3 +312,17 @@ def test_expression_reflected_operators() -> None:
     assert (1 & e).render() == "1 & (X + Y)"
     assert (1 | e).render() == "1 ? (X + Y)"
     assert (1 ^ e).render() == "1 ^ (X + Y)"
+
+
+def test_deep_expression_chain_rejected_at_construction() -> None:
+    # The tree walkers recurse per nesting level, and Python's frame limit
+    # would kill a ~1000-level chain with a raw RecursionError mid-walk;
+    # the cap turns that into a teaching error on the accumulation line
+    X = Variable("X")
+    expr: Expression | Variable = X
+    for _ in range(Expression.MAX_DEPTH):
+        expr = expr + 1
+    assert isinstance(expr, Expression)
+    assert expr.render().count("+") == Expression.MAX_DEPTH  # at the cap: walkers still fine
+    with pytest.raises(ValueError, match="aggregate instead"):
+        expr + 1
