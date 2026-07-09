@@ -262,3 +262,12 @@ def test_control_escape_hatch_exposes_clingo_internals() -> None:
     assert isinstance(grounded.control, clingo.Control)
     assert len(list(grounded.control.symbolic_atoms)) == 2
     assert next(iter(grounded.solve())).atoms(P)  # the verbs still work alongside
+
+
+def test_assumption_class_names_the_instance_spelling() -> None:
+    # A class where an atom belongs used to name _PredicateMeta
+    program = ASPProgram()
+    P = Predicate.define("p_asmcls", ["x"])
+    program.fact(P(x=1))
+    with pytest.raises(TypeError, match=r"pass a grounded instance: p_asmcls\(\.\.\.\)"):
+        program.ground().solve(assumptions=[P])  # type: ignore[list-item]

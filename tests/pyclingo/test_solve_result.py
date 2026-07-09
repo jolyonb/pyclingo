@@ -2,6 +2,7 @@ import clingo
 import pytest
 
 from pyclingo import (
+    ASPProgram,
     AtomCollection,
     CostedModel,
     DefinedConstant,
@@ -123,3 +124,16 @@ def test_convert_symbol_unsupported_argument_type_raises() -> None:
     P = Predicate.define("p_sup", ["x"])
     with pytest.raises(ValueError, match="Unsupported symbol type in argument"):
         convert_symbol_to_predicate(clingo.Function("p_sup", [clingo.Supremum]), {("p_sup", 1): P})
+
+
+def test_atoms_rejects_instances_and_non_classes() -> None:
+    # atoms(instance) silently returned [] — the exact silent-empty failure
+    # the closed-iterator guards exist to prevent elsewhere
+    program = ASPProgram()
+    P = Predicate.define("p_atomcls", ["x"])
+    program.fact(P(x=1))
+    model = next(iter(program.solve()))
+    with pytest.raises(TypeError, match="pass the class p_atomcls"):
+        model.atoms(P(x=1))  # type: ignore[call-overload]
+    with pytest.raises(TypeError, match="takes a Predicate class, got int"):
+        model.atoms(int)  # type: ignore[type-var]

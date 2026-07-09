@@ -34,6 +34,17 @@ from pyclingo.scoping import validate_optimization_element, validate_weak_constr
 from pyclingo.source_location import SourceLocation, capture_location
 
 
+def _non_term_error(kind: str, got: object) -> TypeError:
+    """The must-be-Terms rejection, teaching the predicate-equality trap on a bool."""
+    if isinstance(got, bool):
+        return TypeError(
+            f"{kind} must be Terms, got bool: == between two predicate instances is "
+            f"Python value equality (predicates are data). Bind one side to a Variable "
+            f"and compare that (C == cell(1, 2)), or state the atoms separately."
+        )
+    return TypeError(f"{kind} must be Terms, got {type(got).__name__}")
+
+
 class Segment:
     """
     One named block of program elements, rendered under its header, with
@@ -136,7 +147,7 @@ class Segment:
             )
         for condition in conditions:
             if not isinstance(condition, Term):
-                raise TypeError(f"when() conditions must be Terms, got {type(condition).__name__}")
+                raise _non_term_error("when() conditions", condition)
         return When(self, conditions)
 
     def forbid(self, *conditions: Term) -> None:
@@ -145,7 +156,7 @@ class Segment:
             raise ValueError("forbid() requires at least one condition")
         for condition in conditions:
             if not isinstance(condition, Term):
-                raise TypeError(f"forbid() conditions must be Terms, got {type(condition).__name__}")
+                raise _non_term_error("forbid() conditions", condition)
         rule = Rule(body=list(conditions), check_singletons=self._check_singletons)
         self.append(rule)
 
@@ -432,7 +443,7 @@ class When:
             )
         for term in violation:
             if not isinstance(term, Term):
-                raise TypeError(f"forbid() violation terms must be Terms, got {type(term).__name__}")
+                raise _non_term_error("forbid() violation terms", term)
         self._guard("forbid")
         rule = Rule(
             body=[*self._conditions, *violation],
@@ -460,7 +471,7 @@ class When:
             )
         for term in violation:
             if not isinstance(term, Term):
-                raise TypeError(f"penalize() violation terms must be Terms, got {type(term).__name__}")
+                raise _non_term_error("penalize() violation terms", term)
         self._guard("penalize")
         weak = WeakConstraint(
             (*self._conditions, *violation), weight, tuple(terms) if terms is not None else None, priority

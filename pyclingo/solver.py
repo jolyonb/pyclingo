@@ -52,6 +52,17 @@ class _MinimizeLevelObserver(clingo.Observer):
         self.priorities.add(priority)
 
 
+def _require_predicate_class(candidate: object, verb: str) -> None:
+    """Visibility is per CLASS; failing here beats an AttributeError three stages later at render."""
+    if isinstance(candidate, Predicate):
+        raise TypeError(
+            f"{verb}() takes a predicate class, got the atom {candidate.render()} — "
+            f"pass the class {type(candidate).__name__} (visibility is per class, not per atom)"
+        )
+    if not (isinstance(candidate, type) and issubclass(candidate, Predicate)):
+        raise TypeError(f"{verb}() takes a Predicate class, got {type(candidate).__name__}")
+
+
 def _describe_class(pred: type[Predicate]) -> str:
     """The class name plus its definition site — colliding classes' names match by definition."""
     defined_at = pred._defined_at
@@ -370,6 +381,7 @@ class ASPProgram:
         the check cannot see them, and an absent signature instead fails at
         solve with gringo's "no atoms over signature" info.
         """
+        _require_predicate_class(predicate, "show")
         self._show_overrides[predicate] = True
 
     def hide(self, predicate: type[Predicate]) -> None:
@@ -381,6 +393,7 @@ class ASPProgram:
         raised (hide states an intent; show() of an underived class errors
         because it states an expectation).
         """
+        _require_predicate_class(predicate, "hide")
         self._show_overrides[predicate] = False
 
     def show_when(self, condition: ConditionalLiteral) -> None:
@@ -912,6 +925,11 @@ class GroundedProgram:
                 inner = literal
                 truth = True
             if not isinstance(inner, Predicate):
+                if isinstance(inner, type) and issubclass(inner, Predicate):
+                    raise TypeError(
+                        f"Assumptions are atoms, got the predicate class {inner.__name__} — "
+                        f"pass a grounded instance: {inner.__name__}(...)"
+                    )
                 described = (
                     f"~{type(inner).__name__}" if isinstance(literal, DefaultNegation) else type(literal).__name__
                 )

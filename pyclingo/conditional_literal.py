@@ -75,7 +75,11 @@ class ConditionalLiteral(Term):
     def validate_in_context(self, is_in_head: bool) -> None:
         """Conditional literals are body-only (disjunctive heads are unsupported): raises in heads."""
         if is_in_head:
-            raise ValueError("Conditional literals cannot be used in rule heads")
+            raise ValueError(
+                "Conditional literals cannot be used in rule heads — pyclingo does not "
+                "model disjunctive heads. Choice(...).at_least(1) covers most uses, "
+                "raw_asp() the rest."
+            )
 
     def collect_defined_constants(self) -> set[str]:
         return self._element.collect_defined_constants()

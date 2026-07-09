@@ -67,3 +67,14 @@ def test_collect_variables_delegates_to_element() -> None:
     X = Variable("X")
     cl = ConditionalLiteral(P(x=X), Q(x=X))
     assert cl.collect_variables() == {"X"}
+
+
+def test_head_rejection_signposts_disjunction() -> None:
+    # The docstring knew disjunctive heads are the unsupported concept; now
+    # the error names it and the nearest constructs
+    program = ASPProgram()
+    P = Predicate.define("p_disj", ["x"])
+    Q = Predicate.define("q_disj", ["x"])
+    X = Variable("X")
+    with pytest.raises(ValueError, match=r"Choice\(...\)\.at_least\(1\)"):
+        program.when(Q(x=X)).derive(ConditionalLiteral(P(x=X), Q(x=X)))

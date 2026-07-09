@@ -107,6 +107,15 @@ class AtomCollection:
         """
         if predicate is None:
             return list(self._atoms)
+        if isinstance(predicate, Predicate):
+            raise TypeError(
+                f"atoms() takes a predicate class, got the atom {predicate.render()} — "
+                f"pass the class {type(predicate).__name__} (a silent [] here would read "
+                f"as an empty result)"
+            )
+        if not (isinstance(predicate, type) and issubclass(predicate, Predicate)):
+            described = predicate.__name__ if isinstance(predicate, type) else type(predicate).__name__
+            raise TypeError(f"atoms() takes a Predicate class, got {described}")
         return list(self._by_class.get(predicate, []))
 
     def __len__(self) -> int:
@@ -786,10 +795,22 @@ def convert_symbol_to_predicate(symbol: clingo.Symbol, predicate_types: Predicat
         elif arg.type == clingo.SymbolType.String:
             kwargs[field_name] = arg.string
         elif arg.type == clingo.SymbolType.Function:
+            if arg.name == "":
+                # A clingo tuple argument, not a #show term form: diagnose the
+                # actual limitation instead of blaming the (real) atom around it
+                raise ValueError(
+                    f"Argument {i} of {pred_name} is the clingo tuple {arg}, which pyclingo "
+                    f"does not model — wrap it in a named predicate (pair{arg} instead of {arg})."
+                )
             # Recursively convert nested predicates; bare atoms are nullary predicates
             kwargs[field_name] = convert_symbol_to_predicate(arg, predicate_types)
         else:
-            raise ValueError(f"Unsupported symbol type in argument {i} of {pred_name}: {arg.type}")
+            raise ValueError(
+                f"Unsupported symbol type in argument {i} of {pred_name}: {arg.type}. "
+                f"#sup/#inf are clingo's greatest/least terms — usually the value of a "
+                f"#min/#max over an EMPTY set (min of nothing is #sup). pyclingo has no "
+                f"value for them; guard the producing rule so the set is non-empty."
+            )
 
     instance = pred_class(**kwargs)
     return -instance if symbol.negative else instance

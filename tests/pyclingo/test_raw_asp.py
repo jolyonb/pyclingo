@@ -219,3 +219,15 @@ def test_part_directives_are_found_when_code_resumes_mid_line() -> None:
         program.raw_asp('p("100%"). #program later.')
     with pytest.raises(ValueError, match="unloaded part"):
         program.raw_asp('p("esc\\"quote"). #program later.')  # the \\" escape does not end the string early
+
+
+def test_predicates_entries_validated_at_the_call() -> None:
+    # An instance rendered, grounded, and then died at the first model read
+    # with "'p' object is not callable" — three stages from the author
+    program = ASPProgram()
+    P = Predicate.define("p_rawdecl", ["x"])
+    with pytest.raises(TypeError, match="declares CLASSES, got the atom"):
+        program.raw_asp("p_rawdecl(1).", predicates=[P(x=1)])  # type: ignore[list-item]
+    with pytest.raises(TypeError, match="must be Predicate classes"):
+        program.raw_asp("p_rawdecl(1).", predicates=["p_rawdecl"])  # type: ignore[list-item]
+    program.raw_asp("p_rawdecl(1).", predicates=[P, -P])  # classes and negated signs still pass

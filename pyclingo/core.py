@@ -174,35 +174,40 @@ class ComparableTerm(Term, ABC):
     # until the first miss. Use sets for containment.
     __hash__ = object.__hash__
 
-    def __lt__(self, other: Any) -> Comparison:
+    def _comparison(self, operator: ComparisonOperator, other: Any) -> Comparison:
+        """The shared operand guard: one home for the teaching on each rejected shape."""
+        if isinstance(other, Pool):
+            raise ValueError(
+                f"Cannot compare {type(self).__name__} with a pool: pools expand "
+                f"disjunctively, which comparison operators cannot express. For domain "
+                f"membership use X.in_((1, 2))."
+            )
+        if isinstance(other, type) and issubclass(other, PredicateBase):
+            raise ValueError(
+                f"Cannot compare {type(self).__name__} with the predicate class "
+                f"{other.__name__} — compare against an instance: {other.__name__}(...)"
+            )
         if not isinstance(other, (ComparableTerm, PredicateBase, int, str)):
             raise ValueError(f"Cannot compare {type(self).__name__} with {type(other).__name__}")
-        return Comparison(self, ComparisonOperator.LESS_THAN, other)
+        return Comparison(self, operator, other)
+
+    def __lt__(self, other: Any) -> Comparison:
+        return self._comparison(ComparisonOperator.LESS_THAN, other)
 
     def __le__(self, other: Any) -> Comparison:
-        if not isinstance(other, (ComparableTerm, PredicateBase, int, str)):
-            raise ValueError(f"Cannot compare {type(self).__name__} with {type(other).__name__}")
-        return Comparison(self, ComparisonOperator.LESS_EQUAL, other)
+        return self._comparison(ComparisonOperator.LESS_EQUAL, other)
 
     def __gt__(self, other: Any) -> Comparison:
-        if not isinstance(other, (ComparableTerm, PredicateBase, int, str)):
-            raise ValueError(f"Cannot compare {type(self).__name__} with {type(other).__name__}")
-        return Comparison(self, ComparisonOperator.GREATER_THAN, other)
+        return self._comparison(ComparisonOperator.GREATER_THAN, other)
 
     def __ge__(self, other: Any) -> Comparison:
-        if not isinstance(other, (ComparableTerm, PredicateBase, int, str)):
-            raise ValueError(f"Cannot compare {type(self).__name__} with {type(other).__name__}")
-        return Comparison(self, ComparisonOperator.GREATER_EQUAL, other)
+        return self._comparison(ComparisonOperator.GREATER_EQUAL, other)
 
     def __eq__(self, other: Any) -> Comparison:  # type: ignore[override]
-        if not isinstance(other, (ComparableTerm, PredicateBase, int, str)):
-            raise ValueError(f"Cannot compare {type(self).__name__} with {type(other).__name__}")
-        return Comparison(self, ComparisonOperator.EQUAL, other)
+        return self._comparison(ComparisonOperator.EQUAL, other)
 
     def __ne__(self, other: Any) -> Comparison:  # type: ignore[override]
-        if not isinstance(other, (ComparableTerm, PredicateBase, int, str)):
-            raise ValueError(f"Cannot compare {type(self).__name__} with {type(other).__name__}")
-        return Comparison(self, ComparisonOperator.NOT_EQUAL, other)
+        return self._comparison(ComparisonOperator.NOT_EQUAL, other)
 
 
 class AggregateBase(ComparableTerm, ABC):
@@ -682,7 +687,11 @@ class Pool(BasicTerm, ABC):
         Bare pools are never valid rule elements: always raises. Pools belong
         inside predicates (p(1..5)) or on the right of comparisons (X = 1..5).
         """
-        raise ValueError("Pools can only be used as arguments to predicates or in comparisons")
+        raise ValueError(
+            "Pools can only be used as arguments to predicates or in comparisons. "
+            "For a disjunctive head (a ; b), pyclingo has no construct: "
+            "Choice(...).at_least(1) covers most uses, raw_asp() the rest."
+        )
 
 
 class RangePool(Pool):
@@ -1486,6 +1495,10 @@ class Vars:
     """
 
     def __getattr__(self, name: str) -> Variable:
+        # Python protocol probes (__deepcopy__, IPython's display canary)
+        # must signal absence — hasattr and copy only swallow AttributeError
+        if name.startswith("_"):
+            raise AttributeError(name)
         return Variable(name)
 
 

@@ -455,3 +455,14 @@ def test_append_rejects_non_elements_with_teaching() -> None:
     segment = Segment("Guard")
     with pytest.raises(TypeError, match=r"for verbatim ASP text use raw_asp\(\)"):
         segment.append("q(2).")  # type: ignore[arg-type]
+
+
+def test_bool_conditions_teach_the_predicate_equality_trap() -> None:
+    # cell_a == cell_b between two instances is Python value equality, and
+    # the resulting bool used to draw only "must be Terms, got bool"
+    program = ASPProgram()
+    Cell = Predicate.define("cell_eqtrap", ["x"])
+    with pytest.raises(TypeError, match="Bind one side to a Variable"):
+        program.when(Cell(x=1) == Cell(x=2)).derive(Cell(x=3))  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match="Bind one side to a Variable"):
+        program.forbid(Cell(x=1) == Cell(x=1))  # type: ignore[arg-type]

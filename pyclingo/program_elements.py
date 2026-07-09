@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 from pyclingo.conditional_literal import ConditionalLiteral
 from pyclingo.core import PredicateOccurrence, Term
-from pyclingo.predicate import NegatedPredicate
+from pyclingo.predicate import NegatedPredicate, Predicate
 from pyclingo.scoping import validate_rule
 from pyclingo.source_location import SourceLocation
 
@@ -164,6 +164,20 @@ class RawASP(ProgramElement):
                 f"in an unloaded part and silently vanish from the model. Inline the part's "
                 f"statements directly (and for #include, paste the file's text)."
             )
+        for entry in predicates:
+            if isinstance(entry, Predicate):
+                raise TypeError(
+                    f"raw_asp() predicates declares CLASSES, got the atom {entry.render()} — "
+                    f"pass the class {type(entry).__name__} (declaration covers every atom of "
+                    f"the signature)"
+                )
+            if not isinstance(entry, NegatedPredicate) and not (
+                isinstance(entry, type) and issubclass(entry, Predicate)
+            ):
+                raise TypeError(
+                    f"raw_asp() predicates entries must be Predicate classes (or -P for the "
+                    f"negated sign), got {type(entry).__name__}"
+                )
         self.predicates = tuple(predicates)
 
     def render(self) -> str:

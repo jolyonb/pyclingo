@@ -212,3 +212,27 @@ def test_e2e_clean_program_solves_with_locations_on() -> None:
     assert "test_end_to_end.py" not in program.render()
     model = next(iter(program.solve()))
     assert sorted(k["x"].value for k in model.atoms(Keep)) == [1, 2]
+
+
+def test_e2e_tuple_argument_diagnosed_as_argument_not_show_form() -> None:
+    # A clingo tuple ARGUMENT of a real atom used to draw the #show-term-form
+    # diagnosis, which points away from the cause
+    program = ASPProgram()
+    Edge = Predicate.define("edge_tup", ["e"])
+    program.raw_asp("edge_tup((1,2)).", predicates=[Edge])
+    with pytest.raises(ValueError, match="wrap it in a named predicate"):
+        list(program.solve())
+
+
+def test_e2e_sup_argument_names_the_remedy() -> None:
+    # The realistic route to #sup: a #min over an empty set takes its
+    # identity value. The error decodes the jargon and names the guard.
+    program = ASPProgram()
+    Smallest = Predicate.define("m_sup", ["v"])
+    Never = Predicate.define("never_sup", ["x"], show=False)
+    program.raw_asp(
+        "{ never_sup(1) }.\n:- never_sup(1).\nm_sup(M) :- M = #min{ X : never_sup(X) }.",
+        predicates=[Smallest, Never],
+    )
+    with pytest.raises(ValueError, match="min of nothing is #sup"):
+        list(program.solve())

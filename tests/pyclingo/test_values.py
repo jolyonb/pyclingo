@@ -329,3 +329,21 @@ def test_string_rejects_nul() -> None:
     # NUL breaks clingo's lexer exactly like the newline family
     with pytest.raises(ValueError, match="NUL"):
         String("a\x00b")
+
+
+def test_comparison_rejections_teach_their_remedies() -> None:
+    # Each rejected operand shape names its correct spelling
+    X = Variable("X")
+    P = Predicate.define("p_cmpcls", ["x"])
+    with pytest.raises(ValueError, match=r"domain membership use X\.in_"):
+        _ = X == pool([1, 2])
+    with pytest.raises(ValueError, match="compare against an instance"):
+        _ = X == P
+    with pytest.raises(ValueError, match="Cannot compare Variable with float"):
+        _ = X == 1.5
+
+
+def test_vars_factory_signals_absence_for_protocol_probes() -> None:
+    # hasattr/copy/IPython probe dunders; only AttributeError reads as absence
+    assert not hasattr(V, "_ipython_canary_method_should_not_exist_")
+    assert copy.deepcopy(V) is not None  # __deepcopy__ probe no longer raises ValueError

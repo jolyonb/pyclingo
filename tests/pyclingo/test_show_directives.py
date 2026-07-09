@@ -207,3 +207,14 @@ def test_atom_vs_term_position_is_computed_by_position() -> None:
     Dom = Predicate.define("dom_pos", [])
     pool_cmp = X.in_((Dom(),))
     assert (Dom, False, False) in pool_cmp.collect_predicate_occurrences(as_argument=False)
+
+
+def test_show_and_hide_reject_instances_and_garbage_with_teaching() -> None:
+    # Visibility is per class; an instance used to die three stages later
+    # with a raw AttributeError inside the collision check
+    program = ASPProgram()
+    P = Predicate.define("p_showcls", ["x"])
+    with pytest.raises(TypeError, match="pass the class p_showcls"):
+        program.show(P(x=1))  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match=r"hide\(\) takes a Predicate class, got int"):
+        program.hide(42)  # type: ignore[arg-type]
