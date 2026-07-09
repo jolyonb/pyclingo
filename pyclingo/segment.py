@@ -28,7 +28,7 @@ from pyclingo.optimization import (
     OptimizationDirective,
     WeakConstraint,
 )
-from pyclingo.predicate import PREDICATE_CLASS_TYPE, Predicate
+from pyclingo.predicate import PREDICATE_CLASS_TYPE, NegatedPredicate, Predicate
 from pyclingo.program_elements import BlankLine, Comment, ProgramElement, RawASP, Rule
 from pyclingo.scoping import validate_optimization_element, validate_weak_constraint
 
@@ -228,17 +228,17 @@ class Segment:
         directive.element.freeze()
         self.append(directive)
 
-    def raw_asp(self, text: str, predicates: Sequence[PREDICATE_CLASS_TYPE] = ()) -> None:
+    def raw_asp(self, text: str, predicates: Sequence[PREDICATE_CLASS_TYPE | NegatedPredicate] = ()) -> None:
         """
         Add a verbatim block of ASP text: the escape hatch for constructs
         pyclingo does not model.
 
         Declare any predicates the block produces via predicates so that show
         directives cover them and solutions round-trip into typed instances.
-        A declaration covers the POSITIVE sign's visibility; raw text that
-        derives classically negated atoms (-p) needs its own visibility
-        channel — a raw "#show -p/n." line, or show_when with a negated
-        head — or those atoms stay silently absent from output.
+        Declaring the class P covers round-trip and the collision check for
+        both signs, and emits "#show p/n."; if the block also derives
+        classically negated atoms, declare -P as well to emit "#show -p/n."
+        (predicates=[P, -P]), or the -p atoms stay absent from output.
         """
         if not isinstance(text, str):
             raise TypeError(f"raw_asp() text must be a string, got {type(text).__name__}")

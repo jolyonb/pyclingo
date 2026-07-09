@@ -9,7 +9,7 @@ from pyclingo.conditional_literal import ConditionalLiteral
 from pyclingo.conditioned_element import CONDITION_TYPE
 from pyclingo.core import DefaultNegation, DefinedConstant, PredicateOccurrence, Term
 from pyclingo.optimization import OPTIMIZATION_TERM_TYPE, OptStrategy
-from pyclingo.predicate import Predicate
+from pyclingo.predicate import NegatedPredicate, Predicate
 from pyclingo.program_elements import RawASP
 from pyclingo.scoping import validate_rule
 from pyclingo.segment import Segment, When
@@ -207,7 +207,7 @@ class ASPProgram:
         """Charge for each match of the conditions, in the default segment; see Segment.penalize()."""
         self._default_segment().penalize(*conditions, weight=weight, terms=terms, priority=priority)
 
-    def raw_asp(self, text: str, predicates: Sequence[type[Predicate]] = ()) -> None:
+    def raw_asp(self, text: str, predicates: Sequence[type[Predicate] | NegatedPredicate] = ()) -> None:
         """Add verbatim ASP text to the default segment; see Segment.raw_asp()."""
         self._default_segment().raw_asp(text, predicates)
 

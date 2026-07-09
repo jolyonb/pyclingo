@@ -2,6 +2,7 @@ import copy
 import keyword
 import re
 import types
+from abc import ABCMeta
 from dataclasses import Field as DataclassField
 from dataclasses import dataclass, fields
 from typing import Any, ClassVar, Self, cast, dataclass_transform, get_args, get_origin, overload
@@ -167,6 +168,30 @@ def _validate_schema(name: str, namespace: str, field_names: list[str]) -> None:
             raise ValueError(f"Field name {field_name!r} would shadow a Predicate attribute")
 
 
+@dataclass(frozen=True)
+class NegatedPredicate:
+    """
+    The classically negated signature of a predicate class, written -P.
+
+    Only meaningful in raw_asp(predicates=...): declaring -P tells pyclingo a
+    raw block derives -p atoms, so their "#show -p/n." directive is emitted.
+    (The positive class already round-trips and validates both signs — the
+    sign lives on the atom — so this adds only the negated sign's visibility.)
+    """
+
+    predicate: type[Predicate]
+
+
+class _PredicateMeta(ABCMeta):
+    """
+    Unary minus on a predicate CLASS: -P is NegatedPredicate(P), for raw_asp
+    declarations. (-p(1), minus on an instance, still negates the atom.)
+    """
+
+    def __neg__(cls) -> NegatedPredicate:
+        return NegatedPredicate(cast("type[Predicate]", cls))
+
+
 # dataclass_transform tells type checkers that subclasses become dataclasses
 # (with these frozen/eq settings), so they synthesize a typed __init__ from each
 # subclass's annotated fields — typo'd or missing arguments are type errors.
@@ -174,7 +199,7 @@ def _validate_schema(name: str, namespace: str, field_names: list[str]) -> None:
 # dataclass() to every subclass; the two must agree on the settings.
 @dataclass_transform(frozen_default=True, eq_default=False, field_specifiers=())
 @dataclass(frozen=True, eq=False)
-class Predicate(PredicateBase, Negatable):
+class Predicate(PredicateBase, Negatable, metaclass=_PredicateMeta):
     """
     This is a base class that represents a predicate in an ASP program.
 

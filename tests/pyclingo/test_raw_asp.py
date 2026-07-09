@@ -4,7 +4,7 @@ Tests for raw_asp: the verbatim-ASP escape hatch and its predicate seatbelt.
 
 import pytest
 
-from pyclingo import ASPProgram, ConditionalLiteral, Predicate, Variable
+from pyclingo import ASPProgram, Predicate
 
 
 def test_renders_verbatim() -> None:
@@ -142,18 +142,29 @@ def test_show_declares_as_fully_as_predicates() -> None:
     assert sorted(a["x"].value for a in model.atoms(Q)) == [1, 2, 3]
 
 
-def test_raw_negated_atoms_have_a_visibility_channel() -> None:
-    # predicates= covers the positive sign; the negated sign's channel is
-    # show_when with a negated head (or a raw #show -p/n line)
+def test_raw_negated_atoms_declared_with_minus_predicate() -> None:
+    # predicates= takes P for the positive sign and -P for the negative:
+    # declaring -P emits "#show -p/1." so the raw block's -p atoms are visible
     P = Predicate.define("p_negraw", ["x"])
     program = ASPProgram()
-    X = Variable("X")
     program.fact(P(x=1))
-    program.raw_asp("-p_negraw(2).", predicates=[P])
-    program.show_when(ConditionalLiteral(-P(x=X), -P(x=X)))
+    program.raw_asp("-p_negraw(2).", predicates=[P, -P])
+    assert "#show -p_negraw/1." in program.render()
     model = next(iter(program.solve()))
     negated = [a for a in model.atoms(P) if a.negated]
     assert [a["x"].value for a in negated] == [2]
+
+
+def test_raw_positive_declaration_omits_the_negated_show() -> None:
+    # Declaring only P covers round-trip/collision for both signs, but emits
+    # only the positive #show; the -p atom stays out of output without -P
+    P = Predicate.define("p_posonly", ["x"])
+    program = ASPProgram()
+    program.fact(P(x=1))
+    program.raw_asp("-p_posonly(2).", predicates=[P])
+    rendered = program.render()
+    assert "#show p_posonly/1." in rendered
+    assert "#show -p_posonly/1." not in rendered
 
 
 def test_raw_show_term_forms_get_a_teaching_error() -> None:

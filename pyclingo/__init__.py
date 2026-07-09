@@ -39,7 +39,7 @@ from .core import (
 )
 from .operators import ComparisonOperator
 from .optimization import OptStrategy
-from .predicate import Field, Predicate, PredicateField
+from .predicate import Field, NegatedPredicate, Predicate, PredicateField
 from .segment import Segment, When
 from .solve_result import (
     AtomCollection,
@@ -79,6 +79,7 @@ __all__ = [  # noqa: RUF022 (categorized deliberately, not sorted)
     "ClingoMessage",
     # Declaring predicates
     "Predicate",
+    "NegatedPredicate",
     "Field",
     "PredicateField",
     # Rule-building objects

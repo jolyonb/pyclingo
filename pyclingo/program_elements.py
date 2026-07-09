@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 
 from pyclingo.conditional_literal import ConditionalLiteral
 from pyclingo.core import PredicateOccurrence, Term
+from pyclingo.predicate import NegatedPredicate
 from pyclingo.scoping import validate_rule
 
 if TYPE_CHECKING:
@@ -65,9 +66,14 @@ class RawASP(ProgramElement):
     an atom whose signature was never declared anywhere, solving fails
     loudly at that model. Constants registered via define_constant() are
     always emitted, so raw text may use them freely.
+
+    A declared class covers both signs for round-trip and the name-collision
+    check, but emits only "#show p/n." for the positive sign. If the block
+    also derives classically negated atoms, declare -P as well so "#show
+    -p/n." is emitted (P for positive, -P for negative).
     """
 
-    def __init__(self, text: str, predicates: Sequence[PREDICATE_CLASS_TYPE] = ()):
+    def __init__(self, text: str, predicates: Sequence[PREDICATE_CLASS_TYPE | NegatedPredicate] = ()):
         if not isinstance(text, str):
             raise TypeError(f"RawASP text must be a string, got {type(text).__name__}")
         self.text = text
@@ -77,10 +83,13 @@ class RawASP(ProgramElement):
         return self.text
 
     def collect_predicate_occurrences(self, *, as_argument: bool) -> set[PredicateOccurrence]:
-        # Declared predicates count as positive atom presence: raw text is
-        # invisible to walkers, and predicates= exists to keep #show working.
+        # Raw text is invisible to the walkers, so predicates= declares its
+        # atoms: P is the positive sign, -P (a NegatedPredicate) the negative.
         # A raw block is always a top-level statement, so these are atoms.
-        return {(predicate, False, True) for predicate in self.predicates}
+        return {
+            (entry.predicate, True, True) if isinstance(entry, NegatedPredicate) else (entry, False, True)
+            for entry in self.predicates
+        }
 
 
 class BlankLine(ProgramElement):
