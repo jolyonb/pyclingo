@@ -8,12 +8,14 @@ one whole side once the other side is fully bound, regardless of the
 expression's shape. Every UNSAFE-VARIABLE rejection is therefore a certain
 gringo rejection (no false positives); the cost is a few false negatives
 (e.g. X**2 = 9, which gringo cannot invert) that fall back to clingo's own
-grounding error. Two further checks are deliberate lints BEYOND gringo,
+grounding error. Three further checks are deliberate lints BEYOND gringo,
 which accepts what they reject: singleton variables (gringo is silent;
-switchable via ASPProgram(allow_singletons=True)) and aggregate tuples
+switchable via ASPProgram(allow_singletons=True)), aggregate tuples
 sharing a rule-global variable (gringo emits only an info, with collapsed
-semantics). The probe-derived ground truth lives in
-tests/pyclingo/test_scoping.py.
+semantics), and a conditional-literal head variable absent from its own
+condition (gringo quietly treats it as local to the literal). The ground
+truth is pinned LIVE in tests/pyclingo/test_scoping.py: every case there
+carries gringo's own verdict, re-checked on each run.
 """
 
 from collections import Counter

@@ -1,11 +1,17 @@
 """
-Tests for the scoping machinery: one test per empirically probed gringo
-binding rule (see VALIDATION.md section 0). These pin the ground truth the
-unsafe/singleton validation stands on.
+Tests for the scoping machinery, pinned LIVE against gringo on every run:
+ok() requires gringo to ground what validate_rule accepts (an over-strict
+analysis would otherwise never be caught), and every bad() case declares
+gringo's own verdict on the raw text — True pins the over-approximation
+contract (a safety rejection is a certain gringo rejection), False records
+a deliberate pyclingo-only rejection (the singleton lint, the
+aggregate-tuple-sharing lint, teaching walls on meaningless spellings, and
+the unbound-conditional-literal-head case, where gringo is laxer).
 """
 
 from collections.abc import Sequence
 
+import clingo
 import pytest
 
 from pyclingo import (
@@ -21,6 +27,7 @@ from pyclingo import (
     Variable,
     create_variables,
 )
+from pyclingo.program_elements import render_body_terms
 from pyclingo.scoping import validate_rule
 
 P = Predicate.define("p", ["x"])
@@ -28,13 +35,50 @@ Q = Predicate.define("q", ["x"])
 R2 = Predicate.define("r2", ["x", "y"])
 
 
+def _gringo_grounds(head: Term | None, body: Sequence[Term]) -> bool:
+    """
+    Whether gringo itself grounds the rule (unsafe variables are ground-time
+    errors). A never-true guard atom rides in the body: gringo's safety
+    verdict is static and unaffected, but a self-recursive assignment
+    aggregate (p(N) :- #count{ X : p(X) } = N) would otherwise grow its
+    value set forever during grounding.
+    """
+    head_str = "" if head is None else head.render()
+    guarded_body = f"{render_body_terms(list(body))}, __probe_guard" if body else "__probe_guard"
+    control = clingo.Control(logger=lambda code, message: None)
+    try:
+        control.add("base", [], f"{head_str} :- {guarded_body}.")
+        control.ground([("base", [])])
+    except RuntimeError:
+        return False
+    return True
+
+
+def _rule_text(head: Term | None, body: Sequence[Term]) -> str:
+    head_str = "" if head is None else head.render()
+    return f"{head_str} :- {render_body_terms(list(body))}." if body else f"{head_str}."
+
+
 def ok(head: Term | None, body: Sequence[Term]) -> None:
+    """Accepted by validate_rule AND grounded by gringo — the pin holds both ways, live."""
     validate_rule(head, list(body), "<test rule>")
+    assert _gringo_grounds(head, body), f"pyclingo accepted a rule gringo rejects: {_rule_text(head, body)}"
 
 
-def bad(head: Term | None, body: Sequence[Term], match: str) -> None:
+def bad(head: Term | None, body: Sequence[Term], match: str, *, gringo_rejects: bool) -> None:
+    """
+    Rejected by validate_rule, with gringo's own verdict as the receipt:
+    gringo_rejects=True pins the over-approximation contract; False records
+    a deliberate pyclingo-only rejection of text gringo grounds.
+    """
     with pytest.raises(ValueError, match=match):
         validate_rule(head, list(body), "<test rule>")
+    if gringo_rejects:
+        assert not _gringo_grounds(head, body), f"gringo accepts a rule we reject as unsafe: {_rule_text(head, body)}"
+    else:
+        assert _gringo_grounds(head, body), (
+            f"gringo also rejects {_rule_text(head, body)}: mark this case gringo_rejects=True"
+        )
 
 
 X, Y, N = create_variables("X", "Y", "N")
@@ -68,20 +112,20 @@ def test_aggregate_equality_binds() -> None:
 
 
 def test_negated_literals_do_not_bind() -> None:
-    bad(P(x=X), [Not(Q(x=X))], "Unsafe variable")
+    bad(P(x=X), [Not(Q(x=X))], "Unsafe variable", gringo_rejects=True)
 
 
 def test_non_equality_comparisons_do_not_bind() -> None:
-    bad(P(x=X), [X != 5, Q(x=Y), Y == Y], "Unsafe variable")
+    bad(P(x=X), [X != 5, Q(x=Y), Y == Y], "Unsafe variable", gringo_rejects=True)
 
 
 def test_head_variable_never_in_body_is_unsafe() -> None:
-    bad(P(x=X), [Q(x=Y), P(x=Y)], "Singleton|Unsafe")  # X unsafe (also singleton)
+    bad(P(x=X), [Q(x=Y), P(x=Y)], "Singleton|Unsafe", gringo_rejects=True)  # X unsafe (also singleton)
 
 
 def test_comparison_head_variables_need_body_binding() -> None:
     ok(X == Y, [R2(x=X, y=Y)])  # comparison heads are valid, vars bound
-    bad(X == Y, [Q(x=X), P(x=X)], "Unsafe variable")  # Y unbound
+    bad(X == Y, [Q(x=X), P(x=X)], "Unsafe variable", gringo_rejects=True)  # Y unbound
 
 
 def test_cardinality_bound_variables_are_global() -> None:
@@ -89,7 +133,7 @@ def test_cardinality_bound_variables_are_global() -> None:
         Choice(P(x=X), condition=Q(x=X)).exactly(N),
         [R2(x=N, y=N)],
     )
-    bad(Choice(P(x=X), condition=Q(x=X)).exactly(N), [Q(x=Y), P(x=Y)], "Unsafe variable")
+    bad(Choice(P(x=X), condition=Q(x=X)).exactly(N), [Q(x=Y), P(x=Y)], "Unsafe variable", gringo_rejects=True)
 
 
 # --- local scopes ---
@@ -121,12 +165,12 @@ def test_global_variable_inside_construct_counts_globally() -> None:
 
 
 def test_aggregate_target_not_in_condition_is_a_local_safety_error() -> None:
-    bad(P(x=N), [Q(x=N), N == Count(X, condition=P(x=Y))], "Unsafe local")
+    bad(P(x=N), [Q(x=N), N == Count(X, condition=P(x=Y))], "Unsafe local", gringo_rejects=True)
 
 
 def test_choice_element_variable_without_condition_is_global() -> None:
     ok(Choice(P(x=X)), [Q(x=X), P(x=X)])  # bound by the body: fine
-    bad(Choice(P(x=X)), [Q(x=Y), P(x=Y)], "Unsafe variable")  # nothing binds X
+    bad(Choice(P(x=X)), [Q(x=Y), P(x=Y)], "Unsafe variable", gringo_rejects=True)  # nothing binds X
 
 
 def test_choice_element_variable_bound_by_own_condition_is_local() -> None:
@@ -134,7 +178,10 @@ def test_choice_element_variable_bound_by_own_condition_is_local() -> None:
 
 
 def test_conditional_literal_head_var_not_in_condition_is_global() -> None:
-    bad(None, [ConditionalLiteral(P(x=X), Q(x=Y)), R2(x=Y, y=Y)], "Unsafe|Singleton")
+    # gringo GROUNDS this text (an unbound conditional-literal head variable
+    # is local to the literal); pyclingo rejects it anyway — the stricter
+    # verdict is recorded here as deliberate
+    bad(None, [ConditionalLiteral(P(x=X), Q(x=Y)), R2(x=Y, y=Y)], "Unsafe|Singleton", gringo_rejects=False)
     ok(None, [ConditionalLiteral(P(x=X), Q(x=X)), Not(P(x=1))])
 
 
@@ -142,7 +189,7 @@ def test_conditional_literal_head_var_not_in_condition_is_global() -> None:
 
 
 def test_anonymous_in_head_is_rejected() -> None:
-    bad(P(x=ANY), [Q(x=1)], "anonymous")
+    bad(P(x=ANY), [Q(x=1)], "anonymous", gringo_rejects=True)
 
 
 def test_anonymous_in_body_needs_nothing() -> None:
@@ -153,11 +200,11 @@ def test_anonymous_in_body_needs_nothing() -> None:
 
 
 def test_singleton_variable_is_rejected() -> None:
-    bad(P(x=1), [Q(x=X)], "Singleton")
+    bad(P(x=1), [Q(x=X)], "Singleton", gringo_rejects=False)  # gringo is silent about singletons
 
 
 def test_singleton_local_is_rejected() -> None:
-    bad(P(x=1), [Count(X, condition=P(x=Y)) == 1], "Singleton|Unsafe")
+    bad(P(x=1), [Count(X, condition=P(x=Y)) == 1], "Singleton|Unsafe", gringo_rejects=True)
 
 
 def test_two_uses_is_not_a_singleton() -> None:
@@ -169,12 +216,12 @@ def test_two_uses_is_not_a_singleton() -> None:
 
 def test_global_variable_in_aggregate_tuple_is_rejected() -> None:
     # X fixed by the rule makes {X : p(X)} contain at most one element
-    bad(Q(x=X), [Q(x=X), Count(X, condition=P(x=X)) == 1], "collapses")
+    bad(Q(x=X), [Q(x=X), Count(X, condition=P(x=X)) == 1], "collapses", gringo_rejects=False)
 
 
 def test_global_in_sum_tuple_is_rejected_even_mixed_with_locals() -> None:
     W = Variable("W")
-    bad(Q(x=X), [Q(x=X), Sum((W, X), condition=R2(x=W, y=X)) == 1], "collapses")
+    bad(Q(x=X), [Q(x=X), Sum((W, X), condition=R2(x=W, y=X)) == 1], "collapses", gringo_rejects=False)
 
 
 def test_global_in_aggregate_condition_stays_legal() -> None:
@@ -203,7 +250,7 @@ def test_negated_aggregate_comparison_is_valid() -> None:
 
 
 def test_negated_equality_does_not_bind() -> None:
-    bad(P(x=X), [Q(x=Y), P(x=Y), Not(X == Y + 1)], "Unsafe variable")
+    bad(P(x=X), [Q(x=Y), P(x=Y), Not(X == Y + 1)], "Unsafe variable", gringo_rejects=True)
 
 
 # --- occurrence counting within one literal ---
@@ -268,14 +315,14 @@ def test_local_equality_edge_binds_aggregate_target() -> None:
 
 
 def test_anonymous_in_comparison_head_is_rejected() -> None:
-    bad(X == ANY, [Q(x=X)], "anonymous")
+    bad(X == ANY, [Q(x=X)], "anonymous", gringo_rejects=True)
 
 
 # --- anonymous variable in a choice element target ---
 
 
 def test_anonymous_in_choice_head_is_rejected() -> None:
-    bad(Choice(P(x=ANY)), [Q(x=1)], "anonymous")
+    bad(Choice(P(x=ANY)), [Q(x=1)], "anonymous", gringo_rejects=True)
 
 
 # --- optimization singleton lint is switchable ---

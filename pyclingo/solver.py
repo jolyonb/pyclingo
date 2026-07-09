@@ -1,4 +1,5 @@
 import math
+import threading
 from collections.abc import Mapping, Sequence
 
 import clingo
@@ -8,7 +9,7 @@ from pyclingo.clingo_handler import ClingoMessageHandler, LogLevel
 from pyclingo.conditional_literal import ConditionalLiteral
 from pyclingo.conditioned_element import ConditionType
 from pyclingo.core import DefaultNegation, DefinedConstant, PredicateOccurrence, Term
-from pyclingo.optimization import OptimizationTermType, OptStrategy
+from pyclingo.optimization import OptimizationTermType, OptStrategy, WeakConstraint
 from pyclingo.predicate import NegatedPredicate, Predicate
 from pyclingo.program_elements import RawASP, RenderedLine
 from pyclingo.scoping import validate_rule
@@ -123,23 +124,60 @@ class ASPProgram:
         Aggregate (the mutation-after-capture error naming the capturing
         rule's line) are recorded regardless of this switch.
         """
-        if header is not None and ("\n" in header or "\r" in header):
-            raise ValueError("Program header must be a single line (it renders as one % comment)")
         self._check_singletons = not allow_singletons
         self._source_locations = source_locations
         self._segments: dict[str, Segment] = {}
         self._defined_constants: dict[str, int | str] = {}
         self._show_overrides: dict[type[Predicate], bool] = {}
-        # When True, solution identity is the SHOWN atoms: models agreeing on
-        # every shown atom count as one (clingo's solve.project=show), so
-        # hidden helper predicates stop multiplying models.
-        self.project_shown: bool = False
+        self._project_shown = False
         # Conditional shows are per SIGN: (class, negated) -> the directive's
         # conditional literal. Each sign's visibility resolves independently:
         # its conditional override, else the class's bool override/default.
         self._show_when_overrides: dict[tuple[type[Predicate], bool], ConditionalLiteral] = {}
-        self.header: str | None = header
-        self.default_segment: str = Segment.validate_name(default_segment)
+        # The three assignable attributes go through their property setters,
+        # so post-construction assignment gets the same validation
+        self.header = header
+        self.default_segment = default_segment
+
+    @property
+    def project_shown(self) -> bool:
+        """
+        When True, solution identity is the SHOWN atoms: models agreeing on
+        every shown atom count as one (clingo's solve.project=show), so
+        hidden helper predicates stop multiplying models. Assignable.
+        """
+        return self._project_shown
+
+    @project_shown.setter
+    def project_shown(self, value: bool) -> None:
+        if not isinstance(value, bool):
+            raise TypeError(f"project_shown is a bool, got {type(value).__name__}")
+        self._project_shown = value
+
+    @property
+    def header(self) -> str | None:
+        """The one-line % comment at the top of the render; assignable."""
+        return self._header
+
+    @header.setter
+    def header(self, value: str | None) -> None:
+        if value is not None and not isinstance(value, str):
+            raise TypeError(f"Program header must be a string, got {type(value).__name__}")
+        # A subclass converts to its natural plain str first, so the check
+        # below sees exactly the text that will render
+        value = None if value is None else str(value)
+        if value is not None and ("\n" in value or "\r" in value):
+            raise ValueError("Program header must be a single line (it renders as one % comment)")
+        self._header = value
+
+    @property
+    def default_segment(self) -> str:
+        """The segment the program-level statement verbs write to; assignable (name rules apply on assignment)."""
+        return self._default_segment_name
+
+    @default_segment.setter
+    def default_segment(self, name: str) -> None:
+        self._default_segment_name = Segment.validate_name(name)
 
     def _default_segment(self) -> Segment:
         """The default segment, created on first use; every other segment needs add_segment."""
@@ -291,6 +329,7 @@ class ASPProgram:
         """
         if not isinstance(name, str):
             raise TypeError(f"Constant name must be a string, got {type(name).__name__}")
+        name = str(name)  # a subclass's natural plain form: the checks below see what renders
         if isinstance(value, int) and not isinstance(value, bool) and not -(2**31) <= value < 2**31:
             raise ValueError(
                 f"Constant value {value} is outside clingo's integer range "
@@ -312,6 +351,9 @@ class ASPProgram:
         if isinstance(value, bool) or not isinstance(value, (int, str)):
             # bool subclasses int, and a boolean is never a valid ASP term
             raise TypeError(f"Constant value must be an integer or string, got {type(value).__name__}")
+        # A subclass converts to its natural plain form first, so the check
+        # below sees exactly the value that will render
+        value = int(value) if isinstance(value, int) else str(value)
         if isinstance(value, str) and any(c in value for c in ('"', "\\", "\n", "\r")):
             raise ValueError(f"Constant string value cannot contain quotes, backslashes, or newlines: {value!r}")
 
@@ -496,6 +538,18 @@ class ASPProgram:
         self._validate_constants()
         self._validate_names()
         self._validate_shown_predicates()
+
+        # Discriminate auto-tupled weak constraints program-wide, in document
+        # order: two statements' coinciding ground tuples must not merge
+        # charges in the shared tuple set. A program-level concern like the
+        # #show block — segments are append-only, so ordinals are stable
+        # across re-renders as the program grows.
+        ordinal = 0
+        for segment in self._segments.values():
+            for element in segment:
+                if isinstance(element, WeakConstraint) and element.auto_tuple:
+                    element.discriminator = ordinal
+                    ordinal += 1
 
         # 1. Header comments
         lines: list[str] = []
@@ -811,6 +865,11 @@ class GroundedProgram:
         # levels, highest first — bool(levels) IS "does this program optimize?"
         self._ground_levels = ground_levels
         self._active: SearchABC | None = None
+        # Guards the guard: the sequential-solve check is check-then-set, so
+        # two racing threads could both pass it and share one Control's
+        # search state silently — the exact quiet overlap the check exists
+        # to make loud. Held across check, configure, and _active assignment.
+        self._solve_lock = threading.Lock()
 
     @property
     def text(self) -> str:
@@ -911,9 +970,10 @@ class GroundedProgram:
         grounding for the next solve() — useful when the old result is no
         longer in hand. Idempotent; a no-op if nothing is open.
         """
-        if self._active is not None:
-            self._active.close()
-            self._active = None
+        with self._solve_lock:
+            if self._active is not None:
+                self._active.close()
+                self._active = None
 
     def solve(
         self,
@@ -940,14 +1000,15 @@ class GroundedProgram:
                 silently make every model vanish (or be vacuous), so an
                 unknown atom raises instead.
         """
-        converted = self._begin_solve(None, timeout, assumptions)
-        self._active = result = SolveResult(
-            self._control,
-            self._predicate_types,
-            timeout,
-            self._message_handler,
-            assumptions=converted,
-        )
+        with self._solve_lock:
+            converted = self._begin_solve(None, timeout, assumptions)
+            self._active = result = SolveResult(
+                self._control,
+                self._predicate_types,
+                timeout,
+                self._message_handler,
+                assumptions=converted,
+            )
         return result
 
     def cautious_iter(
@@ -982,15 +1043,16 @@ class GroundedProgram:
         timeout: float = 0,
         assumptions: Sequence[Predicate | DefaultNegation] | None = None,
     ) -> RefinementSteps:
-        converted = self._begin_solve(mode, timeout, assumptions)
-        self._active = steps = RefinementSteps(
-            self._control,
-            self._predicate_types,
-            timeout,
-            self._message_handler,
-            converted or [],
-            mode,
-        )
+        with self._solve_lock:
+            converted = self._begin_solve(mode, timeout, assumptions)
+            self._active = steps = RefinementSteps(
+                self._control,
+                self._predicate_types,
+                timeout,
+                self._message_handler,
+                converted or [],
+                mode,
+            )
         return steps
 
     def cautious(
@@ -1087,6 +1149,19 @@ class GroundedProgram:
                 raise ValueError(
                     f"bound value {b} is outside clasp's 64-bit cost range [-9223372036854775808, 9223372036854775807]"
                 )
+        with self._solve_lock:
+            return self._locked_optimize_iter(timeout, assumptions, strategy, all_optima, items, bound)
+
+    def _locked_optimize_iter(
+        self,
+        timeout: float,
+        assumptions: Sequence[Predicate | DefaultNegation] | None,
+        strategy: OptStrategy,
+        all_optima: bool,
+        items: Mapping[int, int] | None,
+        bound: int | Mapping[int, int] | None,
+    ) -> OptimizeSteps:
+        """The body of optimize_iter, under the sequential-solve lock."""
         converted = self._begin_solve(OPTIMIZE, timeout, assumptions)
         bounds: list[int] = []
         if items is not None:

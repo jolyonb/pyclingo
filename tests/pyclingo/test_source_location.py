@@ -35,11 +35,10 @@ del _frame
 
 @pytest.fixture
 def skip_registry() -> Iterator[None]:
-    """Snapshot the skip-prefix registry and restore it after the test."""
-    snapshot = set(source_location_module._skip_prefixes)
+    """Snapshot the skip-prefix registry and restore it after the test (rebind: the set is copy-on-write)."""
+    snapshot = source_location_module._skip_prefixes
     yield
-    source_location_module._skip_prefixes.clear()
-    source_location_module._skip_prefixes.update(snapshot)
+    source_location_module._skip_prefixes = snapshot
 
 
 # ---- capture_location ----
@@ -306,3 +305,12 @@ def test_display_escapes_newlines() -> None:
     # line so an annotated render never gains lines (or injects statements)
     assert SourceLocation("evil\nq(666).", 1).display() == "evil\\nq(666).:1"
     assert SourceLocation("evil\rq(7).", 2).display() == "evil\\rq(7).:2"
+
+
+def test_registration_rebinds_instead_of_mutating(skip_registry: None) -> None:
+    # Copy-on-write: a walker iterating the registry on another thread sees
+    # the old set or the new one, never a mutating one
+    before = source_location_module._skip_prefixes
+    register_skip_package("cow_probe")
+    assert "cow_probe" not in before  # the old set is untouched
+    assert "cow_probe" in source_location_module._skip_prefixes

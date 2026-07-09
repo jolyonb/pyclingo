@@ -177,3 +177,45 @@ def test_raw_show_term_forms_get_a_teaching_error() -> None:
     program.raw_asp("#show 2*X : p_term(X).")
     with pytest.raises(ValueError, match="non-predicate output"):
         list(program.solve())
+
+
+def test_part_directives_rejected_with_teaching() -> None:
+    # A #program part directive silently unloads everything rendered after
+    # it (the program grounds a single 'base' part): empty model, SAT — a
+    # silent wrong answer caught at construction instead
+    program = ASPProgram()
+    with pytest.raises(ValueError, match="unloaded part"):
+        program.raw_asp("#program later.")
+    with pytest.raises(ValueError, match="unloaded part"):
+        program.raw_asp('#include "other.lp".')
+
+
+def test_part_directives_in_comments_and_scripts_are_inert() -> None:
+    # Commented-out, string-embedded, and #script-embedded text is not a
+    # directive — and gringo NESTS block comments, so an inner *% does not
+    # end the outer comment
+    program = ASPProgram()
+    P = Predicate.define("p_inert", ["x"])
+    program.raw_asp("% #program later.\np_inert(1).", predicates=[P])
+    program.raw_asp("%*\n#program block.\n*%\np_inert(2).")
+    program.raw_asp("%*\nouter %* inner *%\n#program still_commented.\n*%\np_inert(3).")
+    program.raw_asp('p_inert("#program in a string").')
+    program.raw_asp('#script (python)\ntext = "#program fake."\n#end.')
+    program.raw_asp("p_inert(4). % a trailing comment mentioning #program, no newline")
+    assert "p_inert(1)." in program.render()
+    # An unterminated #script swallows the rest of the scan (gringo itself
+    # rejects the block at parse, so the scan need not judge its interior)
+    throwaway = ASPProgram()
+    throwaway.raw_asp("#script (python)\n#program fake.")
+
+
+def test_part_directives_are_found_when_code_resumes_mid_line() -> None:
+    # The scan is character-level: a directive after a same-line comment
+    # close, or after a string containing %, is still live code
+    program = ASPProgram()
+    with pytest.raises(ValueError, match="unloaded part"):
+        program.raw_asp("%* note *% #program later.")
+    with pytest.raises(ValueError, match="unloaded part"):
+        program.raw_asp('p("100%"). #program later.')
+    with pytest.raises(ValueError, match="unloaded part"):
+        program.raw_asp('p("esc\\"quote"). #program later.')  # the \\" escape does not end the string early

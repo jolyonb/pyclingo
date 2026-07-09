@@ -3,12 +3,14 @@ Tests for the ground()/solve() split: ground once, solve many times, with
 the sequential-solve and staleness contracts enforced loudly.
 """
 
+import threading
 from itertools import islice
 
 import clingo
 import pytest
 
 from pyclingo import ASPProgram, Choice, Number, Predicate, RangePool, Variable
+from pyclingo.solver import GroundedProgram
 
 A = Predicate.define("a", ["value"])
 
@@ -213,3 +215,37 @@ def test_project_shown_off_by_default() -> None:
     P = Predicate.define("p_projd", ["x"])
     program.fact(P(x=1))
     assert "project" not in program.render()
+
+
+def test_racing_solves_admit_exactly_one() -> None:
+    # The sequential guard is locked: of two threads racing solve() on one
+    # grounding, exactly one wins and the other hits the teaching error —
+    # never two searches silently sharing one Control (the unlocked
+    # check-then-set admitted both in 93/500 trials)
+    program = ASPProgram()
+    P = Predicate.define("p_race_seq", ["x"])
+    program.fact(Choice(P(x=RangePool(1, 3))))
+    for _ in range(20):
+        grounded = program.ground()
+        outcomes: list[str] = []
+        barrier = threading.Barrier(2)
+
+        def attempt(
+            grounded: GroundedProgram = grounded,
+            outcomes: list[str] = outcomes,
+            barrier: threading.Barrier = barrier,
+        ) -> None:
+            barrier.wait()
+            try:
+                grounded.solve()
+                outcomes.append("admitted")
+            except RuntimeError:
+                outcomes.append("refused")
+
+        threads = [threading.Thread(target=attempt) for _ in range(2)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+        assert sorted(outcomes) == ["admitted", "refused"]
+        grounded.abandon()

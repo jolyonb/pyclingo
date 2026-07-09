@@ -91,22 +91,35 @@ def rendered_programs_must_parse(request: pytest.FixtureRequest, monkeypatch: py
     monkeypatch.setattr(ASPProgram, "render", checked_program_render)
 
     for term_class, host in _TERM_HOSTS:
-        original = term_class.render
+        # Patch every class in the family that defines its OWN render: a
+        # concrete subclass's render (Variable, Number, RangePool, ...)
+        # shadows a base-class patch, which silently turned the checker off
+        # for that whole family
+        family = [term_class]
+        stack = [term_class]
+        while stack:
+            for subclass in stack.pop().__subclasses__():
+                family.append(subclass)
+                stack.append(subclass)
+        for klass in family:
+            if "render" not in klass.__dict__:
+                continue  # inherits render: the ancestor's patch covers it
+            original = klass.__dict__["render"]
 
-        def checked_render(
-            self: Any,
-            *args: Any,
-            _original: Callable[..., str] = original,
-            _host: Callable[[str], str] = host,
-            **kwargs: Any,
-        ) -> str:
-            depth[0] += 1
-            try:
-                output = _original(self, *args, **kwargs)
-            finally:
-                depth[0] -= 1
-            if depth[0] == 0:
-                assert_clingo_accepts(_host(output))
-            return output
+            def checked_render(
+                self: Any,
+                *args: Any,
+                _original: Callable[..., str] = original,
+                _host: Callable[[str], str] = host,
+                **kwargs: Any,
+            ) -> str:
+                depth[0] += 1
+                try:
+                    output = _original(self, *args, **kwargs)
+                finally:
+                    depth[0] -= 1
+                if depth[0] == 0:
+                    assert_clingo_accepts(_host(output))
+                return output
 
-        monkeypatch.setattr(term_class, "render", checked_render)
+            monkeypatch.setattr(klass, "render", checked_render)

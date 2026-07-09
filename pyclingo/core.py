@@ -537,6 +537,9 @@ class Number(ConstantBase):
         # bool subclasses int, and a boolean is never a valid ASP term
         if isinstance(value, bool) or not isinstance(value, int):
             raise TypeError(f"Number value must be an integer, got {type(value).__name__}")
+        # A subclass converts to its natural plain int first, so the checks
+        # below (and rendering) see exactly that value
+        value = int(value)
         if not -(2**31) <= value < 2**31:
             raise ValueError(
                 f"Number value {value} is outside clingo's integer range "
@@ -574,6 +577,9 @@ class String(ConstantBase):
         """No double quotes, backslashes, or newlines (no escaping support); single quotes are fine."""
         if not isinstance(value, str):
             raise TypeError(f"String constant value must be a string, got {type(value).__name__}")
+        # A subclass converts to its natural plain str first (its __str__),
+        # so the content checks below see exactly the text that will render
+        value = str(value)
 
         if '"' in value:
             raise ValueError(f"String constant cannot contain double quotes (no escaping support): {value}")
@@ -1239,13 +1245,18 @@ class Comparison(Negatable):
         Comparisons deliberately have no truth value.
 
         Operators like == on pyclingo terms build ASP comparison terms rather than
-        evaluating anything, so code like `if x == y:` is almost certainly a bug.
-        Raising here turns that silent wrongness into a loud error.
+        evaluating anything, so code like `if x == y:` is almost certainly a bug —
+        and a chained comparison (X < Y < Z) needs a truth value halfway through,
+        because Python evaluates it as (X < Y) and (Y < Z). Raising here turns
+        both silent wrongnesses into a loud error.
         """
         raise TypeError(
             f"A Comparison ({self.render()}) has no boolean value: comparison operators on "
-            "pyclingo terms build ASP terms rather than evaluating them. If you meant to "
-            "compare Python objects, compare their .render() output or use 'is'."
+            "pyclingo terms build ASP terms rather than evaluating them. A chained "
+            "comparison like X < Y < Z lands here because Python evaluates it as "
+            "(X < Y) and (Y < Z) — pass each comparison separately instead: "
+            "when(X < Y, Y < Z). If you meant to compare Python objects, compare "
+            "their .render() output or use 'is'."
         )
 
     @property

@@ -14,6 +14,10 @@ optimization statements at a priority level contribute tuples to ONE
 set — duplicate tuples count once, whichever statement (or weak
 constraint) produced them — and the weight sums over the distinct set,
 so accumulating elements into one statement would be cosmetic only.
+minimize()/maximize() tuples are the caller's, rendered exactly as
+given; penalize()'s AUTO tuples carry a per-statement discriminator so
+independent penalties never share tuples by accident (see
+WeakConstraint).
 """
 
 from enum import StrEnum
@@ -36,6 +40,14 @@ class WeakConstraint(ProgramElement):
     both to the same construct, and their tuples share the one global set —
     but the spelling states intent: penalize() reads as forbid() that
     negotiates. Constructed via ASPProgram.penalize(), not directly.
+
+    Tuple identity is owned per the spelling: an AUTO tuple (terms omitted)
+    means the library owns it — this statement, this match, charged once —
+    so the program render adds a per-statement discriminator term
+    ("weak-constraint-N") that keeps two statements' coinciding ground
+    tuples from silently merging in the shared set. Explicit terms= means
+    the caller owns the identity: rendered exactly as given, gringo's
+    shared tuple-set semantics included.
     """
 
     def __init__(
@@ -60,6 +72,11 @@ class WeakConstraint(ProgramElement):
                 f"instead. To deliberately reward, use maximize() (or minimize() with a negative "
                 f"weight) — the objective verbs say what they mean."
             )
+        # An auto tuple delegates identity to the library; the program render
+        # completes it with a per-statement discriminator (see the class
+        # docstring). None until a program render assigns it.
+        self._auto_tuple = tuple_terms is None
+        self.discriminator: int | None = None
         if tuple_terms is None:
             # Per-match charging by default: the tuple gets the conditions'
             # global variables, spelled out in the render. gringo's bare
@@ -76,6 +93,12 @@ class WeakConstraint(ProgramElement):
                 )
         if not isinstance(priority, int) or isinstance(priority, bool):
             raise TypeError(f"Weak-constraint priority must be an int, got {type(priority).__name__}")
+        if not -(2**31) <= priority < 2**31:
+            raise ValueError(
+                f"Weak-constraint priority {priority} is outside clingo's integer range "
+                f"[-2147483648, 2147483647]; clingo would silently wrap it, merging or "
+                f"reordering objective tiers"
+            )
         if not conditions:
             raise ValueError("A weak constraint requires at least one condition")
         # The conditions form a RULE BODY: everything forbid() accepts is
@@ -96,6 +119,11 @@ class WeakConstraint(ProgramElement):
         return self._targets
 
     @property
+    def auto_tuple(self) -> bool:
+        """Whether the tuple was auto-built (terms omitted), so the program render adds a discriminator."""
+        return self._auto_tuple
+
+    @property
     def priority(self) -> int:
         return self._priority
 
@@ -114,8 +142,15 @@ class WeakConstraint(ProgramElement):
         weight_str = self._targets[0].render()
         if self._priority != 0:
             weight_str = f"{weight_str}@{self._priority}"
-        tuple_str = ", ".join([weight_str, *(term.render() for term in self._targets[1:])])
-        return f":~ {render_body_terms(self._conditions)}. [{tuple_str}]"
+        parts = [weight_str]
+        # The discriminator names this statement in the shared tuple set —
+        # two auto-tupled statements over one domain must not merge charges.
+        # Standalone renders (fragments, validation error text) have no
+        # program-assigned ordinal and render the user's tuple bare.
+        if self._auto_tuple and self.discriminator is not None:
+            parts.append(f'"weak-constraint-{self.discriminator}"')
+        parts.extend(term.render() for term in self._targets[1:])
+        return f":~ {render_body_terms(self._conditions)}. [{', '.join(parts)}]"
 
     def collect_defined_constants(self) -> set[str]:
         constants: set[str] = set()
@@ -188,6 +223,12 @@ class OptimizationDirective(ProgramElement):
                 )
         if not isinstance(priority, int) or isinstance(priority, bool):
             raise TypeError(f"Optimization priority must be an int, got {type(priority).__name__}")
+        if not -(2**31) <= priority < 2**31:
+            raise ValueError(
+                f"Optimization priority {priority} is outside clingo's integer range "
+                f"[-2147483648, 2147483647]; clingo would silently wrap it, merging or "
+                f"reordering objective tiers"
+            )
 
         self._optimization = optimization
         self._weight = weight

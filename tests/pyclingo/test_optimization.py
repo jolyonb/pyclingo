@@ -19,6 +19,7 @@ from pyclingo import (
     Count,
     Number,
     Predicate,
+    Segment,
     SolveResult,
     String,
     Variable,
@@ -106,6 +107,19 @@ def test_weight_types_validated() -> None:
         program.minimize(String("three"), condition=Pick(x=ANY))  # type: ignore[arg-type]
     with pytest.raises(TypeError, match="priority must be an int"):
         program.minimize(1, condition=Pick(x=ANY), priority="high")  # type: ignore[arg-type]
+
+
+def test_priority_outside_clingo_range_rejected() -> None:
+    # gringo wraps priorities mod 2^32 with no message even at DEBUG —
+    # tiers the author placed apart silently merge or reorder. Probed:
+    # priority=2**32+5 grounded as tier 5; 2**31 became the LOWEST tier.
+    program = ASPProgram()
+    X = Variable("X")
+    with pytest.raises(ValueError, match="outside clingo's integer range"):
+        program.minimize(1, X, condition=Pick(x=X), priority=2**32 + 5)
+    with pytest.raises(ValueError, match="outside clingo's integer range"):
+        program.penalize(Pick(x=X), priority=2**31)
+    program.minimize(1, X, condition=Pick(x=X), priority=2**31 - 1)  # boundary is legal
 
 
 def test_aggregate_condition_rejected() -> None:
@@ -331,8 +345,61 @@ def test_penalize_defaults_charge_per_match() -> None:
     X = Variable("X")
     program.fact(Pick(x=1), Pick(x=2), Pick(x=3))
     program.penalize(Pick(x=X))
-    assert ":~ pick(X). [1, X]" in program.render()
+    assert ':~ pick(X). [1, "weak-constraint-0", X]' in program.render()
     assert optimal_cost(program) == [3]  # one charge per match
+
+
+def test_independent_penalties_never_merge_charges() -> None:
+    # The auto tuple carries a per-statement discriminator: two penalties
+    # over one domain charge separately even when their ground (weight,
+    # variables) coincide. Without it, clasp's shared tuple set counted
+    # these two charges as one (probed cost was [1]).
+    program = ASPProgram()
+    X = Variable("X")
+    Q = Predicate.define("q_dis", ["x"])
+    program.fact(Pick(x=1), Q(x=1))
+    program.penalize(Pick(x=X))
+    program.penalize(Q(x=X))
+    rendered = program.render()
+    assert ':~ pick(X). [1, "weak-constraint-0", X]' in rendered
+    assert ':~ q_dis(X). [1, "weak-constraint-1", X]' in rendered
+    assert optimal_cost(program) == [2]  # one charge each
+
+
+def test_discriminators_are_program_wide_across_segments() -> None:
+    # Ordinals are assigned in document order over the whole program, so
+    # penalties in different segments never share a tag
+    program = ASPProgram()
+    X = Variable("X")
+    Q = Predicate.define("q_seg", ["x"])
+    extra = program.add_segment("Extra")
+    program.fact(Pick(x=1))
+    program.penalize(Pick(x=X))
+    extra.fact(Q(x=1))
+    extra.penalize(Q(x=X))
+    rendered = program.render()
+    assert '"weak-constraint-0"' in rendered and '"weak-constraint-1"' in rendered
+    assert optimal_cost(program) == [2]
+
+
+def test_explicit_terms_carry_no_discriminator() -> None:
+    # terms= means the caller owns tuple identity: rendered exactly as
+    # given, so deliberate cross-statement merging stays expressible
+    # (test_penalize_is_minimize_in_disguise pins the merging itself)
+    program = ASPProgram()
+    X = Variable("X")
+    program.fact(Pick(x=1))
+    program.penalize(Pick(x=X), terms=[X])
+    assert "weak-constraint" not in program.render()
+
+
+def test_discriminator_is_a_program_render_concern() -> None:
+    # Like the #show block, the tag exists only in a program's render: a
+    # standalone segment renders the bare tuple (a fragment, not a program)
+    segment = Segment("Soft")
+    X = Variable("X")
+    segment.penalize(Pick(x=X))
+    assert ":~ pick(X). [1, X]" in segment.render(with_header=False)
 
 
 def test_penalize_empty_terms_collapse_deliberately() -> None:
@@ -407,7 +474,7 @@ def test_auto_terms_exclude_construct_locals() -> None:
     program.fact(Choice(Pick(x=1)).add(Pick(x=2)))
     program.fact(Tag(t=1), Tag(t=2))
     program.penalize(Tag(t=T), Count(X, condition=Pick(x=X)) >= 2)
-    assert ":~ tag_at(T), #count{ X : pick(X) } >= 2. [1, T]" in program.render()
+    assert ':~ tag_at(T), #count{ X : pick(X) } >= 2. [1, "weak-constraint-0", T]' in program.render()
 
 
 def test_bound_type_validated() -> None:

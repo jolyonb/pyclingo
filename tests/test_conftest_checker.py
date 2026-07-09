@@ -4,8 +4,18 @@ Tests for the suite-wide render conformance checker itself.
 
 import pytest
 
-from pyclingo import ASPProgram, Count, Predicate, Variable
-from tests.conftest import assert_clingo_accepts
+from pyclingo import (
+    ASPProgram,
+    Count,
+    DefinedConstant,
+    ExplicitPool,
+    Number,
+    Predicate,
+    RangePool,
+    String,
+    Variable,
+)
+from tests.conftest import _TERM_HOSTS, assert_clingo_accepts
 
 
 def test_checker_accepts_valid_programs() -> None:
@@ -32,6 +42,29 @@ def test_top_level_term_renders_are_wrapped_and_checked() -> None:
     P = Predicate.define("p", ["x"])
     assert (~(X < 5)).render() == "not X < 5"
     assert Count(X, condition=P(x=X)).render() == "#count{ X : p(X) }"
+
+
+def test_every_term_host_family_resolves_to_the_checked_render() -> None:
+    # The patch must land on the class whose render an INSTANCE actually
+    # calls: concrete Value/Pool subclasses define their own render, which
+    # once shadowed the base-class patch and silently turned the checker
+    # off for both families
+    instances = [
+        Variable("ConfCheck"),
+        Number(3),
+        String("conf"),
+        DefinedConstant("conf_c"),
+        RangePool(1, 3),
+        ExplicitPool([1, 2]),
+        Predicate.define("p_conf", ["x"])(x=1),
+        Count(Variable("ConfCheck")),
+    ]
+    for instance in instances:
+        assert type(instance).render.__name__ == "checked_render", type(instance).__name__
+    # And every family listed in _TERM_HOSTS is patched at its root too
+    for term_class, _host in _TERM_HOSTS:
+        if "render" in term_class.__dict__:
+            assert term_class.render.__name__ in ("checked_render", "checked_program_render"), term_class.__name__
 
 
 def test_nested_renders_do_not_multiply_checks() -> None:

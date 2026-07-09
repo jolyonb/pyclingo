@@ -62,9 +62,12 @@ class Segment:
 
     @staticmethod
     def validate_name(name: str) -> str:
-        """The name, exactly as given; rejects empty or multi-line ones."""
+        """The name, exactly as given (as a plain str); rejects empty or multi-line ones."""
         if not isinstance(name, str):
             raise TypeError(f"Segment name must be a string, got {type(name).__name__}")
+        # A subclass converts to its natural plain str first, so the checks
+        # below see exactly the name that will render
+        name = str(name)
         if not name.strip():
             raise ValueError("Segment names cannot be empty")
         if "\n" in name or "\r" in name:
@@ -169,13 +172,16 @@ class Segment:
         so the spelling is intent: penalize() for soft constraints,
         minimize() for objectives.
 
-        By default each ground match is charged separately: the tuple gets
-        the conditions' variables, written out in the render. Pass terms=
-        to charge by a different identity — terms=[] deliberately collapses
-        EVERY match into one charge (gringo's own bare-tuple semantics).
-        Every weight/terms variable must be bound by the conditions. A
-        negative literal weight is rejected — that is a reward, not a
-        penalty; spell it minimize()/maximize().
+        Tuple identity follows the spelling. By default the library owns
+        it: the tuple gets the conditions' variables plus a per-statement
+        "weak-constraint-N" tag, so each ground match of THIS statement is
+        charged once — two penalties over one domain never merge charges.
+        Pass terms= to own the identity yourself (rendered exactly as
+        given, shared tuple-set semantics included) — terms=[] deliberately
+        collapses EVERY match into one charge (gringo's own bare-tuple
+        semantics). Every weight/terms variable must be bound by the
+        conditions. A negative literal weight is rejected — that is a
+        reward, not a penalty; spell it minimize()/maximize().
         """
         weak = WeakConstraint(conditions, weight, tuple(terms) if terms is not None else None, priority)
         validate_weak_constraint(

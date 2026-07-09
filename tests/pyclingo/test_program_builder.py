@@ -433,3 +433,27 @@ def test_header_gap_is_exactly_one_even_into_a_multiline_element() -> None:
     segment.raw_asp("\n\nraw_gap(1).")
     rendered = segment.render(with_header=True)
     assert rendered == "\n% ===== Gap =====\n\nraw_gap(1)."
+
+
+def test_assignable_attributes_validate_on_assignment() -> None:
+    # project_shown/header/default_segment are the three assignable
+    # attributes; assignment runs the same validation construction does, so
+    # a bad value fails on the assigning line, not at render
+    program = ASPProgram()
+    with pytest.raises(TypeError, match="project_shown is a bool"):
+        program.project_shown = "yes"  # type: ignore[assignment]
+    with pytest.raises(TypeError, match="header must be a string"):
+        program.header = 7  # type: ignore[assignment]
+    with pytest.raises(ValueError, match="single line"):
+        program.header = "line1\nline2"  # would render bare uncommented ASP
+    with pytest.raises(ValueError, match="single-line"):
+        program.default_segment = "a\nb"
+    program.header = "Set later"  # the happy paths still assign
+    program.project_shown = True
+    program.default_segment = "Elsewhere"
+    P = Predicate.define("p_assign", ["x"])
+    program.fact(P(x=1))
+    rendered = program.render()
+    assert "% Set later" in rendered
+    assert "p_assign(1)." in rendered  # landed in the reassigned default segment
+    assert program["Elsewhere"] is not None

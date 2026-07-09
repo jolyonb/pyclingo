@@ -44,7 +44,11 @@ class SourceLocation:
         return f"{path}:{self.lineno}"
 
 
-_skip_prefixes: set[str] = {"pyclingo"}
+# Copy-on-write: registration rebinds a fresh frozenset, so a walker
+# iterating on another thread sees the old set or the new one, never a
+# mutating one ("Set changed size during iteration" out of an innocent
+# fact() call)
+_skip_prefixes: frozenset[str] = frozenset({"pyclingo"})
 # Keyed by identity, holding the code object alive: two functions compiled
 # from identical source in different files have EQUAL code objects (CPython
 # code equality ignores the filename), and marking one must not mark the other
@@ -65,12 +69,13 @@ def register_skip_package(name: str) -> None:
     Registration is process-wide and permanent: register only names you own.
     "__main__" is rejected — that is the user's own script, never plumbing.
     """
+    global _skip_prefixes
     parts = name.split(".") if isinstance(name, str) else []
     if not parts or not all(part.isidentifier() for part in parts):
         raise ValueError(f"Package name must be a dotted module path, got {name!r}")
     if "__main__" in parts:
         raise ValueError("Cannot register '__main__' as plumbing: it is the user's own script")
-    _skip_prefixes.add(name)
+    _skip_prefixes = _skip_prefixes | {name}
 
 
 def attribute_to_caller[F: Callable[..., object]](func: F) -> F:

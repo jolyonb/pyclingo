@@ -2,6 +2,10 @@
 Tests for in_namespace(): cached namespaced copies of predicate classes.
 """
 
+import gc
+import threading
+import weakref
+
 import pytest
 
 from pyclingo import ASPProgram, Field, Predicate
@@ -63,3 +67,37 @@ def test_define_classes_clone_too() -> None:
 def test_namespace_validation_applies() -> None:
     with pytest.raises(ValueError, match="Namespace"):
         Clue.in_namespace("Bad Namespace!")
+
+
+def test_clone_churn_is_collectable() -> None:
+    # The clone cache lives in the base class's own __dict__: dropping the
+    # base frees its clones, so a define()+in_namespace() loop cannot pin
+    # classes forever through a process-global cache
+    base = Predicate.define("churn_probe", ["x"])
+    clone = base.in_namespace("ns_churn")
+    assert base.in_namespace("ns_churn") is clone  # repeat-call identity while live
+    base_ref, clone_ref = weakref.ref(base), weakref.ref(clone)
+    del base, clone
+    gc.collect()
+    assert base_ref() is None
+    assert clone_ref() is None
+
+
+def test_concurrent_cloning_agrees_on_one_class() -> None:
+    # Racing in_namespace() callers must all hold the same clone class: two
+    # distinct classes sharing (name, arity) would trip the collision check
+    base = Predicate.define("race_clone", ["x"])
+    results: list[type[Predicate]] = []
+    barrier = threading.Barrier(8)
+
+    def clone() -> None:
+        barrier.wait()
+        results.append(base.in_namespace("ns_race"))
+
+    threads = [threading.Thread(target=clone) for _ in range(8)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert len(results) == 8
+    assert len({id(c) for c in results}) == 1

@@ -1,6 +1,7 @@
 import copy
 import keyword
 import re
+import threading
 import types
 from abc import ABCMeta
 from dataclasses import Field as DataclassField
@@ -29,6 +30,10 @@ type PredicateField = int | str | Value | Predicate | Expression | Pool
 # so int/str never appear here (unlike PredicateField, the write union)
 type FieldAsTermType = Value | Predicate | Expression | Pool
 type PredicateClassType = type[Predicate]
+
+# Serializes in_namespace()'s clone creation: racing callers must agree on
+# one clone class per (base, namespace)
+_clone_lock = threading.Lock()
 
 
 class Field[T]:
@@ -238,8 +243,11 @@ class Predicate(PredicateBase, Negatable, metaclass=_PredicateMeta):
     # plain Python values; __post_init__ leaves them alone
     _descriptor_fields: ClassVar[frozenset[str]] = frozenset()
     # in_namespace() clones, cached so repeated calls return the same class —
-    # two distinct classes sharing a (name, arity) would be a collision
-    _namespace_clones: ClassVar[dict[tuple[type, str], type[Predicate]]] = {}
+    # two distinct classes sharing a (name, arity) would be a collision. The
+    # dict lives in each base class's OWN __dict__ (created on first use,
+    # never inherited), so dropping the base frees its clones: a define()
+    # churn loop cannot pin classes forever through a process-global cache.
+    _namespace_clones: ClassVar[dict[str, type[Predicate]]]
     # Where user code defined this class (its class statement, define() call,
     # or in_namespace() call); a name-collision error needs it — the colliding
     # classes' names match by definition, so names alone cannot disambiguate
@@ -316,17 +324,23 @@ class Predicate(PredicateBase, Negatable, metaclass=_PredicateMeta):
         """
         if namespace == cls._namespace:
             return cls  # already in this namespace
-        key = (cls, namespace)
-        clone = Predicate._namespace_clones.get(key)
-        if clone is None:
-            clone = types.new_class(
-                cls.__name__,
-                bases=(cls,),
-                kwds={"name": cls._predicate_name, "namespace": namespace, "show": cls._show},
-            )
-            assert issubclass(clone, Predicate)
-            clone._defined_at = capture_location()  # the in_namespace() call, not types.new_class
-            Predicate._namespace_clones[key] = clone
+        # Locked: racing callers must agree on ONE clone class — two distinct
+        # classes sharing (name, arity) would trip the collision check later
+        with _clone_lock:
+            clones = cls.__dict__.get("_namespace_clones")
+            if clones is None:
+                clones = {}
+                cls._namespace_clones = clones
+            clone = clones.get(namespace)
+            if clone is None:
+                clone = types.new_class(
+                    cls.__name__,
+                    bases=(cls,),
+                    kwds={"name": cls._predicate_name, "namespace": namespace, "show": cls._show},
+                )
+                assert issubclass(clone, Predicate)
+                clone._defined_at = capture_location()  # the in_namespace() call, not types.new_class
+                clones[namespace] = clone
         return cast(type[Self], clone)
 
     @classmethod

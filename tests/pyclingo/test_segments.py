@@ -341,7 +341,7 @@ def test_when_penalize_happy_path_and_non_term_violation() -> None:
     X = Variable("X")
     program.when(A(x=X)).penalize(B(x=X))
     rendered = program.render()
-    assert ":~ a(X), b(X). [1, X]" in rendered
+    assert ':~ a(X), b(X). [1, "weak-constraint-0", X]' in rendered
 
     program2 = ASPProgram()
     with pytest.raises(TypeError, match=r"penalize\(\) violation terms must be Terms, got str"):

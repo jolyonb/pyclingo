@@ -30,6 +30,14 @@ class TestComparisonBool:
             if Number(1) == Number(2):
                 pass
 
+    def test_chained_comparison_error_teaches_the_remedy(self) -> None:
+        # X < Y < Z is legal Python that needs a truth value halfway through
+        # ((X < Y) and (Y < Z)); the wall must name the chaining and the fix,
+        # not just the if-statement misuse
+        X, Y, Z = Variable("X"), Variable("Y"), Variable("Z")
+        with pytest.raises(TypeError, match=r"pass each comparison separately.*when\(X < Y, Y < Z\)"):
+            X < Y < Z  # noqa: B015 (the chained comparison is the act under test)
+
 
 class TestValueCaching:
     def test_variables_are_cached(self) -> None:

@@ -266,3 +266,23 @@ def test_interleaved_results_stay_independent() -> None:
     assert len(na) == 4 and len(nb) == 4
     assert ra.exhausted and rb.exhausted
     assert ra.solution_count == rb.solution_count == 4
+
+
+def test_held_iterator_is_loud_after_timeout() -> None:
+    # A generator dead from a TimeoutError can only StopIteration on resume,
+    # which a retry loop reusing the held iterator would read as a clean
+    # empty stream — i.e. unsatisfiable. The timeout terminals close the
+    # state first, so the wrapper stays loud.
+    program = make_choice_program(1)
+    A = Predicate.define("h2_pig", ["p", "h"])
+    B = Predicate.define("h2_p", ["p"], show=False)
+    P, P2, H = Variable("P"), Variable("P2"), Variable("H")
+    program.fact(*[B(p=i) for i in range(1, 13)])
+    program.when(B(p=P)).derive(Choice(A(p=P, h=RangePool(1, 11))).exactly(1))
+    program.forbid(A(p=P, h=H), A(p=P2, h=H), P < P2)
+    result = program.solve(timeout=0.05)
+    iterator = iter(result)
+    with pytest.raises(TimeoutError):
+        next(iterator)
+    with pytest.raises(RuntimeError, match="was closed"):
+        next(iterator)

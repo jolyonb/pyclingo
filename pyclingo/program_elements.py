@@ -63,6 +63,9 @@ class Comment(ProgramElement):
         """text may be multi-line."""
         if not isinstance(text, str):
             raise TypeError(f"Comment text must be a string, got {type(text).__name__}")
+        # A subclass converts to its natural plain str first, so the check
+        # below sees exactly the text that will render
+        text = str(text)
         # Multi-line text renders as a %* *% block, and gringo NESTS block
         # comments: an inner %* swallows the rest of the file, and an inner
         # *% terminates early — both delimiters are forbidden. Single-line
@@ -74,6 +77,56 @@ class Comment(ProgramElement):
     def render(self) -> str:
         """Single-line text renders as a % comment; multi-line text as a %* *% block."""
         return f"%*\n{self.text}\n*%" if "\n" in self.text else f"% {self.text}"
+
+
+def _find_part_directive(text: str) -> str | None:
+    """
+    The first #program/#include directive in the text — outside string
+    literals, comments, and #script blocks — or None. Both directives
+    restructure the program itself (parts, files), which a single-base-part
+    grounding cannot honor. Block comments NEST in gringo (see Comment), so
+    only depth 0 is code; a character scan is required because a line can
+    close a comment and resume code, and % may sit inside a string.
+    """
+    i, n = 0, len(text)
+    depth = 0
+    while i < n:
+        if depth:
+            if text.startswith("%*", i):
+                depth += 1
+                i += 2
+            elif text.startswith("*%", i):
+                depth -= 1
+                i += 2
+            else:
+                i += 1
+        elif text.startswith("%*", i):
+            depth += 1
+            i += 2
+        elif text[i] == "%":
+            # Line comment: code resumes after the newline
+            newline = text.find("\n", i)
+            if newline == -1:
+                break
+            i = newline + 1
+        elif text[i] == '"':
+            # String literal, honoring \" escapes (raw text is arbitrary gringo)
+            i += 1
+            while i < n and text[i] != '"':
+                i += 2 if text[i] == "\\" else 1
+            i += 1
+        elif text.startswith("#script", i):
+            end = text.find("#end.", i)
+            if end == -1:
+                break  # unterminated script: gringo rejects the block itself
+            i = end + len("#end.")
+        elif text.startswith("#program", i):
+            return "#program"
+        elif text.startswith("#include", i):
+            return "#include"
+        else:
+            i += 1
+    return None
 
 
 class RawASP(ProgramElement):
@@ -100,7 +153,17 @@ class RawASP(ProgramElement):
     def __init__(self, text: str, predicates: Sequence[PredicateClassType | NegatedPredicate] = ()):
         if not isinstance(text, str):
             raise TypeError(f"RawASP text must be a string, got {type(text).__name__}")
-        self.text = text
+        # A subclass converts to its natural plain str first: what the scan
+        # below inspects is exactly what will render
+        self.text = str(text)
+        if directive := _find_part_directive(self.text):
+            raise ValueError(
+                f"raw_asp() text contains {directive}, which pyclingo cannot honor: the program "
+                f"grounds a single 'base' part, so every statement rendered after a part "
+                f"directive — including pyclingo-authored rules and #show lines — would land "
+                f"in an unloaded part and silently vanish from the model. Inline the part's "
+                f"statements directly (and for #include, paste the file's text)."
+            )
         self.predicates = tuple(predicates)
 
     def render(self) -> str:

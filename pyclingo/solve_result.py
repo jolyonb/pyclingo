@@ -697,7 +697,10 @@ def _search_generator(
         # Variation point: a timed-out enumeration flags and stops (each
         # yielded model was already a true answer), but a timed-out
         # refinement must raise — merely stopping would impersonate a
-        # completed one
+        # completed one. Closing first keeps a retained iterator loud: a
+        # generator dead from an exception can only StopIteration on
+        # resume, which would read as clean exhaustion.
+        state.closed = True
         raise TimeoutError(
             f"{mode} refinement did not finish within {timeout}s; approximations yielded "
             f"so far form a {'superset' if mode is RefinementMode.CAUTIOUS else 'subset'} "
@@ -706,7 +709,8 @@ def _search_generator(
     if timed_out and state.emission_count == 0:
         # One principle for every mode: a timeout is quiet while real
         # answers are in hand, loud when empty-handed — a silent empty
-        # stream would read as unsatisfiable
+        # stream would read as unsatisfiable. Closed first, as above.
+        state.closed = True
         raise TimeoutError(
             f"the search found no model within {timeout}s; an empty result would "
             f"read as unsatisfiable, and there is nothing usable to return. "

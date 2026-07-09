@@ -278,3 +278,42 @@ def test_pool_helper_rejects_bad_elements() -> None:
 def test_create_variables_requires_a_name() -> None:
     with pytest.raises(ValueError, match="At least one variable name"):
         create_variables()
+
+
+def test_subclass_inputs_take_their_natural_form_then_validate() -> None:
+    # A str/int subclass converts to its natural plain representation FIRST,
+    # and validation runs on that converted value — what is validated is
+    # exactly what renders, so a lying __str__ cannot smuggle text past the
+    # checks: its lie IS the candidate value, and the checks see it
+    class LyingInt(int):
+        def __str__(self) -> str:
+            return "1). evil(1"
+
+    class LyingStr(str):
+        def __str__(self) -> str:
+            return 'x". evil. %'
+
+    class LoudStr(str):
+        def __str__(self) -> str:
+            return f"loud-{str.__str__(self)}"
+
+    # int() ignores __str__: the natural int value renders numerically
+    assert Number(LyingInt(7)).render() == "7"
+    assert type(Number(LyingInt(7)).value) is int
+    # The lie becomes the candidate value and fails the content checks
+    with pytest.raises(ValueError, match="double quotes"):
+        String(LyingStr("safe"))
+    # A benign subclass keeps its natural representation, as a plain str
+    loud = String(LoudStr("safe"))
+    assert loud.render() == '"loud-safe"'
+    assert type(loud.value) is str
+
+    program = ASPProgram()
+    P = Predicate.define("p_inj", ["x"])
+    program.fact(P(x=LyingInt(7)))
+    with pytest.raises(ValueError, match="quotes"):
+        program.define_constant("c_inj", LyingStr("quiet"))
+    program.define_constant("c_loud", LoudStr("quiet"))
+    rendered = program.render()
+    assert "evil" not in rendered
+    assert '#const c_loud = "loud-quiet".' in rendered
