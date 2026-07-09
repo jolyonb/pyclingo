@@ -134,6 +134,22 @@ def test_show_when_both_signs_independently() -> None:
     assert shown == ["-p_both(2)", "p_both(1)"]
 
 
+def test_show_when_duplicate_sign_rejected() -> None:
+    # A sign takes one conditional directive; a second registration raises
+    # (naming the existing directive) instead of silently replacing it —
+    # the other sign remains independently registrable
+    program = ASPProgram()
+    P = Predicate.define("p_dup", ["x"])
+    D = Predicate.define("d_dup", ["x"], show=False)
+    X = Variable("X")
+    program.show_when(ConditionalLiteral(P(x=X), [P(x=X), D(x=X)]))
+    with pytest.raises(ValueError, match=r"already registered for p_dup/1.*p_dup\(X\) : p_dup\(X\), d_dup\(X\)"):
+        program.show_when(ConditionalLiteral(P(x=X), P(x=X)))
+    program.show_when(ConditionalLiteral(-P(x=X), [-P(x=X), D(x=X)]))  # the other sign registers fine
+    with pytest.raises(ValueError, match="already registered for -p_dup/1"):
+        program.show_when(ConditionalLiteral(-P(x=X), -P(x=X)))
+
+
 def test_show_when_on_underived_predicate_rejected_at_render() -> None:
     program = ASPProgram()
     P = Predicate.define("p_und", ["x"])

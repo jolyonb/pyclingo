@@ -1,6 +1,6 @@
 import math
 import threading
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 
 import clingo
 
@@ -150,6 +150,31 @@ class ASPProgram:
         self.header = header
         self.default_segment = default_segment
 
+    def __setattr__(self, name: str, value: object) -> None:
+        """
+        Reject assignment to unknown public attributes: the assignable
+        surface is exactly the settable properties, so a typo like
+        program.project_show = True fails loudly instead of configuring
+        nothing.
+        """
+        if not name.startswith("_"):
+            attr = getattr(type(self), name, None)
+            if not (isinstance(attr, property) and attr.fset is not None):
+                assignable = ", ".join(
+                    sorted(
+                        {
+                            key
+                            for klass in type(self).__mro__
+                            for key, member in vars(klass).items()
+                            if isinstance(member, property) and member.fset is not None
+                        }
+                    )
+                )
+                raise AttributeError(
+                    f"ASPProgram has no assignable attribute '{name}'; assignable attributes: {assignable}"
+                )
+        super().__setattr__(name, value)
+
     @property
     def project_shown(self) -> bool:
         """
@@ -234,6 +259,25 @@ class ASPProgram:
             )
         self._segments[key] = value
 
+    def __contains__(self, segment: str) -> bool:
+        """Whether a segment with this name exists (membership is by name, like a dict's)."""
+        if isinstance(segment, Segment):
+            raise TypeError(
+                f"Membership is by name, like a dict's: use '{segment.name}' in program "
+                f"(program['{segment.name}'] reads the attached object back for an identity check)"
+            )
+        if not isinstance(segment, str):
+            raise TypeError(f"Segment membership is by name (a string), got {type(segment).__name__}")
+        return str(segment) in self._segments
+
+    def __iter__(self) -> Iterator[str]:
+        """Iterate the segment names, in rendering order (dict convention: keys; .segments holds the objects)."""
+        return iter(self._segments)
+
+    def __len__(self) -> int:
+        """The number of segments."""
+        return len(self._segments)
+
     @property
     def segments(self) -> tuple[Segment, ...]:
         """The program's segments, in rendering order."""
@@ -269,9 +313,13 @@ class ASPProgram:
         """
         del self._segments[self._existing_segment_key(segment)]
 
-    def fact(self, *facts: Predicate | Choice) -> None:
+    def fact(self, *facts: Predicate) -> None:
         """Add unconditional statements to the default segment; see Segment.fact()."""
         self._default_segment().fact(*facts)
+
+    def choose(self, choice: Choice) -> None:
+        """Add a bare choice rule to the default segment; see Segment.choose()."""
+        self._default_segment().choose(choice)
 
     def when(self, *conditions: Term) -> When:
         """Hold conditions for a closer, in the default segment; see Segment.when()."""
@@ -401,8 +449,9 @@ class ASPProgram:
         negated atoms, and the two may be registered independently — the
         other sign falls back to the class's show()/hide()/default. For
         its own sign a conditional outranks show()/hide() regardless of
-        call order (resolution is by kind, not time), and there is no
-        way to unregister one.
+        call order (resolution is by kind, not time). A sign takes ONE
+        conditional: registering a second for the same (class, sign)
+        raises, and there is no way to unregister one.
         """
         if not isinstance(condition, ConditionalLiteral):
             raise TypeError(f"show_when condition must be a ConditionalLiteral, got {type(condition).__name__}")
@@ -412,13 +461,21 @@ class ASPProgram:
                 f"show_when needs a conditional literal whose head is a predicate atom "
                 f"(the thing to show), got {type(head).__name__}"
             )
+        key = (type(head), head.negated)
+        if key in self._show_when_overrides:
+            sign = "-" if head.negated else ""
+            raise ValueError(
+                f"show_when is already registered for {sign}{type(head).get_name()}/{type(head).get_arity()} "
+                f"(#show {self._show_when_overrides[key].render()}.); a sign takes one conditional "
+                f"directive — combine the conditions into a single show_when"
+            )
         # A show directive is a capture too: freeze so later mutation of a
         # shared builder cannot silently rewrite it, and validate its variables
         # (a #show directive has no rule body, so everything must be bound
         # inside the conditional literal itself)
         validate_rule(None, [condition], f"#show {condition.render()}.", check_singletons=self._check_singletons)
         condition.freeze()
-        self._show_when_overrides[(type(head), head.negated)] = condition
+        self._show_when_overrides[key] = condition
 
     def _collect_predicates(self) -> set[type[Predicate]]:
         """

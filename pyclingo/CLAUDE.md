@@ -139,6 +139,7 @@ Collections of terms for ASP expansion:
 #### ASP Program (`solver.py`)
 Main class for building and solving ASP programs:
 - **Fact creation**: `fact()` method
+- **Bare choice rules**: `choose()` method
 - **Rule creation**: `when()` method
 - **Constraint creation**: `forbid()` method
 - **Comments and formatting**: `comment()`, `section()`, `blank_line()`

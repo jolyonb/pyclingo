@@ -18,7 +18,7 @@ def make_choice_program(n: int) -> ASPProgram:
     """A program with 2^n models: an unconstrained choice over a(1..n)."""
     program = ASPProgram()
     A = Predicate.define("a", ["value"])
-    program.fact(Choice(A(value=RangePool(1, n))))
+    program.choose(Choice(A(value=RangePool(1, n))))
     return program
 
 
@@ -278,7 +278,7 @@ def test_scalar_knobs_reject_lookalike_types() -> None:
         grounded.cautious(max_iterations=True)
     optimizing = ASPProgram()
     B = Predicate.define("b_knob", ["x"])
-    optimizing.fact(Choice(B(x=RangePool(1, 2))).at_least(1))
+    optimizing.choose(Choice(B(x=RangePool(1, 2))).at_least(1))
     optimizing.minimize(1, Variable("X"), condition=B(x=Variable("X")))
     with pytest.raises(TypeError, match="max_iterations is a count"):
         optimizing.ground().optimize(max_iterations=True)

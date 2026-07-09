@@ -35,7 +35,7 @@ def build() -> ASPProgram:
     X = Variable("X")
     choice = Choice(Color(x=X), condition=Dom(x=X)).at_least(1).at_most(2)
     program.fact(*[Dom(x=i) for i in (1, 2, 3)])
-    program.fact(choice)
+    program.choose(choice)
     program.forbid(Color(x=1), Color(x=2))
     return program
 
@@ -340,7 +340,7 @@ def test_refinement_timeout_mid_stream_raises() -> None:
     AssignM = Predicate.define("assign_mid", ["p", "h"])
     program = ASPProgram()
     P, P2, H = Variable("P"), Variable("P2"), Variable("H")
-    program.fact(Choice(Free()))
+    program.choose(Choice(Free()))
     program.fact(*[PigeonM(p=i) for i in range(1, 15)])
     program.when(PigeonM(p=P)).derive(Choice(AssignM(p=P, h=RangePool(1, 13))).at_most(1))
     program.forbid(AssignM(p=P, h=H), AssignM(p=P2, h=H), P < P2)

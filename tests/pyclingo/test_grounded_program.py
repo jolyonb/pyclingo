@@ -18,7 +18,7 @@ A = Predicate.define("a", ["value"])
 def make_program(n: int = 3) -> ASPProgram:
     """2^n models: an unconstrained choice over a(1..n)."""
     program = ASPProgram()
-    program.fact(Choice(A(value=RangePool(1, n))))
+    program.choose(Choice(A(value=RangePool(1, n))))
     return program
 
 
@@ -166,7 +166,7 @@ def test_assumptions_resolve_defined_constants() -> None:
     program = ASPProgram()
     F = Predicate.define("f_const", ["x"])
     n = program.define_constant("n_assume", 4)
-    program.fact(Choice(F(x=RangePool(1, n))))
+    program.choose(Choice(F(x=RangePool(1, n))))
     grounded = program.ground()
     result = grounded.solve(assumptions=[F(x=n)])
     models = list(result)
@@ -194,8 +194,8 @@ def test_project_shown_collapses_helper_variants() -> None:
         program = ASPProgram()
         Sol = Predicate.define("sol", [])
         Aux = Predicate.define("aux", [], show=False)
-        program.fact(Choice(Sol()))
-        program.fact(Choice(Aux()))
+        program.choose(Choice(Sol()))
+        program.choose(Choice(Aux()))
         return program
 
     raw = build()
@@ -224,7 +224,7 @@ def test_racing_solves_admit_exactly_one() -> None:
     # check-then-set admitted both in 93/500 trials)
     program = ASPProgram()
     P = Predicate.define("p_race_seq", ["x"])
-    program.fact(Choice(P(x=RangePool(1, 3))))
+    program.choose(Choice(P(x=RangePool(1, 3))))
     for _ in range(20):
         grounded = program.ground()
         outcomes: list[str] = []
@@ -278,7 +278,7 @@ def test_sugar_verbs_take_assumptions() -> None:
     # per-solve knob (previously the one missing parameter)
     program = ASPProgram()
     P = Predicate.define("p_sugar_asm", ["x"])
-    program.fact(Choice(P(x=RangePool(1, 3))))
+    program.choose(Choice(P(x=RangePool(1, 3))))
     models = list(program.solve(assumptions=[P(x=2)]))
     assert models and all(any(a["x"].value == 2 for a in m.atoms(P)) for m in models)
     cautious = program.cautious(assumptions=[P(x=2)])
@@ -289,7 +289,7 @@ def test_sugar_verbs_take_assumptions() -> None:
     optimizing = ASPProgram()
     Q = Predicate.define("q_sugar_asm", ["x"])
     X = Variable("X")
-    optimizing.fact(Choice(Q(x=RangePool(1, 3))).at_least(1))
+    optimizing.choose(Choice(Q(x=RangePool(1, 3))).at_least(1))
     optimizing.minimize(X, condition=Q(x=X))
     best = optimizing.optimize(assumptions=[Q(x=3)])
     assert best is not None and best.cost == (3,)  # q(3) forced in; the rest minimized away

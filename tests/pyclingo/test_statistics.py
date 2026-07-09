@@ -87,7 +87,7 @@ def test_statistics_finalize_after_a_capped_run() -> None:
     # stats yet; the with-block's close ends it and finalizes them.
     program = ASPProgram()
     P = Predicate.define("p_cap", ["x"])
-    program.fact(Choice(P(x=RangePool(1, 4))))  # 2^4 models
+    program.choose(Choice(P(x=RangePool(1, 4))))  # 2^4 models
     with program.solve() as result:
         list(islice(result, 3))
         assert result.statistics is None  # still live mid-stream: no final stats
@@ -101,7 +101,7 @@ def test_statistics_finalize_after_a_timeout() -> None:
     # clean exhaustion
     program = ASPProgram()
     P = Predicate.define("p_timeout", ["x"])
-    program.fact(Choice(P(x=RangePool(1, 60))))  # 2^60 models: never finishes
+    program.choose(Choice(P(x=RangePool(1, 60))))  # 2^60 models: never finishes
     result = program.solve(timeout=0.2)
     # islice bound: a timeout regression fails loudly instead of hanging
     list(islice(result, 100_000))

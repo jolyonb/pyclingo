@@ -3,8 +3,9 @@ Segment: a named block of program elements that is also an authoring
 surface, and When: the pending context its when() returns.
 
 Every statement verb lives here, spoken from a segment; ASPProgram's
-verbs delegate to its default segment. fact() adds grounded atoms or a
-bare choice rule. when(*conditions) holds the conditions and completes
+verbs delegate to its default segment. fact() adds grounded atoms;
+choose() adds a bare choice rule. when(*conditions) holds the
+conditions and completes
 with exactly one closer, which adds the conditions as the rule body:
 derive (a rule head — an atom or a choice), require (a comparison the
 body must satisfy), forbid (extra body literals that must not all
@@ -113,19 +114,19 @@ class Segment:
 
     # ---- statement verbs ----
 
-    def fact(self, *facts: Predicate | Choice) -> None:
-        """
-        Add unconditional statements: grounded facts, or bare choice rules
-        like { a(1..3) } whose element variables are local.
-        """
+    def fact(self, *facts: Predicate) -> None:
+        """Add unconditional statements: grounded atoms, asserted true."""
         if not facts:
             raise ValueError("fact() requires at least one statement")
         for statement in facts:
-            if not isinstance(statement, (Predicate, Choice)):
+            if isinstance(statement, Choice):
                 raise TypeError(
-                    f"fact() arguments must be Predicate or Choice instances, got {type(statement).__name__}"
+                    f"A choice rule ({statement.render()}) is not a fact — nothing is "
+                    f"asserted, the solver picks. State it with choose() instead."
                 )
-            if isinstance(statement, Predicate) and not statement.is_grounded:
+            if not isinstance(statement, Predicate):
+                raise TypeError(f"fact() arguments must be Predicate instances, got {type(statement).__name__}")
+            if not statement.is_grounded:
                 variables = ", ".join(sorted(statement.collect_variables()))
                 raise ValueError(
                     f"fact() requires grounded predicates, but {statement.render()} contains "
@@ -134,6 +135,23 @@ class Segment:
         for statement in facts:
             rule = Rule(head=statement, check_singletons=self._check_singletons)
             self.append(rule)
+
+    def choose(self, choice: Choice) -> None:
+        """
+        Add a bare choice rule: "{ elements } bounds." with no body — the
+        solver freely picks which elements hold, within the bounds.
+        Element variables are local to their conditions. A choice under
+        conditions is spelled when(*conditions).derive(choice).
+        """
+        if isinstance(choice, Predicate):
+            raise TypeError(
+                f"choose() takes a Choice, got the atom {choice.render()} — "
+                f"an atom asserted unconditionally is a fact: fact({choice.render()})"
+            )
+        if not isinstance(choice, Choice):
+            raise TypeError(f"choose() takes a Choice, got {type(choice).__name__}")
+        rule = Rule(head=choice, check_singletons=self._check_singletons)
+        self.append(rule)
 
     def when(self, *conditions: Term) -> When:
         """

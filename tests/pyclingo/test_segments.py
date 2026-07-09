@@ -38,6 +38,30 @@ def test_add_segment_fixes_position() -> None:
     assert [segment.name for segment in program.segments] == ["later", "other"]
 
 
+def test_mapping_protocol_over_segment_names() -> None:
+    # dict convention: membership, iteration, and len speak segment NAMES
+    # in rendering order; .segments serves the objects
+    program = ASPProgram()
+    assert len(program) == 0
+    assert "Rules" not in program  # the default segment does not exist until first write
+    program.fact(P(x=1))
+    program.add_segment("grid")
+    assert "Rules" in program
+    assert "grid" in program
+    assert "typo" not in program
+    assert list(program) == ["Rules", "grid"]
+    assert len(program) == 2
+
+
+def test_membership_is_by_name_not_object() -> None:
+    program = ASPProgram()
+    grid = program.add_segment("grid")
+    with pytest.raises(TypeError, match=r"Membership is by name.*'grid' in program"):
+        grid in program  # type: ignore[operator]  # noqa: B015 (the membership test is the act under test)
+    with pytest.raises(TypeError, match=r"by name \(a string\), got int"):
+        3 in program  # type: ignore[operator]  # noqa: B015
+
+
 def test_writes_require_the_segment_to_exist() -> None:
     # add_segment is the one creation point: program["name"] refuses
     # unknown names instead of quietly creating them (typos stay loud)
@@ -143,7 +167,7 @@ def test_ground_then_delete_segment_gives_ab_comparison() -> None:
     # Each ground() is an independent snapshot, so removing a segment
     # between groundings compares the program with and without it
     program = ASPProgram()
-    program.fact(Choice(P(x=RangePool(1, 2))))  # 4 models unconstrained
+    program.choose(Choice(P(x=RangePool(1, 2))))  # 4 models unconstrained
     program.add_segment("extra")
     program["extra"].forbid(P(x=1))  # 2 models with the constraint
     full = program.ground()

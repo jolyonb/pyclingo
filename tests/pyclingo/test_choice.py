@@ -90,7 +90,7 @@ def test_frozen_choice_error_without_receipt_falls_back(monkeypatch: pytest.Monk
     program = ASPProgram()
     P = Predicate.define("p_nr", ["x"])
     choice = Choice(P(x=1))
-    program.fact(choice)
+    program.choose(choice)
     with pytest.raises(RuntimeError, match="captured by a rule and is frozen"):
         choice.at_most(1)
 

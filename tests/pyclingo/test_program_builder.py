@@ -42,7 +42,7 @@ def test_facts_must_be_grounded() -> None:
 def test_builder_methods_reject_wrong_types() -> None:
     program = ASPProgram()
     P = Predicate.define("p", ["x"])
-    with pytest.raises(TypeError, match="must be Predicate or Choice instances, got str"):
+    with pytest.raises(TypeError, match="must be Predicate instances, got str"):
         program.fact("p(1).")  # type: ignore[arg-type]
     with pytest.raises(TypeError, match="must be Terms, got str"):
         program.when("p(X)").derive(P(x=1))  # type: ignore[arg-type]
@@ -58,13 +58,31 @@ def test_empty_conditions_are_rejected() -> None:
         program.when()
 
 
-def test_fact_states_bare_choice_rules() -> None:
-    # A bare choice rule is a legitimate unconditional statement, so fact()
-    # takes it alongside grounded predicates
+def test_choose_states_bare_choice_rules() -> None:
+    # A bare choice rule is an unconditional statement with nothing
+    # asserted; choose() states it, and a conditioned choice stays
+    # when(...).derive(choice)
     program = ASPProgram()
     P = Predicate.define("p", ["x"])
-    program.fact(Choice(P(x=RangePool(1, 3))))
+    program.choose(Choice(P(x=RangePool(1, 3))))
     assert "{ p(1..3) }." in program.render()
+
+
+def test_fact_refuses_a_choice_and_names_the_verb() -> None:
+    # fact() asserts; a choice asserts nothing, so the error teaches choose()
+    program = ASPProgram()
+    P = Predicate.define("p", ["x"])
+    with pytest.raises(TypeError, match=r"choice rule \(\{ p\(1\.\.3\) \}\) is not a fact.*choose\(\)"):
+        program.fact(Choice(P(x=RangePool(1, 3))))  # type: ignore[arg-type]
+
+
+def test_choose_refuses_atoms_and_other_types() -> None:
+    program = ASPProgram()
+    P = Predicate.define("p", ["x"])
+    with pytest.raises(TypeError, match=r"got the atom p\(1\).*fact\(p\(1\)\)"):
+        program.choose(P(x=1))  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match=r"choose\(\) takes a Choice, got str"):
+        program.choose("{ p(1..3) }.")  # type: ignore[arg-type]
 
 
 def test_constant_values_must_fit_clingo_integers() -> None:
@@ -139,7 +157,7 @@ def test_failed_rule_leaves_builders_unfrozen() -> None:
         scene.derive(choice)  # Y is a singleton — rule rejected
     scene.derive(P(x=Y))  # close the scene so the program stays renderable
     choice.add(P(x=X + 1), Q(x=X))  # still mutable: the rule never captured it
-    program.fact(choice)
+    program.choose(choice)
     assert "{ p_uf(X) : q_uf(X); p_uf(X + 1) : q_uf(X) }" in program.render()
 
 
@@ -457,3 +475,14 @@ def test_assignable_attributes_validate_on_assignment() -> None:
     assert "% Set later" in rendered
     assert "p_assign(1)." in rendered  # landed in the reassigned default segment
     assert program["Elsewhere"] is not None
+
+
+def test_unknown_public_attribute_assignment_rejected() -> None:
+    # A typo'd assignment must not silently configure nothing; the error
+    # names the real assignable surface
+    program = ASPProgram()
+    with pytest.raises(AttributeError, match=r"no assignable attribute 'project_show'.*project_shown"):
+        program.project_show = True  # type: ignore[attr-defined]
+    with pytest.raises(AttributeError, match="no assignable attribute 'fact'"):
+        program.fact = None  # type: ignore[method-assign, assignment]
+    assert program.project_shown is False  # the typo configured nothing

@@ -41,7 +41,7 @@ def test_require_keeps_exactly_the_pairs_where_the_comparison_holds(
     A, B = Variable("A"), Variable("B")
     program = ASPProgram()
     program.fact(*[V(n=k) for k in domain])
-    program.fact(Choice(Pick(x=A, y=B), condition=[V(n=A), V(n=B)]).exactly(1))
+    program.choose(Choice(Pick(x=A, y=B), condition=[V(n=A), V(n=B)]).exactly(1))
     program.when(Pick(x=A, y=B)).require(op(A, B))
     kept = {(pick["x"].value, pick["y"].value) for model in program.solve() for pick in model.atoms(Pick)}
     assert kept == {(a, b) for a in domain for b in domain if op(a, b)}
@@ -57,7 +57,7 @@ def test_require_inversion_composes_with_negated_body_literals() -> None:
     Pick = Predicate.define("pick_neg", ["x"])
     program.fact(*[V(n=k) for k in range(1, 5)])
     program.fact(Flag(x=2), Flag(x=4))
-    program.fact(Choice(Pick(x=X), condition=V(n=X)).exactly(1))
+    program.choose(Choice(Pick(x=X), condition=V(n=X)).exactly(1))
     program.when(Pick(x=X), ~Flag(x=X)).require(X < 3)
     assert ":- pick_neg(X), not flag_neg(X), X >= 3." in program.render()
     kept = {model.atoms(Pick)[0]["x"].value for model in program.solve()}
@@ -81,7 +81,7 @@ def test_require_inequality_is_safe_because_its_inverse_binds() -> None:
     # and the model count shows nothing else was constrained.
     program = ASPProgram()
     Q = Predicate.define("q_eq_binds", ["x"])
-    program.fact(Choice(Q(x=RangePool(1, 4))))  # free choice over q(1..4)
+    program.choose(Choice(Q(x=RangePool(1, 4))))  # free choice over q(1..4)
     program.when(~Q(x=X)).require(X != 3)
     assert ":- not q_eq_binds(X), X = 3." in program.render()
     models = [frozenset(atom["x"].value for atom in model.atoms(Q)) for model in program.solve()]
