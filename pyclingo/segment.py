@@ -29,8 +29,9 @@ from pyclingo.optimization import (
     WeakConstraint,
 )
 from pyclingo.predicate import PREDICATE_CLASS_TYPE, NegatedPredicate, Predicate
-from pyclingo.program_elements import BlankLine, Comment, ProgramElement, RawASP, Rule
+from pyclingo.program_elements import BlankLine, Comment, ProgramElement, RawASP, RenderedLine, Rule
 from pyclingo.scoping import validate_optimization_element, validate_weak_constraint
+from pyclingo.source_location import SourceLocation, capture_location
 
 
 class Segment:
@@ -48,13 +49,15 @@ class Segment:
     allow_singletons switches off the singleton-variable lint for
     statements made through this segment (a variable used exactly once is
     rejected as a likely typo); segments a program creates inherit the
-    program's setting.
+    program's setting, and so does source_locations (whether appended
+    elements are stamped with the user line that authored them).
     """
 
-    def __init__(self, name: str, allow_singletons: bool = False) -> None:
+    def __init__(self, name: str, allow_singletons: bool = False, source_locations: bool = True) -> None:
         self._name = self.validate_name(name)
         self._elements: list[ProgramElement] = []
         self._check_singletons = not allow_singletons
+        self._capture_locations = source_locations
         self._pending: list[When] = []
 
     @staticmethod
@@ -74,7 +77,14 @@ class Segment:
         return self._name
 
     def append(self, element: ProgramElement) -> None:
-        """Add an element to the end of the segment."""
+        """
+        Add an element to the end of the segment. Every statement verb ends
+        here, so this is also where the element is stamped with the user
+        line that authored it (unless the When machinery already did).
+        Formatting elements (locatable=False) are never stamped.
+        """
+        if self._capture_locations and element.locatable and element.source_location is None:
+            element.source_location = capture_location()
         self._elements.append(element)
 
     def __len__(self) -> int:
@@ -267,18 +277,42 @@ class Segment:
         with is absorbed, so the gap after the header is always exactly one.
         Raises if any when() in this segment was never completed.
         """
+        return "\n".join(line.text for line in self.render_lines(with_header))
+
+    def render_lines(self, with_header: bool) -> list[RenderedLine]:
+        """
+        The segment's rendered lines, each carrying the element that
+        produced it (framing lines carry None) — a multi-line element
+        claims every one of its lines. render() joins the text column; the
+        program builds its line-provenance map from the element column.
+        Raises if any when() in this segment was never completed.
+        """
         self.check_pending()
-        lines = [element.render() for element in self._elements]
+        lines: list[RenderedLine] = []
+        for element in self._elements:
+            # split("\n"), not splitlines(): a trailing newline in raw text
+            # must keep contributing its empty line, exactly as when whole
+            # rendered elements were joined
+            lines.extend(RenderedLine(text, element) for text in element.render().split("\n"))
         if with_header:
-            while lines and lines[0] == "":
+            while lines and lines[0].text == "":
                 lines.pop(0)
-            lines = ["", f"% ===== {self._name} =====", "", *lines]
-        return "\n".join(lines)
+            lines = [
+                RenderedLine("", None),
+                RenderedLine(f"% ===== {self._name} =====", None),
+                RenderedLine("", None),
+                *lines,
+            ]
+        return lines
 
     def check_pending(self) -> None:
         """Raise if any when() on this segment is still awaiting its closer."""
         if self._pending:
-            listing = "; ".join(f"when({', '.join(c.render() for c in w.conditions)})" for w in self._pending)
+            listing = "; ".join(
+                f"when({', '.join(c.render() for c in w.conditions)})"
+                + (f" opened at {w.location.display()}" if w.location is not None else "")
+                for w in self._pending
+            )
             raise ValueError(
                 f"Segment '{self._name}' has incomplete when() statements: {listing}. "
                 f"Complete each with .derive/.require/.forbid/.penalize."
@@ -311,6 +345,9 @@ class When:
         self._segment = segment
         self._conditions = conditions
         self._completed_by: str | None = None
+        # Captured here, not at the closer: a dangling When's whole
+        # diagnosis is where it was opened, and by definition no closer ran
+        self._location = capture_location() if segment._capture_locations else None
         segment._pending.append(self)
 
     @property
@@ -318,12 +355,24 @@ class When:
         """The held conditions."""
         return self._conditions
 
+    @property
+    def location(self) -> SourceLocation | None:
+        """The user line that opened this when(), if capture is on."""
+        return self._location
+
     def _complete(self, closer: str, element: ProgramElement) -> None:
         # The element is fully built (and validated) before the context
         # resolves, so a rejected statement leaves the When retryable
         self._guard(closer)
         self._completed_by = closer
         self._segment._pending.remove(self)
+        # The element anchors at the when() line; a closer on a different
+        # line is recorded too — a fluent chain's halves can sit far apart
+        if self._location is not None:
+            element.source_location = self._location
+            closed = capture_location()
+            if closed is not None and closed != self._location:
+                element.closed_at = closed
         self._segment.append(element)
 
     def _guard(self, closer: str) -> None:

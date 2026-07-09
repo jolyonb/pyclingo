@@ -25,10 +25,11 @@ This directory contains the testing strategy for the PyClingo project, using a m
 
 Files are organized by construct (e.g. `test_choice.py`, `test_aggregates.py`,
 `test_arithmetic.py`, `test_values.py`) and by cross-cutting concern (e.g.
-`test_scoping.py`, `test_reconstruction.py`, `test_optimization.py` /
-`test_optimize_solve.py`). `test_end_to_end.py` holds the paved-path smoke
-tests: small complete programs run construct → render → solve → typed
-reconstruction. This suite carries pyclingo's coverage on its own — the puzzle
+`test_scoping.py`, `test_reconstruction.py`, `test_source_location.py`,
+`test_optimization.py` / `test_optimize_solve.py`). `test_end_to_end.py` holds
+the paved-path smoke tests: small complete programs run construct → render →
+solve → typed reconstruction. Location-sensitive tests capture expected line
+numbers at runtime (via `inspect`), never as literals. This suite carries pyclingo's coverage on its own — the puzzle
 integration test contributes almost nothing pyclingo-side — so it stays whole
 when aspuzzle splits into its own repo.
 

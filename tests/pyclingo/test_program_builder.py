@@ -1,7 +1,10 @@
 """
 Tests for ASPProgram's construction methods: fact, when, forbid,
-raw_asp, define_constant, and the guards on their inputs.
+raw_asp, define_constant, the guards on their inputs, and the
+annotated / line-paired render paths.
 """
+
+import inspect
 
 import pytest
 
@@ -13,9 +16,18 @@ from pyclingo import (
     DefinedConstant,
     Predicate,
     RangePool,
+    SourceLocation,
     Variable,
 )
 from pyclingo.program_elements import BlankLine, Comment, RawASP, Rule
+from pyclingo.segment import Segment
+
+
+def _here() -> SourceLocation:
+    """The caller's own file and line, for building expected locations."""
+    frame = inspect.currentframe()
+    assert frame is not None and frame.f_back is not None
+    return SourceLocation(frame.f_back.f_code.co_filename, frame.f_back.f_lineno)
 
 
 def test_facts_must_be_grounded() -> None:
@@ -264,3 +276,142 @@ def test_rule_rejects_empty_head_and_body() -> None:
         Rule()
     with pytest.raises(ValueError, match="empty head and body"):
         Rule(body=[])  # falsy [] slips the None-only check
+
+
+def test_annotate_appends_the_authoring_line_to_each_statement() -> None:
+    program = ASPProgram()
+    P = Predicate.define("p_ann", ["x"])
+    Q = Predicate.define("q_ann", ["x"])
+    here = _here()
+    program.fact(Q(x=1))
+    program.when(Q(x=1)).derive(P(x=1))
+    fact_note = SourceLocation(here.filename, here.lineno + 1).display()
+    rule_note = SourceLocation(here.filename, here.lineno + 2).display()
+    lines = program.render(annotate=True).splitlines()
+    assert f"q_ann(1).  % {fact_note}" in lines
+    assert f"p_ann(1) :- q_ann(1).  % {rule_note}" in lines
+
+
+def test_formatting_elements_are_never_stamped() -> None:
+    # No diagnostic can point at a comment or blank line, so they carry no
+    # location — section() and friends do not pay the capture walk
+    program = ASPProgram()
+    program.section("layout")  # a blank line and a comment
+    assert all(element.source_location is None for element in program["Rules"])
+
+
+def test_annotate_leaves_comments_and_blank_lines_bare() -> None:
+    program = ASPProgram()
+    P = Predicate.define("p_nab", ["x"])
+    program.comment("a note")
+    program.blank_line()
+    program.fact(P(x=1))
+    lines = program.render(annotate=True).splitlines()
+    # This file's location notes all share the "  % path:" suffix marker
+    note_marker = f"  % {_here().display().rsplit(':', 1)[0]}:"
+    noted = [line for line in lines if note_marker in line]
+    # The fact carries the program's only note; the comment renders exactly
+    # as written and the blank line after it stays empty
+    assert len(noted) == 1 and noted[0].startswith("p_nab(1).")
+    comment_index = lines.index("% a note")
+    assert lines[comment_index + 1] == ""
+
+
+def test_annotate_records_a_closer_on_a_different_line() -> None:
+    program = ASPProgram()
+    P = Predicate.define("p_far", ["x"])
+    Q = Predicate.define("q_far", ["x"])
+    here = _here()
+    scene = program.when(Q(x=1))
+    scene.derive(P(x=1))
+    opened = SourceLocation(here.filename, here.lineno + 1).display()
+    closed = SourceLocation(here.filename, here.lineno + 2).display()
+    lines = program.render(annotate=True).splitlines()
+    assert f"p_far(1) :- q_far(1).  % {opened} (closed at {closed})" in lines
+
+
+def test_annotate_preserves_line_numbering() -> None:
+    # Notes are appended, never inserted: annotated line N is plain line N,
+    # so the annotated text doubles as the reverse map for raw-clingo
+    # errors. A multi-line raw block gets its origin on every non-blank
+    # line; its interior blank line stays blank.
+    program = ASPProgram()
+    P = Predicate.define("p_num", ["x"])
+    program.fact(P(x=1))
+    program.comment("plain")
+    program.raw_asp("raw_num(1).\n\nraw_num(2).")
+    plain = program.render().splitlines()
+    annotated = program.render(annotate=True).splitlines()
+    assert len(plain) == len(annotated)
+    assert all(a == p or a.startswith(f"{p}  % ") for p, a in zip(plain, annotated, strict=True))
+    noted = [a for a in annotated if "  % " in a]
+    assert len(noted) == 3  # the fact and both non-blank raw lines
+
+
+def test_render_defaults_to_unannotated_output() -> None:
+    program = ASPProgram()
+    P = Predicate.define("p_ra", ["x"])
+    program.fact(P(x=1))
+    program.when(P(x=1)).derive(P(x=2))
+    assert program.render() == program.render(annotate=False)
+
+
+def test_annotate_is_inert_when_source_locations_are_off() -> None:
+    program = ASPProgram(source_locations=False)
+    P = Predicate.define("p_off", ["x"])
+    Q = Predicate.define("q_off", ["x"])
+    program.fact(Q(x=1))
+    scene = program.when(Q(x=1))
+    scene.derive(P(x=1))
+    assert program.render(annotate=True) == program.render()
+
+
+def test_render_lines_pairs_each_line_with_its_element() -> None:
+    segment = Segment("Extras")
+    P = Predicate.define("p_rl", ["x"])
+    segment.fact(P(x=1))
+    segment.raw_asp("raw_a(1).\nraw_b(2).")
+
+    lines = segment.render_lines(with_header=True)
+    assert [(line.text, line.element) for line in lines[:3]] == [
+        ("", None),
+        ("% ===== Extras =====", None),
+        ("", None),
+    ]
+    assert lines[3].text == "p_rl(1)."
+    assert isinstance(lines[3].element, Rule)
+    # The multi-line raw block claims every one of its lines
+    raw_lines = lines[4:]
+    assert [line.text for line in raw_lines] == ["raw_a(1).", "raw_b(2)."]
+    assert isinstance(raw_lines[0].element, RawASP)
+    assert all(line.element is raw_lines[0].element for line in raw_lines)
+    assert "\n".join(line.text for line in lines) == segment.render(with_header=True)
+
+    bare = segment.render_lines(with_header=False)
+    assert bare[0].text == "p_rl(1)."
+    assert all(line.element is not None for line in bare)
+    assert "\n".join(line.text for line in bare) == segment.render(with_header=False)
+
+
+def test_annotate_leaves_script_block_interiors_bare() -> None:
+    # A note inside a raw #script block would become part of the embedded
+    # script's source; those lines stay bare, and annotation resumes after
+    # the closing "#end."
+    program = ASPProgram()
+    P = Predicate.define("p_scr", ["x"])
+    program.raw_asp('#script (python)\ndef main(prg):\n    prg.ground([("base", [])])\n#end.')
+    program.fact(P(x=1))
+    lines = program.render(annotate=True).splitlines()
+    for bare in ("#script (python)", "def main(prg):", '    prg.ground([("base", [])])', "#end."):
+        assert bare in lines  # exactly as written: no trailing note
+    assert any(line.startswith("p_scr(1).  % ") for line in lines)  # annotation resumes
+
+
+def test_header_gap_is_exactly_one_even_into_a_multiline_element() -> None:
+    # The header's blank-absorption works on lines, so a first element that
+    # OPENS with blank lines (a triple-quoted raw block) is trimmed too: the
+    # gap after "% ===== name =====" is always exactly one blank line
+    segment = Segment("Gap")
+    segment.raw_asp("\n\nraw_gap(1).")
+    rendered = segment.render(with_header=True)
+    assert rendered == "\n% ===== Gap =====\n\nraw_gap(1)."

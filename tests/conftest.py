@@ -78,10 +78,10 @@ def rendered_programs_must_parse(request: pytest.FixtureRequest, monkeypatch: py
 
     original_program_render = ASPProgram.render
 
-    def checked_program_render(self: ASPProgram) -> str:
+    def checked_program_render(self: ASPProgram, *args: Any, **kwargs: Any) -> str:
         depth[0] += 1
         try:
-            output = original_program_render(self)
+            output = original_program_render(self, *args, **kwargs)
         finally:
             depth[0] -= 1
         if depth[0] == 0:

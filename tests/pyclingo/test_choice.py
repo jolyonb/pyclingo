@@ -2,9 +2,12 @@
 Tests for Choice construction guards.
 """
 
+import inspect
+import re
+
 import pytest
 
-from pyclingo import ASPProgram, Choice, Count, Not, Number, Predicate, String, Variable
+from pyclingo import ASPProgram, Choice, Count, Not, Number, Predicate, SourceLocation, String, Variable
 
 
 def test_impossible_cardinality_rejected() -> None:
@@ -53,8 +56,50 @@ def test_choice_builds_freely_before_capture_and_shares_after() -> None:
     X = Variable("X")
     choice = Choice(P(x=X), condition=Q(x=X)).add(R(x=X)).exactly(1)  # chaining pre-capture
     program.when(Q(x=X)).derive(choice)
-    program.when(R(x=X)).derive(choice)  # sharing a built choice is fine
+    program.when(R(x=X)).derive(choice)  # a frozen choice is a value: same choice under a second body
     assert program.render().count("{ p(X) : q(X); r(X) } = 1") == 2
+
+
+def test_shared_choice_rules_each_report_their_own_line() -> None:
+    # Sharing puts one builder under two rules; locations live on the rules,
+    # so each reports the line of ITS derive
+    program = ASPProgram()
+    P, Q, R = (Predicate.define(n, ["x"]) for n in ("p_sl", "q_sl", "r_sl"))
+    X = Variable("X")
+    choice = Choice(P(x=X), condition=Q(x=X))
+    frame = inspect.currentframe()
+    assert frame is not None
+    lineno = frame.f_lineno
+    program.when(Q(x=X)).derive(choice)  # lineno + 1
+    program.when(R(x=X)).derive(choice)  # lineno + 2
+    first, second = program["Rules"]
+    assert first.source_location == SourceLocation(frame.f_code.co_filename, lineno + 1)
+    assert second.source_location == SourceLocation(frame.f_code.co_filename, lineno + 2)
+
+
+def test_frozen_choice_error_names_the_capturing_line() -> None:
+    program = ASPProgram()
+    P, Q = Predicate.define("p_rc", ["x"]), Predicate.define("q_rc", ["x"])
+    X = Variable("X")
+    choice = Choice(P(x=X), condition=Q(x=X))
+    frame = inspect.currentframe()
+    assert frame is not None
+    lineno = frame.f_lineno
+    program.when(Q(x=X)).derive(choice)  # lineno + 1
+    where = SourceLocation(frame.f_code.co_filename, lineno + 1).display()
+    with pytest.raises(RuntimeError, match=re.escape(f"captured by the rule at {where}")):
+        choice.add(P(x=X))
+
+
+def test_frozen_choice_error_without_receipt_falls_back(monkeypatch: pytest.MonkeyPatch) -> None:
+    # When capture found no user frame, the error keeps its unlocated wording
+    monkeypatch.setattr("pyclingo.conditioned_element.capture_location", lambda: None)
+    program = ASPProgram()
+    P = Predicate.define("p_nr", ["x"])
+    choice = Choice(P(x=1))
+    program.fact(choice)
+    with pytest.raises(RuntimeError, match="captured by a rule and is frozen"):
+        choice.at_most(1)
 
 
 def test_negative_cardinality_rejected_for_number_too() -> None:

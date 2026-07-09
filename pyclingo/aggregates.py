@@ -2,7 +2,7 @@ from abc import ABC
 from enum import StrEnum
 from typing import ClassVar, Self
 
-from pyclingo.conditioned_element import CONDITION_TYPE, ConditionedElement
+from pyclingo.conditioned_element import CONDITION_TYPE, ConditionedElement, FreezableBuilder
 from pyclingo.core import (
     AggregateBase,
     Expression,
@@ -25,16 +25,24 @@ class AggregateType(StrEnum):
     MAX = "#max"
 
 
-class Aggregate(AggregateBase, ABC):
+class Aggregate(FreezableBuilder, AggregateBase, ABC):
     """
     Abstract base class for aggregates in ASP programs.
 
     Aggregates calculate values over sets of elements, used in expressions like
     #count{ X : p(X) } = 3 or #sum{ W,X : p(X,W) } > 10.
+
+    An aggregate is a mutable builder until a rule captures it, which
+    freezes it. A frozen aggregate is a value: build once, use in as many
+    rules as you like (capture may be transitive, through a comparison
+    holding the aggregate). Only mutation is fenced (it would silently
+    rewrite every rule that holds the builder).
     """
 
     # Set by subclasses to specify which aggregate function to use
     AGGREGATE_TYPE: ClassVar[AggregateType]
+
+    _RECEIPT_NOUN = "aggregate"
 
     def __init__(
         self,
@@ -50,7 +58,6 @@ class Aggregate(AggregateBase, ABC):
                       If None, it's an unconditional element
         """
         self._elements: list[ConditionedElement] = []
-        self._frozen = False
         self.add(element, condition)
 
     def add(
@@ -73,11 +80,7 @@ class Aggregate(AggregateBase, ABC):
             >>> Count(X).add(Y, p(x=Y)).add((Z, W), [q(x=Z), r(x=W)]).render()
             '#count{ X; Y : p(Y); Z, W : q(Z), r(W) }'
         """
-        if self._frozen:
-            raise RuntimeError(
-                "This aggregate was captured by a rule and is frozen; mutating it would "
-                "silently rewrite the recorded rule. Build a new aggregate instead."
-            )
+        self._require_mutable()
         element_tuple = element if isinstance(element, tuple) else (element,)
         for item in element_tuple:
             if not isinstance(item, (Value, Expression, Predicate)):
@@ -88,9 +91,6 @@ class Aggregate(AggregateBase, ABC):
         self._elements.append(ConditionedElement(element_tuple, condition, "aggregate"))
 
         return self
-
-    def freeze(self) -> None:
-        self._frozen = True
 
     @property
     def elements(self) -> list[ConditionedElement]:

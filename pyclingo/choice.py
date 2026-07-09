@@ -1,6 +1,6 @@
 from typing import Self
 
-from pyclingo.conditioned_element import CONDITION_TYPE, ConditionedElement
+from pyclingo.conditioned_element import CONDITION_TYPE, ConditionedElement, FreezableBuilder
 from pyclingo.core import (
     Expression,
     Number,
@@ -16,7 +16,7 @@ type CHOICE_ELEMENT_TYPE = Predicate
 type CARDINALITY_TYPE = int | Value | Expression
 
 
-class Choice(Term):
+class Choice(FreezableBuilder, Term):
     """
     Represents a choice rule in ASP programs.
 
@@ -27,7 +27,15 @@ class Choice(Term):
     - { p(X) : q(X) }
     - 2 { p(X) : q(X) } 4
     - { p(X) : q(X) } = 3
+
+    A Choice is a mutable builder until a rule captures it, which freezes
+    it. A frozen Choice is a value: further rules may capture it too — the
+    same choice under different bodies — and it renders identically in
+    each. Only mutation is fenced (it would silently rewrite every rule
+    that holds the builder).
     """
+
+    _RECEIPT_NOUN = "Choice"
 
     def __init__(
         self,
@@ -45,7 +53,6 @@ class Choice(Term):
         self._elements: list[ConditionedElement] = []
         self._min_cardinality: None | Value | Expression = None
         self._max_cardinality: None | Value | Expression = None
-        self._frozen = False
 
         self.add(element, condition)
 
@@ -76,16 +83,6 @@ class Choice(Term):
         self._elements.append(ConditionedElement((element,), condition, "choice"))
 
         return self
-
-    def _require_mutable(self) -> None:
-        if self._frozen:
-            raise RuntimeError(
-                "This Choice was captured by a rule and is frozen; mutating it would "
-                "silently rewrite the recorded rule. Build a new Choice instead."
-            )
-
-    def freeze(self) -> None:
-        self._frozen = True
 
     @staticmethod
     def _validate_cardinality(count: int | Value | Expression, description: str) -> Value | Expression:

@@ -1,12 +1,15 @@
 """
 Tests for the Segment container: the segments property, add_segment, the
-mapping protocol (program["x"] / assignment / del), and the
-segment-header rendering rules.
+mapping protocol (program["x"] / assignment / del), the segment-header
+rendering rules, and how segments stamp elements with source locations.
 """
+
+import inspect
+import re
 
 import pytest
 
-from pyclingo import ASPProgram, Choice, Predicate, RangePool, Segment, Variable
+from pyclingo import ASPProgram, Choice, Predicate, RangePool, Segment, SourceLocation, Variable
 from pyclingo.program_elements import BlankLine, Comment, Rule
 
 P = Predicate.define("p_seg", ["x"])
@@ -343,3 +346,105 @@ def test_when_penalize_happy_path_and_non_term_violation() -> None:
     program2 = ASPProgram()
     with pytest.raises(TypeError, match=r"penalize\(\) violation terms must be Terms, got str"):
         program2.when(A(x=1)).penalize("b")  # type: ignore[arg-type]
+
+
+def test_dangling_when_reports_its_open_site() -> None:
+    program = ASPProgram()
+    program.fact(P(x=1))
+    frame = inspect.currentframe()
+    assert frame is not None
+    lineno = frame.f_lineno
+    program.when(P(x=Variable("X")))  # the very next line -> lineno + 1
+    opened_at = SourceLocation(__file__, lineno + 1).display()
+    with pytest.raises(ValueError, match=re.escape(f"when(p_seg(X)) opened at {opened_at}")):
+        program.segments[0].check_pending()
+    with pytest.raises(ValueError, match=re.escape(f"when(p_seg(X)) opened at {opened_at}")):
+        program.render()
+
+
+def test_when_location_is_the_open_site() -> None:
+    program = ASPProgram()
+    frame = inspect.currentframe()
+    assert frame is not None
+    lineno = frame.f_lineno
+    w = program.when(P(x=Variable("X")))  # the very next line -> lineno + 1
+    assert w.location == SourceLocation(__file__, lineno + 1)
+    w.derive(P(x=Variable("X")))
+
+
+def test_when_location_is_none_with_capture_off() -> None:
+    program = ASPProgram(source_locations=False)
+    program.fact(P(x=1))
+    w = program.when(P(x=Variable("X")))
+    assert w.location is None
+    with pytest.raises(ValueError, match=r"incomplete when\(\) statements: when\(p_seg\(X\)\)") as excinfo:
+        program.render()
+    assert "opened at" not in str(excinfo.value)
+
+
+def test_one_line_when_chain_stamps_the_when_line_alone() -> None:
+    program = ASPProgram()
+    X = Variable("X")
+    frame = inspect.currentframe()
+    assert frame is not None
+    lineno = frame.f_lineno
+    program.when(P(x=X)).derive(P(x=X))  # opened and closed on lineno + 1
+    element = list(program.segments[0])[-1]
+    assert element.source_location == SourceLocation(__file__, lineno + 1)
+    assert element.closed_at is None
+
+
+def test_split_when_records_both_open_and_close_sites() -> None:
+    program = ASPProgram()
+    X = Variable("X")
+    frame = inspect.currentframe()
+    assert frame is not None
+    lineno = frame.f_lineno
+    w = program.when(P(x=X))  # opened on lineno + 1
+    w.derive(P(x=X))  # closed on lineno + 2
+    element = list(program.segments[0])[-1]
+    assert element.source_location == SourceLocation(__file__, lineno + 1)
+    assert element.closed_at == SourceLocation(__file__, lineno + 2)
+
+
+def test_segment_capture_off_leaves_elements_unstamped() -> None:
+    segment = Segment("quiet", source_locations=False)
+    segment.fact(P(x=1))
+    element = list(segment)[-1]
+    assert element.source_location is None
+    assert element.closed_at is None
+
+
+def test_attached_segment_keeps_its_own_capture_setting() -> None:
+    # A prebuilt segment attaches with the capture setting it was built
+    # with; only segments the program itself creates inherit the program's
+    program = ASPProgram(source_locations=False)
+    program.fact(P(x=1))  # the default segment inherits capture-off
+    assert list(program.segments[0])[-1].source_location is None
+
+    program.add_segment("inherited")  # program-created: inherits capture-off
+    program["inherited"].fact(P(x=2))
+    assert list(program["inherited"])[-1].source_location is None
+
+    own = Segment("own")  # capture on by default, kept through attachment
+    program.add_segment(own)
+    frame = inspect.currentframe()
+    assert frame is not None
+    lineno = frame.f_lineno
+    own.fact(P(x=3))  # the very next line -> lineno + 1
+    assert list(own)[-1].source_location == SourceLocation(__file__, lineno + 1)
+
+    capturing_program = ASPProgram()
+    silent = Segment("silent", source_locations=False)
+    capturing_program.add_segment(silent)
+    silent.fact(P(x=4))
+    assert list(silent)[-1].source_location is None
+
+
+def test_append_keeps_an_already_set_source_location() -> None:
+    segment = Segment("s")
+    rule = Rule(head=P(x=1))
+    preset = SourceLocation("elsewhere.py", 7)
+    rule.source_location = preset
+    segment.append(rule)
+    assert rule.source_location is preset

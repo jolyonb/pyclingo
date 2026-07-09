@@ -1,11 +1,13 @@
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from pyclingo.conditional_literal import ConditionalLiteral
 from pyclingo.core import PredicateOccurrence, Term
 from pyclingo.predicate import NegatedPredicate
 from pyclingo.scoping import validate_rule
+from pyclingo.source_location import SourceLocation
 
 if TYPE_CHECKING:
     from pyclingo.predicate import PREDICATE_CLASS_TYPE
@@ -13,6 +15,18 @@ if TYPE_CHECKING:
 
 class ProgramElement(ABC):
     """Base class for any element in an ASP program."""
+
+    # Stamped by Segment.append() when location capture is on: the line of
+    # user code that authored this element. For a when()-built element whose
+    # closer sat on a different line, source_location is the when() site and
+    # closed_at is the closer's.
+    source_location: SourceLocation | None = None
+    closed_at: SourceLocation | None = None
+
+    # Whether this element gets a source location at all; formatting
+    # elements (comments, blank lines) opt out — no diagnostic can ever
+    # point at them, so stamping would be a wasted stack walk
+    locatable: bool = True
 
     @abstractmethod
     def render(self) -> str:
@@ -32,8 +46,18 @@ class ProgramElement(ABC):
         return {predicate for predicate, _negated, _is_atom in self.collect_predicate_occurrences(as_argument=False)}
 
 
+@dataclass(frozen=True)
+class RenderedLine:
+    """One rendered line of ASP text and the element that produced it (None for program-generated framing)."""
+
+    text: str
+    element: ProgramElement | None
+
+
 class Comment(ProgramElement):
     """Represents a comment in an ASP program."""
+
+    locatable = False
 
     def __init__(self, text: str):
         """text may be multi-line."""
@@ -94,6 +118,8 @@ class RawASP(ProgramElement):
 
 class BlankLine(ProgramElement):
     """Represents a blank line in an ASP program for formatting."""
+
+    locatable = False
 
     def render(self) -> str:
         return ""

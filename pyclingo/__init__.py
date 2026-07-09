@@ -40,6 +40,7 @@ from .core import (
 from .operators import ComparisonOperator
 from .optimization import OptStrategy
 from .predicate import Field, NegatedPredicate, Predicate, PredicateField
+from .program_elements import RenderedLine
 from .segment import Segment, When
 from .solve_result import (
     AtomCollection,
@@ -55,6 +56,13 @@ from .solve_result import (
     SolveResult,
 )
 from .solver import ASPProgram, GroundedProgram
+from .source_location import (
+    SourceLocation,
+    attribute_to_caller,
+    capture_location,
+    location_override,
+    register_skip_package,
+)
 from .version import __version__
 
 __all__ = [  # noqa: RUF022 (categorized deliberately, not sorted)
@@ -77,6 +85,13 @@ __all__ = [  # noqa: RUF022 (categorized deliberately, not sorted)
     "SearchABC",
     "LogLevel",
     "ClingoMessage",
+    "RenderedLine",
+    # Source locations (diagnostics point at the authoring Python line)
+    "SourceLocation",
+    "capture_location",
+    "register_skip_package",
+    "attribute_to_caller",
+    "location_override",
     # Declaring predicates
     "Predicate",
     "NegatedPredicate",
