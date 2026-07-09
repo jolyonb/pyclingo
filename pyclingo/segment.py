@@ -173,7 +173,9 @@ class Segment:
         the conditions' variables, written out in the render. Pass terms=
         to charge by a different identity — terms=[] deliberately collapses
         EVERY match into one charge (gringo's own bare-tuple semantics).
-        Every weight/terms variable must be bound by the conditions.
+        Every weight/terms variable must be bound by the conditions. A
+        negative literal weight is rejected — that is a reward, not a
+        penalty; spell it minimize()/maximize().
         """
         weak = WeakConstraint(conditions, weight, tuple(terms) if terms is not None else None, priority)
         validate_weak_constraint(

@@ -51,6 +51,15 @@ class WeakConstraint(ProgramElement):
             raise TypeError("Weak-constraint weight must be integer-valued, got a String")
         if not isinstance(weight, (Value, Expression)):
             raise TypeError(f"Weak-constraint weight must be an int, Value, or Expression, got {type(weight).__name__}")
+        # Checked after coercion so Number(-3) is caught the same as -3. A
+        # negative weight is legal ASP but turns the penalty into a reward,
+        # inverting the verb's name — almost certainly a sign flip
+        if isinstance(weight, Number) and weight.value < 0:
+            raise ValueError(
+                f"penalize() charges a cost, but weight={weight.value} would reward the match "
+                f"instead. To deliberately reward, use maximize() (or minimize() with a negative "
+                f"weight) — the objective verbs say what they mean."
+            )
         if tuple_terms is None:
             # Per-match charging by default: the tuple gets the conditions'
             # global variables, spelled out in the render. gringo's bare

@@ -304,6 +304,25 @@ def test_penalize_weight_types_validated() -> None:
         program.penalize(Pick(x=ANY), weight=1, priority="high")  # type: ignore[arg-type]
 
 
+def test_penalize_rejects_negative_weight() -> None:
+    # A negative weight is legal ASP but rewards the match, inverting the
+    # verb's name — a probable sign flip. The objective verbs are the
+    # deliberate spelling, and minimize keeps negative weights legal.
+    program = ASPProgram()
+    X = Variable("X")
+    with pytest.raises(ValueError, match="would reward the match"):
+        program.penalize(Pick(x=1), weight=-3)
+    with pytest.raises(ValueError, match="would reward the match"):
+        program.penalize(Pick(x=1), weight=Number(-3))  # caught the same after coercion
+    pending = program.when(Pick(x=1))
+    with pytest.raises(ValueError, match="would reward the match"):
+        pending.penalize(Pick(x=2), weight=-1)
+    pending.penalize(Pick(x=2), weight=1)  # the rejected closer left the when() retryable
+    program.penalize(Pick(x=X), weight=X)  # a variable weight is unknowable: accepted
+    program.minimize(-3, condition=Pick(x=1))  # the deliberate escape stays legal
+    assert "#minimize{ -3 : pick(1) }." in program.render()
+
+
 def test_penalize_defaults_charge_per_match() -> None:
     # The default tuple is the conditions' variables, written out in the
     # render: each ground match charges separately (gringo's bare tuple
