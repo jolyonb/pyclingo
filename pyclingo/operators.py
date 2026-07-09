@@ -35,6 +35,8 @@ BINARY_OPERATIONS = {
     Operation.BITOR,
     Operation.BITXOR,
 }
+# Named for the property, so POWER belongs even though the render path
+# resolves every POWER pairing at the EXPLICIT_PARENS branch first
 NONCOMMUTATIVE_OPERATIONS = {Operation.SUBTRACT, Operation.INTEGER_DIVIDE, Operation.MODULO, Operation.POWER}
 
 # Rendering is deliberately over-parenthesized for these: any mix with a different

@@ -148,7 +148,7 @@ def _bind_fixpoint(binders: set[str], edges: list[EqualityEdge], directed_edges:
                 bound |= left
                 changed = True
             # An empty side means the other side is bound unconditionally
-            # (e.g. N = 1..3, or N = #count{ ... } whose variables are all local)
+            # (e.g. 5 = N, or N = #count{ ... } whose variables are all local)
             if not left and not right <= bound:
                 bound |= right
                 changed = True

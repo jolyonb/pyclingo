@@ -179,8 +179,8 @@ class Choice(FreezableBuilder, Term):
         A Choice rule is grounded if all its elements and conditions are grounded.
 
         Note: This property strictly checks all variables, including those that would be
-        considered "local" to the aggregate in ASP semantics. For example, in
-        {X : p(X)}, the variable X is local to the aggregate but this property
+        considered "local" to the choice in ASP semantics. For example, in
+        {X : p(X)}, the variable X is local to the choice but this property
         will still report False because X is ungrounded. This approach ensures
         consistency with how other Term classes handle groundedness.
         We may later add a separate property to check that no global variables are used if needed.

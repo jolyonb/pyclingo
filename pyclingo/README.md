@@ -84,7 +84,8 @@ class Score(Predicate):
 
 program = ASPProgram()
 program.fact(Score(player="ada", points=3), Score(player="ben", points=5))
-model = next(iter(program.solve()))
+model = next(iter(program.solve()), None)
+assert model is not None  # None here means unsatisfiable
 total = sum(score.points for score in model.atoms(Score))  # plain ints
 assert total == 8
 ```

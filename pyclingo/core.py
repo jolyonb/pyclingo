@@ -24,8 +24,9 @@ from pyclingo.operators import (
 )
 
 if TYPE_CHECKING:
-    # The one annotation-only upward reference in the package: collect_predicates
-    # returns predicate classes, but core cannot import predicate at runtime
+    # Annotation-only upward reference (scoping.py holds another):
+    # collect_predicates returns predicate classes, but core cannot import
+    # predicate at runtime
     from pyclingo.predicate import PredicateClassType
 
 

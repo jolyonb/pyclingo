@@ -1,8 +1,9 @@
 """
-Search results: the streaming handles (SolveResult, RefinementSteps) and
-the typed atom containers (Model, Consequences) they produce.
+Search results: the streaming handles (SolveResult, RefinementSteps,
+OptimizeSteps) and the typed atom containers (Model, Consequences) they
+produce.
 
-Every search mode shares one lifecycle — _Search handles over one
+Every search mode shares one lifecycle — SearchABC handles over one
 _search_generator — because the skeleton is mode-independent clingo fact:
 resume/wait/cancel/get ordering, the timed-out-vs-exhausted race, and
 finalization on every exit path. The modes differ at exactly three
@@ -458,8 +459,8 @@ class SolveResult(SearchABC):
 
     def __iter__(self) -> Iterator[Model]:
         self._guard_consumed("call solve() again for a fresh search")
-        # mode="models" makes every emission a Model; the generator is typed
-        # by the shared element type, so this cast is the one honest seam
+        # mode=None (enumeration) makes every emission a Model; the generator
+        # is typed by the shared element type, so this cast is the one honest seam
         return cast(Iterator[Model], self._iterator)
 
 

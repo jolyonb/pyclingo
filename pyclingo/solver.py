@@ -510,7 +510,7 @@ class ASPProgram:
         Render the complete ASP program, in order:
 
         1. Header comments
-        2. #const definitions (only those actually used)
+        2. #const definitions (every registered constant — raw_asp text may use them, so none are filtered)
         3. Program segments (rules, comments, section headers)
         4. #show directives (program overrides, then class defaults)
 
