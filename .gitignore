@@ -16,3 +16,9 @@ DESIGN_REVIEW_v4.md
 AUDIT_v5.md
 DESIGN_REVIEW_v5.md
 .venv/
+
+# Coverage
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml

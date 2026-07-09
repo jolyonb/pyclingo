@@ -16,6 +16,7 @@ dev = [
     "ruff>=0.15",
     "pytest>=9.1",
     "ty>=0.0.56",
+    "pytest-cov>=7.1.0",
 ]
 
 [build-system]
@@ -68,3 +69,15 @@ markers = [
 ]
 python_files = "test_*.py"
 python_functions = "test_*"
+
+[tool.coverage.run]
+source = ["pyclingo"]
+
+[tool.coverage.report]
+# Line coverage of pyclingo must be total. Genuinely unexecutable lines are
+# excluded here (not with scattered pragmas): abstract-method bodies that
+# subclasses always override, and type-checking-only imports.
+exclude_also = [
+    "if TYPE_CHECKING:",
+    "@(abc\\.)?abstractmethod",
+]

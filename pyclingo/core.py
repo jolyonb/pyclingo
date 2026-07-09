@@ -891,7 +891,8 @@ class Expression(ComparableTerm):
         if isinstance(value, int):
             return Number(value)
 
-        raise TypeError(f"Cannot convert {type(value).__name__} to an ASP term")
+        # Unreachable: __init__ rejects any non-Value/Expression/int operand before this runs.
+        raise TypeError(f"Cannot convert {type(value).__name__} to an ASP term")  # pragma: no cover
 
     @property
     def first_term(self) -> VALUE_EXPRESSION_TYPE | None:

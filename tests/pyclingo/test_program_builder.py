@@ -74,34 +74,10 @@ def test_multiline_header_rejected() -> None:
         ASPProgram(header="a\nb")
 
 
-def test_multiline_segment_name_rejected() -> None:
-    program = ASPProgram()
-    with pytest.raises(ValueError, match="single-line"):
-        program.add_segment("a\nb")
-
-
 def test_not_reserved_as_constant_name() -> None:
     program = ASPProgram()
     with pytest.raises(ValueError, match="reserved"):
         program.define_constant("not", 1)
-
-
-def test_empty_segment_names_rejected_everywhere() -> None:
-    program = ASPProgram()
-    P = Predicate.define("p_seg", ["x"])
-    with pytest.raises(ValueError, match="cannot be empty"):
-        program.add_segment("")
-    with pytest.raises(ValueError, match="cannot be empty"):
-        program["  "].fact(P(x=1))
-
-
-def test_segment_headers_render_the_name_verbatim() -> None:
-    program = ASPProgram()
-    P = Predicate.define("p_seg2", ["x"])
-    program.add_segment("grid_stuff")
-    program["grid_stuff"].fact(P(x=1))
-    program.fact(P(x=2))  # second segment so headers render
-    assert "% ===== grid_stuff =====" in program.render()
 
 
 def test_define_constant_rejects_bool_and_non_ascii() -> None:

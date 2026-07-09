@@ -1,6 +1,4 @@
-"""
-Tests for Rule rendering.
-"""
+"""Tests for ConditionalLiteral rendering and validation."""
 
 from pyclingo import ASPProgram, ConditionalLiteral, LogLevel, Predicate, Variable
 
