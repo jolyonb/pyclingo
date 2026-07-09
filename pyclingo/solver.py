@@ -201,17 +201,21 @@ class ASPProgram:
             )
         return self._segments[key]
 
+    def _existing_segment_key(self, segment: str) -> str:
+        """The validated name of an existing segment; KeyError names the existing ones."""
+        key = Segment.validate_name(segment)
+        if key not in self._segments:
+            existing = ", ".join(f"'{name}'" for name in self._segments) or "none"
+            raise KeyError(f"Segment '{segment}' does not exist; existing segments: {existing}")
+        return key
+
     def __getitem__(self, segment: str) -> Segment:
         """
         The named segment. Reading never creates: an unknown name raises
         KeyError naming the existing segments (add_segment is the one
         creation point; the default segment self-creates on first write).
         """
-        key = Segment.validate_name(segment)
-        if key not in self._segments:
-            existing = ", ".join(f"'{name}'" for name in self._segments) or "none"
-            raise KeyError(f"Segment '{segment}' does not exist; existing segments: {existing}")
-        return self._segments[key]
+        return self._segments[self._existing_segment_key(segment)]
 
     def __setitem__(self, segment: str, value: Segment) -> None:
         """
@@ -263,11 +267,7 @@ class ASPProgram:
         Remove a segment and everything in it; KeyError (naming the
         existing segments) if absent. Existing groundings are unaffected.
         """
-        key = Segment.validate_name(segment)
-        if key not in self._segments:
-            existing = ", ".join(f"'{name}'" for name in self._segments) or "none"
-            raise KeyError(f"Segment '{segment}' does not exist; existing segments: {existing}")
-        del self._segments[key]
+        del self._segments[self._existing_segment_key(segment)]
 
     def fact(self, *facts: Predicate | Choice) -> None:
         """Add unconditional statements to the default segment; see Segment.fact()."""
@@ -346,16 +346,7 @@ class ASPProgram:
                 f"Constant value {value} is outside clingo's integer range "
                 f"[-2147483648, 2147483647]; clingo would silently wrap it"
             )
-        if not name.isascii():
-            raise ValueError(f"Constant name must be ASCII (gringo's lexer is ASCII-only): {name!r}")
-        if not name or not name[0].islower():
-            raise ValueError(f"Constant name must start with a lowercase letter: {name}")
-        if name == "not":
-            raise ValueError("'not' is reserved in ASP and cannot be a constant name")
-
-        if not all(c.isalnum() or c == "_" for c in name):
-            raise ValueError(f"Constant name can only contain letters, digits, and underscores: {name}")
-
+        constant = DefinedConstant(name)  # the one home for constant-name rules
         if name in self._defined_constants:
             raise ValueError(f"Defined constant '{name}' is already registered")
 
@@ -370,7 +361,7 @@ class ASPProgram:
 
         self._defined_constants[name] = value
 
-        return DefinedConstant(name)
+        return constant
 
     def show(self, predicate: type[Predicate]) -> None:
         """
@@ -622,9 +613,7 @@ class ASPProgram:
         }
         positive_classes = walked_positive | override_positive
         negated_classes = {cls for cls, negated, is_atom in occurrences if is_atom and negated}
-        all_classes = (
-            self._collect_predicates() | set(self._show_overrides) | {cls for cls, _ in self._show_when_overrides}
-        )
+        all_classes = self._collect_predicates()
         for pred in all_classes:
             bool_visibility = self._show_overrides.get(pred, pred.shown_by_default())
             for negated, present_set in ((False, positive_classes), (True, negated_classes)):

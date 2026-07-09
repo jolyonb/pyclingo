@@ -127,10 +127,6 @@ def _occurrences(term: Term) -> Counter[str]:
     return counts
 
 
-def _count_variables(term: Term, counts: Counter[str]) -> None:
-    counts.update(_occurrences(term))
-
-
 def _bind_fixpoint(binders: set[str], edges: list[EqualityEdge], directed_edges: list[EqualityEdge]) -> set[str]:
     """
     Propagate bindings until nothing changes: equality edges flow both ways;
@@ -162,7 +158,7 @@ def _bind_fixpoint(binders: set[str], edges: list[EqualityEdge], directed_edges:
     return bound
 
 
-def _analyze_comparison(comparison: Comparison, scopes: RuleScopes, counts: Counter[str]) -> None:
+def _analyze_comparison(comparison: Comparison, scopes: RuleScopes) -> None:
     """
     A body equality contributes a binding edge between its sides; any
     comparison counts its global variables. Aggregates inside comparisons
@@ -173,7 +169,7 @@ def _analyze_comparison(comparison: Comparison, scopes: RuleScopes, counts: Coun
         if isinstance(term, Aggregate):
             side_vars.append(frozenset(_analyze_aggregate(term, scopes)))
         else:
-            _count_variables(term, counts)
+            scopes.body_counts.update(_occurrences(term))
             side_vars.append(frozenset(_variables_of(term)))
 
     if isinstance(comparison.right_term, Pool):
@@ -200,7 +196,7 @@ def _analyze_aggregate(aggregate: Aggregate, scopes: RuleScopes) -> set[str]:
                     f"so a don't-care there is meaningless. Name a condition variable "
                     f"instead: {aggregate.render()}"
                 )
-            _count_variables(target, scope.target_counts)
+            scope.target_counts.update(_occurrences(target))
         for condition in element.conditions:
             _analyze_local_condition(condition, scope)
         scopes.local_scopes.append(scope)
@@ -211,20 +207,20 @@ def _analyze_local_condition(condition: Term, scope: LocalScope) -> None:
     """A condition inside an aggregate/choice element or conditional literal."""
     if isinstance(condition, Predicate):
         scope.binders |= _variables_of(condition)
-        _count_variables(condition, scope.condition_counts)
+        scope.condition_counts.update(_occurrences(condition))
     elif isinstance(condition, DefaultNegation):
-        _count_variables(condition, scope.condition_counts)
+        scope.condition_counts.update(_occurrences(condition))
     elif isinstance(condition, Comparison):
         sides = []
         for term in (condition.left_term, condition.right_term):
-            _count_variables(term, scope.condition_counts)
+            scope.condition_counts.update(_occurrences(term))
             sides.append(frozenset(_variables_of(term)))
         if isinstance(condition.right_term, Pool):
             scope.directed_edges.append((sides[1], sides[0]))
         elif condition.is_equality:
             scope.equality_edges.append((sides[0], sides[1]))
     else:  # pragma: no cover - construction-time validation prevents this
-        _count_variables(condition, scope.condition_counts)
+        scope.condition_counts.update(_occurrences(condition))
 
 
 def _analyze_negated_body_term(negation: DefaultNegation, scopes: RuleScopes) -> None:
@@ -242,9 +238,9 @@ def _analyze_negated_body_term(negation: DefaultNegation, scopes: RuleScopes) ->
             if isinstance(side, Aggregate):
                 _analyze_aggregate(side, scopes)
             else:
-                _count_variables(side, scopes.body_counts)
+                scopes.body_counts.update(_occurrences(side))
     else:
-        _count_variables(inner, scopes.body_counts)
+        scopes.body_counts.update(_occurrences(inner))
 
 
 def analyze(head: Term | None, body: list[Term]) -> RuleScopes:
@@ -255,21 +251,21 @@ def analyze(head: Term | None, body: list[Term]) -> RuleScopes:
     if isinstance(head, Predicate):
         if "_" in head.collect_variables():
             scopes.anonymous_in_head = True
-        _count_variables(head, scopes.head_counts)
+        scopes.head_counts.update(_occurrences(head))
     elif isinstance(head, Comparison):
         # A comparison head forces the equality; all its variables are global
         # and need body binding
         for side in (head.left_term, head.right_term):
             if "_" in side.collect_variables():
                 scopes.anonymous_in_head = True
-            _count_variables(side, scopes.head_counts)
+            scopes.head_counts.update(_occurrences(side))
     elif isinstance(head, Choice):
         for element in head.elements:
             target = element.targets[0]  # choice elements have exactly one target
             if "_" in target.collect_variables():
                 scopes.anonymous_in_head = True
             scope = LocalScope(description="choice element", targets_are_global_without_condition=True)
-            _count_variables(target, scope.target_counts)
+            scope.target_counts.update(_occurrences(target))
             for condition in element.conditions:
                 _analyze_local_condition(condition, scope)
             scopes.local_scopes.append(scope)
@@ -285,15 +281,15 @@ def analyze(head: Term | None, body: list[Term]) -> RuleScopes:
     for term in body:
         if isinstance(term, Predicate):
             scopes.global_binders |= _variables_of(term)
-            _count_variables(term, scopes.body_counts)
+            scopes.body_counts.update(_occurrences(term))
         elif isinstance(term, DefaultNegation):
             # Negated literals count globally and bind nothing
             _analyze_negated_body_term(term, scopes)
         elif isinstance(term, Comparison):
-            _analyze_comparison(term, scopes, scopes.body_counts)
+            _analyze_comparison(term, scopes)
         elif isinstance(term, ConditionalLiteral):
             scope = LocalScope(description="conditional literal", targets_are_global_without_condition=True)
-            _count_variables(term.head, scope.target_counts)
+            scope.target_counts.update(_occurrences(term.head))
             for condition in term.condition:
                 _analyze_local_condition(condition, scope)
             scopes.local_scopes.append(scope)
@@ -346,7 +342,7 @@ def validate_optimization_element(element: ConditionedElement, rule_text: str, c
                 f"(gringo makes it unsafe) — and the tuple defines distinctness, so a "
                 f"don't-care there is meaningless. Name a condition variable instead: {rule_text}"
             )
-        _count_variables(target, scope.target_counts)
+        scope.target_counts.update(_occurrences(target))
     for condition in element.conditions:
         _analyze_local_condition(condition, scope)
     bound = _bind_fixpoint(scope.binders, scope.equality_edges, scope.directed_edges)
@@ -454,7 +450,7 @@ def validate_weak_constraint(
                 f"The anonymous variable '_' cannot appear in a weak-constraint "
                 f"tuple (gringo makes it unsafe): {rule_text}"
             )
-        _count_variables(target, scopes.head_counts)
+        scopes.head_counts.update(_occurrences(target))
     _resolve_localities(scopes)
     _check_scopes(scopes, "weak constraint", lambda: rule_text, check_singletons)
 

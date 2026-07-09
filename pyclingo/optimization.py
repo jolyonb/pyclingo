@@ -32,6 +32,35 @@ from pyclingo.scoping import body_global_variables
 type OptimizationTermType = Value | Expression | Predicate
 
 
+def _validated_weight(weight: int | OptimizationTermType, noun: str) -> Value | Expression:
+    """The weight rules both constructs share; the noun keeps each error's spelling."""
+    if isinstance(weight, int):
+        weight = Number(weight)
+    if isinstance(weight, String):
+        raise TypeError(f"{noun} weight must be integer-valued, got a String")
+    if not isinstance(weight, (Value, Expression)):
+        raise TypeError(f"{noun} weight must be an int, Value, or Expression, got {type(weight).__name__}")
+    return weight
+
+
+def _validate_priority(priority: int, noun: str) -> None:
+    """The priority rules both constructs share."""
+    if not isinstance(priority, int) or isinstance(priority, bool):
+        raise TypeError(f"{noun} priority must be an int, got {type(priority).__name__}")
+    if not -(2**31) <= priority < 2**31:
+        raise ValueError(
+            f"{noun} priority {priority} is outside clingo's integer range "
+            f"[-2147483648, 2147483647]; clingo would silently wrap it, merging or "
+            f"reordering objective tiers"
+        )
+
+
+def _weight_at_priority(weight: Term, priority: int) -> str:
+    """Render W@P, with @0 elided so bare and explicit-zero spellings cannot diverge."""
+    weight_str = weight.render()
+    return f"{weight_str}@{priority}" if priority != 0 else weight_str
+
+
 class WeakConstraint(ProgramElement):
     """
     A constraint that charges instead of forbidding: ":~ conditions. [W@P, T]".
@@ -57,12 +86,7 @@ class WeakConstraint(ProgramElement):
         tuple_terms: tuple[OptimizationTermType, ...] | None,
         priority: int,
     ) -> None:
-        if isinstance(weight, int):
-            weight = Number(weight)
-        if isinstance(weight, String):
-            raise TypeError("Weak-constraint weight must be integer-valued, got a String")
-        if not isinstance(weight, (Value, Expression)):
-            raise TypeError(f"Weak-constraint weight must be an int, Value, or Expression, got {type(weight).__name__}")
+        weight = _validated_weight(weight, "Weak-constraint")
         # Checked after coercion so Number(-3) is caught the same as -3. A
         # negative weight is legal ASP but turns the penalty into a reward,
         # inverting the verb's name — almost certainly a sign flip
@@ -91,14 +115,7 @@ class WeakConstraint(ProgramElement):
                 raise TypeError(
                     f"Weak-constraint tuple terms must be Values, Expressions, or Predicates, got {type(term).__name__}"
                 )
-        if not isinstance(priority, int) or isinstance(priority, bool):
-            raise TypeError(f"Weak-constraint priority must be an int, got {type(priority).__name__}")
-        if not -(2**31) <= priority < 2**31:
-            raise ValueError(
-                f"Weak-constraint priority {priority} is outside clingo's integer range "
-                f"[-2147483648, 2147483647]; clingo would silently wrap it, merging or "
-                f"reordering objective tiers"
-            )
+        _validate_priority(priority, "Weak-constraint")
         if not conditions:
             raise ValueError("A weak constraint requires at least one condition")
         # The conditions form a RULE BODY: everything forbid() accepts is
@@ -139,10 +156,7 @@ class WeakConstraint(ProgramElement):
             cond.freeze()
 
     def render(self) -> str:
-        weight_str = self._targets[0].render()
-        if self._priority != 0:
-            weight_str = f"{weight_str}@{self._priority}"
-        parts = [weight_str]
+        parts = [_weight_at_priority(self._targets[0], self._priority)]
         # The discriminator names this statement in the shared tuple set —
         # two auto-tupled statements over one domain must not merge charges.
         # Standalone renders (fragments, validation error text) have no
@@ -210,28 +224,15 @@ class OptimizationDirective(ProgramElement):
         condition: ConditionType | list[ConditionType] | None,
         priority: int,
     ) -> None:
-        if isinstance(weight, int):
-            weight = Number(weight)
-        if isinstance(weight, String):
-            raise TypeError("Optimization weight must be integer-valued, got a String")
-        if not isinstance(weight, (Value, Expression)):
-            raise TypeError(f"Optimization weight must be an int, Value, or Expression, got {type(weight).__name__}")
+        weight = _validated_weight(weight, "Optimization")
         for term in tuple_terms:
             if not isinstance(term, (Value, Expression, Predicate)):
                 raise TypeError(
                     f"Optimization tuple terms must be Values, Expressions, or Predicates, got {type(term).__name__}"
                 )
-        if not isinstance(priority, int) or isinstance(priority, bool):
-            raise TypeError(f"Optimization priority must be an int, got {type(priority).__name__}")
-        if not -(2**31) <= priority < 2**31:
-            raise ValueError(
-                f"Optimization priority {priority} is outside clingo's integer range "
-                f"[-2147483648, 2147483647]; clingo would silently wrap it, merging or "
-                f"reordering objective tiers"
-            )
+        _validate_priority(priority, "Optimization")
 
         self._optimization = optimization
-        self._weight = weight
         self._priority = priority
         self._element = ConditionedElement((weight, *tuple_terms), condition, "optimization")
 
@@ -250,10 +251,7 @@ class OptimizationDirective(ProgramElement):
     def render(self) -> str:
         directive = f"#{self._optimization.value}"
         targets = self._element.targets
-        weight_str = targets[0].render()
-        if self._priority != 0:
-            weight_str = f"{weight_str}@{self._priority}"
-        parts = [weight_str, *(term.render() for term in targets[1:])]
+        parts = [_weight_at_priority(targets[0], self._priority), *(term.render() for term in targets[1:])]
         element_str = ", ".join(parts)
         if conditions := self._element.conditions:
             element_str += " : " + ", ".join(cond.render() for cond in conditions)

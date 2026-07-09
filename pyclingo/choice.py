@@ -191,8 +191,10 @@ class Choice(FreezableBuilder, Term):
 
         if self.min_cardinality and not self.min_cardinality.is_grounded:
             return False
+        if self.max_cardinality and not self.max_cardinality.is_grounded:  # noqa: SIM103
+            return False
 
-        return not (self.max_cardinality and not self.max_cardinality.is_grounded)
+        return True
 
     def render(self, context: RenderingContext = RenderingContext.DEFAULT) -> str:
         prefix = ""

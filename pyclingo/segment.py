@@ -385,8 +385,10 @@ class When:
 
     def _complete(self, closer: str, element: ProgramElement) -> None:
         # The element is fully built (and validated) before the context
-        # resolves, so a rejected statement leaves the When retryable
-        self._guard(closer)
+        # resolves, so a rejected statement leaves the When retryable.
+        # Every closer runs _guard() BEFORE building its element (a second
+        # closer must fail before Rule() freezes shared builders), so no
+        # completed When can reach here.
         self._completed_by = closer
         self._segment._pending.remove(self)
         # The element anchors at the when() line; a closer on a different

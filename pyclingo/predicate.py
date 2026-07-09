@@ -308,7 +308,7 @@ class Predicate(PredicateBase, Negatable, metaclass=_PredicateMeta):
             descriptor: Field[Any] = Field()
             descriptor._configure(field_name, ground)
             setattr(cls, field_name, descriptor)
-        cls._descriptor_fields = getattr(cls, "_descriptor_fields", frozenset()) | frozenset(ground_types)
+        cls._descriptor_fields = cls._descriptor_fields | frozenset(ground_types)
 
     @classmethod
     def in_namespace(cls, namespace: str) -> type[Self]:
@@ -476,7 +476,7 @@ class Predicate(PredicateBase, Negatable, metaclass=_PredicateMeta):
     @classmethod
     def field_names(cls) -> list[str]:
         """Get field names that represent predicate arguments (not starting with _)."""
-        return [f.name for f in fields(cls) if not f.name.startswith("_")]
+        return [f.name for f in cls.argument_fields()]
 
     def read_as_term(self, field_name: str) -> FieldAsTermType:
         """
@@ -520,7 +520,7 @@ class Predicate(PredicateBase, Negatable, metaclass=_PredicateMeta):
     @classmethod
     def get_arity(cls) -> int:
         """Returns the arity of the predicate."""
-        return len([f for f in fields(cls) if not f.name.startswith("_")])
+        return len(cls.argument_fields())
 
     @classmethod
     def shown_by_default(cls) -> bool:

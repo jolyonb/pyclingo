@@ -231,6 +231,90 @@ class Negatable(Term, ABC):
         return DefaultNegation(self)
 
 
+class ArithmeticOps:
+    """
+    The arithmetic operator suite shared by Value and Expression: every
+    operator builds an Expression (or raises its teaching wall). One home —
+    the two classes accept the same operand union. self is typed Any because
+    a mixin cannot name its hosts' union; the only inheritors are Value and
+    Expression, exactly the types Expression's operands accept.
+    """
+
+    def __add__(self: Any, other: ExpressionFieldType) -> Expression:
+        return Expression(self, Operation.ADD, other)
+
+    def __radd__(self: Any, other: ExpressionFieldType) -> Expression:
+        return Expression(other, Operation.ADD, self)
+
+    def __sub__(self: Any, other: ExpressionFieldType) -> Expression:
+        return Expression(self, Operation.SUBTRACT, other)
+
+    def __rsub__(self: Any, other: ExpressionFieldType) -> Expression:
+        return Expression(other, Operation.SUBTRACT, self)
+
+    def __mul__(self: Any, other: ExpressionFieldType) -> Expression:
+        return Expression(self, Operation.MULTIPLY, other)
+
+    def __rmul__(self: Any, other: ExpressionFieldType) -> Expression:
+        return Expression(other, Operation.MULTIPLY, self)
+
+    def __neg__(self: Any) -> Expression:
+        return Expression(None, Operation.UNARY_MINUS, self)
+
+    def __floordiv__(self: Any, other: ExpressionFieldType) -> Expression:
+        return Expression(self, Operation.INTEGER_DIVIDE, other)
+
+    def __rfloordiv__(self: Any, other: ExpressionFieldType) -> Expression:
+        return Expression(other, Operation.INTEGER_DIVIDE, self)
+
+    def __truediv__(self, other: object) -> Never:
+        raise TypeError(
+            "clingo has no true division; use // (renders as ASP '/', integer division truncating toward zero)"
+        )
+
+    def __rtruediv__(self, other: object) -> Never:
+        raise TypeError(
+            "clingo has no true division; use // (renders as ASP '/', integer division truncating toward zero)"
+        )
+
+    def __mod__(self: Any, other: ExpressionFieldType) -> Expression:
+        return Expression(self, Operation.MODULO, other)
+
+    def __rmod__(self: Any, other: ExpressionFieldType) -> Expression:
+        return Expression(other, Operation.MODULO, self)
+
+    def __pow__(self: Any, other: ExpressionFieldType) -> Expression:
+        return Expression(self, Operation.POWER, other)
+
+    def __rpow__(self: Any, other: ExpressionFieldType) -> Expression:
+        return Expression(other, Operation.POWER, self)
+
+    def __and__(self: Any, other: ExpressionFieldType) -> Expression:
+        return Expression(self, Operation.BITAND, other)
+
+    def __rand__(self: Any, other: ExpressionFieldType) -> Expression:
+        return Expression(other, Operation.BITAND, self)
+
+    def __or__(self: Any, other: ExpressionFieldType) -> Expression:
+        return Expression(self, Operation.BITOR, other)
+
+    def __ror__(self: Any, other: ExpressionFieldType) -> Expression:
+        return Expression(other, Operation.BITOR, self)
+
+    def __xor__(self: Any, other: ExpressionFieldType) -> Expression:
+        return Expression(self, Operation.BITXOR, other)
+
+    def __rxor__(self: Any, other: ExpressionFieldType) -> Expression:
+        return Expression(other, Operation.BITXOR, self)
+
+    def __invert__(self) -> Never:
+        """~ is reserved for default negation, which needs a literal: always raises."""
+        raise TypeError(
+            "~ is default negation and applies to literals (predicates, comparisons); "
+            "for bitwise complement, use Compl(x)"
+        )
+
+
 class _ValueMeta(ABCMeta):
     """
     Caches Value instances: constructing the same value twice returns the same
@@ -266,7 +350,7 @@ class _ValueMeta(ABCMeta):
         return super().__call__(*args, **kwargs)  # type: ignore[misc, no-any-return]
 
 
-class Value(BasicTerm, ComparableTerm, ABC, metaclass=_ValueMeta):
+class Value(BasicTerm, ComparableTerm, ArithmeticOps, ABC, metaclass=_ValueMeta):
     """
     Abstract base class for values: variables and constants, the most basic
     elements in an ASP program.
@@ -327,80 +411,6 @@ class Value(BasicTerm, ComparableTerm, ABC, metaclass=_ValueMeta):
         uniformly to all of its operands when deciding parenthesization.
         """
         pass
-
-    def __add__(self, other: int | ValueExpressionType) -> Expression:
-        return Expression(self, Operation.ADD, other)
-
-    def __radd__(self, other: int | ValueExpressionType) -> Expression:
-        return Expression(other, Operation.ADD, self)
-
-    def __sub__(self, other: int | ValueExpressionType) -> Expression:
-        return Expression(self, Operation.SUBTRACT, other)
-
-    def __rsub__(self, other: int | ValueExpressionType) -> Expression:
-        return Expression(other, Operation.SUBTRACT, self)
-
-    def __mul__(self, other: int | ValueExpressionType) -> Expression:
-        return Expression(self, Operation.MULTIPLY, other)
-
-    def __rmul__(self, other: int | ValueExpressionType) -> Expression:
-        return Expression(other, Operation.MULTIPLY, self)
-
-    def __neg__(self) -> Expression:
-        return Expression(None, Operation.UNARY_MINUS, self)
-
-    def __floordiv__(self, other: int | ValueExpressionType) -> Expression:
-        return Expression(self, Operation.INTEGER_DIVIDE, other)
-
-    def __rfloordiv__(self, other: int | ValueExpressionType) -> Expression:
-        return Expression(other, Operation.INTEGER_DIVIDE, self)
-
-    def __truediv__(self, other: object) -> Never:
-        raise TypeError(
-            "clingo has no true division; use // (renders as ASP '/', integer division truncating toward zero)"
-        )
-
-    def __rtruediv__(self, other: object) -> Never:
-        raise TypeError(
-            "clingo has no true division; use // (renders as ASP '/', integer division truncating toward zero)"
-        )
-
-    def __mod__(self, other: int | ValueExpressionType) -> Expression:
-        return Expression(self, Operation.MODULO, other)
-
-    def __rmod__(self, other: int | ValueExpressionType) -> Expression:
-        return Expression(other, Operation.MODULO, self)
-
-    def __pow__(self, other: int | ValueExpressionType) -> Expression:
-        return Expression(self, Operation.POWER, other)
-
-    def __rpow__(self, other: int | ValueExpressionType) -> Expression:
-        return Expression(other, Operation.POWER, self)
-
-    def __and__(self, other: int | ValueExpressionType) -> Expression:
-        return Expression(self, Operation.BITAND, other)
-
-    def __rand__(self, other: int | ValueExpressionType) -> Expression:
-        return Expression(other, Operation.BITAND, self)
-
-    def __or__(self, other: int | ValueExpressionType) -> Expression:
-        return Expression(self, Operation.BITOR, other)
-
-    def __ror__(self, other: int | ValueExpressionType) -> Expression:
-        return Expression(other, Operation.BITOR, self)
-
-    def __xor__(self, other: int | ValueExpressionType) -> Expression:
-        return Expression(self, Operation.BITXOR, other)
-
-    def __rxor__(self, other: int | ValueExpressionType) -> Expression:
-        return Expression(other, Operation.BITXOR, self)
-
-    def __invert__(self) -> Never:
-        """~ is reserved for default negation, which needs a literal: always raises."""
-        raise TypeError(
-            "~ is default negation and applies to literals (predicates, comparisons); "
-            "for bitwise complement, use Compl(x)"
-        )
 
 
 class Variable(Value):
@@ -871,8 +881,6 @@ def pool(elements: range | Sequence[int | str | BasicTerm] | Pool) -> Pool:
         TypeError: If elements is not a supported type or contains unsupported elements
         ValueError: If attempting to create an empty pool
     """
-    pool_elements: Sequence[BasicTerm]
-
     if isinstance(elements, Pool):
         return elements
 
@@ -886,31 +894,13 @@ def pool(elements: range | Sequence[int | str | BasicTerm] | Pool) -> Pool:
     if isinstance(elements, (list, tuple)):
         if not elements:
             raise ValueError("Cannot create an empty pool")
-
-        pool_elements = []
-        for element in elements:
-            if isinstance(element, int):
-                pool_elements.append(Number(element))
-            elif isinstance(element, str):
-                pool_elements.append(String(element))
-            elif isinstance(element, Pool):
-                raise TypeError("Pools cannot be nested inside pools")
-            elif isinstance(element, BasicTerm):
-                # Ensure the element is grounded
-                if not element.is_grounded:
-                    raise ValueError(f"Pool elements must be grounded: {element.render()}")
-                pool_elements.append(element)
-            else:
-                raise TypeError(
-                    f"Pool elements must be ints, strs, or grounded basic terms, got {type(element).__name__}"
-                )
-
-        return ExplicitPool(pool_elements)
+        # ExplicitPool validates and coerces every element itself
+        return ExplicitPool(elements)
 
     raise TypeError(f"Expected Pool, list, tuple, or range, got {type(elements).__name__}")
 
 
-class Expression(ComparableTerm):
+class Expression(ComparableTerm, ArithmeticOps):
     """
     Represents a mathematical expression in an ASP program.
 
@@ -1084,79 +1074,6 @@ class Expression(ComparableTerm):
         raise ValueError("Expressions can only be used as parts of comparisons, assignments, or as predicate arguments")
 
     # Arithmetic operator methods
-    def __add__(self, other: ExpressionFieldType) -> Expression:
-        return Expression(self, Operation.ADD, other)
-
-    def __radd__(self, other: ExpressionFieldType) -> Expression:
-        return Expression(other, Operation.ADD, self)
-
-    def __sub__(self, other: ExpressionFieldType) -> Expression:
-        return Expression(self, Operation.SUBTRACT, other)
-
-    def __rsub__(self, other: ExpressionFieldType) -> Expression:
-        return Expression(other, Operation.SUBTRACT, self)
-
-    def __mul__(self, other: ExpressionFieldType) -> Expression:
-        return Expression(self, Operation.MULTIPLY, other)
-
-    def __rmul__(self, other: ExpressionFieldType) -> Expression:
-        return Expression(other, Operation.MULTIPLY, self)
-
-    def __neg__(self) -> Expression:
-        return Expression(None, Operation.UNARY_MINUS, self)
-
-    def __floordiv__(self, other: ExpressionFieldType) -> Expression:
-        return Expression(self, Operation.INTEGER_DIVIDE, other)
-
-    def __rfloordiv__(self, other: ExpressionFieldType) -> Expression:
-        return Expression(other, Operation.INTEGER_DIVIDE, self)
-
-    def __truediv__(self, other: object) -> Never:
-        raise TypeError(
-            "clingo has no true division; use // (renders as ASP '/', integer division truncating toward zero)"
-        )
-
-    def __rtruediv__(self, other: object) -> Never:
-        raise TypeError(
-            "clingo has no true division; use // (renders as ASP '/', integer division truncating toward zero)"
-        )
-
-    def __mod__(self, other: ExpressionFieldType) -> Expression:
-        return Expression(self, Operation.MODULO, other)
-
-    def __rmod__(self, other: ExpressionFieldType) -> Expression:
-        return Expression(other, Operation.MODULO, self)
-
-    def __pow__(self, other: ExpressionFieldType) -> Expression:
-        return Expression(self, Operation.POWER, other)
-
-    def __rpow__(self, other: ExpressionFieldType) -> Expression:
-        return Expression(other, Operation.POWER, self)
-
-    def __and__(self, other: ExpressionFieldType) -> Expression:
-        return Expression(self, Operation.BITAND, other)
-
-    def __rand__(self, other: ExpressionFieldType) -> Expression:
-        return Expression(other, Operation.BITAND, self)
-
-    def __or__(self, other: ExpressionFieldType) -> Expression:
-        return Expression(self, Operation.BITOR, other)
-
-    def __ror__(self, other: ExpressionFieldType) -> Expression:
-        return Expression(other, Operation.BITOR, self)
-
-    def __xor__(self, other: ExpressionFieldType) -> Expression:
-        return Expression(self, Operation.BITXOR, other)
-
-    def __rxor__(self, other: ExpressionFieldType) -> Expression:
-        return Expression(other, Operation.BITXOR, self)
-
-    def __invert__(self) -> Never:
-        """~ is reserved for default negation, which needs a literal: always raises."""
-        raise TypeError(
-            "~ is default negation and applies to literals (predicates, comparisons); "
-            "for bitwise complement, use Compl(x)"
-        )
 
     def __str__(self) -> str:
         return self.render()

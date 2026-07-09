@@ -121,9 +121,11 @@ class AtomCollection:
     def __len__(self) -> int:
         return len(self._atoms)
 
+    def _counts_str(self) -> str:
+        return ", ".join(f"{cls.get_name()}: {len(atoms)}" for cls, atoms in self._by_class.items())
+
     def __repr__(self) -> str:
-        counts = ", ".join(f"{cls.get_name()}: {len(atoms)}" for cls, atoms in self._by_class.items())
-        return f"{type(self).__name__}({counts})"
+        return f"{type(self).__name__}({self._counts_str()})"
 
 
 class Model(AtomCollection):
@@ -169,8 +171,7 @@ class CostedModel(Model):
         self.proven = proven
 
     def __repr__(self) -> str:
-        counts = ", ".join(f"{cls.get_name()}: {len(atoms)}" for cls, atoms in self._by_class.items())
-        return f"{type(self).__name__}(cost={list(self.cost)}, proven={self.proven}, {counts})"
+        return f"{type(self).__name__}(cost={list(self.cost)}, proven={self.proven}, {self._counts_str()})"
 
 
 class Optimum(CostedModel):
@@ -357,9 +358,8 @@ class SearchABC(ABC):
         """Stop the search early; flags and statistics are finalized."""
         self._iterator.close()
         # Closing a never-started generator skips its finally, so mark
-        # finished here as well; closed makes pre-held iterators loud
+        # finished here as well
         self._state.finished = True
-        self._state.closed = True
 
     def __enter__(self) -> Self:
         return self
