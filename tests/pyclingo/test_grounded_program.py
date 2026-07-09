@@ -3,13 +3,14 @@ Tests for the ground()/solve() split: ground once, solve many times, with
 the sequential-solve and staleness contracts enforced loudly.
 """
 
+import inspect
 import threading
 from itertools import islice
 
 import clingo
 import pytest
 
-from pyclingo import ASPProgram, Choice, Number, Predicate, RangePool, Variable
+from pyclingo import ASPProgram, Choice, Number, Predicate, RangePool, SourceLocation, Variable
 from pyclingo.solver import GroundedProgram
 
 A = Predicate.define("a", ["value"])
@@ -310,3 +311,54 @@ def test_ground_context_backs_at_functions() -> None:
     program.raw_asp("val_ctx(@double(21)).", predicates=[Val])
     model = program.ground(context=_Doubler()).solve().first()
     assert model.atoms(Val)[0]["x"] is Number(42)  # interned: identity is value
+
+
+def test_analyze_grounding_ranks_signatures_and_names_the_lines() -> None:
+    program = ASPProgram()
+    P = Predicate.define("p_an", ["x"], show=False)
+    Q = Predicate.define("q_an", ["x"], show=False)
+    Pair = Predicate.define("pair_an", ["a", "b"])
+    X, Y = Variable("X"), Variable("Y")
+    frame = inspect.currentframe()
+    assert frame is not None
+    lineno = frame.f_lineno
+    program.fact(*[P(x=i) for i in range(1, 4)])  # lineno + 1: 3 atoms, one shared line
+    program.fact(*[Q(x=i) for i in range(1, 4)])  # lineno + 2
+    program.when(P(x=X), Q(x=Y)).derive(Pair(a=X, b=Y))  # lineno + 3: the 9-atom product
+    report = program.ground().analyze_grounding()
+    lines = report.splitlines()
+    assert lines[0] == "Grounding profile: 15 ground atoms across 3 signatures"
+    pair_site = SourceLocation(frame.f_code.co_filename, lineno + 3).display()
+    assert lines[1] == f"  pair_an/2: 9 atoms — derived at {pair_site}"
+    fact_site = SourceLocation(frame.f_code.co_filename, lineno + 1).display()
+    assert lines[2] == f"  p_an/1: 3 atoms — derived at {fact_site}"  # three facts, one deduped line
+
+
+def test_analyze_grounding_attributes_choices_and_raw_blocks() -> None:
+    program = ASPProgram()
+    Chosen = Predicate.define("chosen_an", ["x"])
+    Raw = Predicate.define("raw_an", ["x"])
+    frame = inspect.currentframe()
+    assert frame is not None
+    lineno = frame.f_lineno
+    program.choose(Choice(Chosen(x=RangePool(1, 4))).exactly(2))  # lineno + 1
+    program.raw_asp("raw_an(1..3).", predicates=[Raw])  # lineno + 2
+    report = program.ground().analyze_grounding()
+    choice_site = SourceLocation(frame.f_code.co_filename, lineno + 1).display()
+    raw_site = SourceLocation(frame.f_code.co_filename, lineno + 2).display()
+    assert f"  chosen_an/1: 4 atoms — derived at {choice_site}" in report
+    assert f"  raw_an/1: 3 atoms — derived at {raw_site}" in report
+
+
+def test_analyze_grounding_fallbacks_stay_honest() -> None:
+    # Capture off: sites exist but carry no location. Declared-by-show raw
+    # atoms: no deriving statement is known at all.
+    program = ASPProgram(source_locations=False)
+    P = Predicate.define("p_an_off", ["x"])
+    Ghost = Predicate.define("ghost_an", ["x"])
+    program.fact(P(x=1))
+    program.raw_asp("ghost_an(1..2).")
+    program.show(Ghost)  # show() declares as fully as predicates= — but derives nothing
+    report = program.ground().analyze_grounding()
+    assert "  p_an_off/1: 1 atoms — derived at unknown (source locations off)" in report
+    assert "  ghost_an/1: 2 atoms — derived at no pyclingo statement (declared but underived?)" in report

@@ -11,7 +11,7 @@ from pyclingo.conditioned_element import ConditionType
 from pyclingo.core import DefaultNegation, DefinedConstant, PredicateOccurrence, Term
 from pyclingo.optimization import OptimizationTermType, OptStrategy, WeakConstraint
 from pyclingo.predicate import NegatedSignature, Predicate
-from pyclingo.program_elements import RawASP, RenderedLine
+from pyclingo.program_elements import RawASP, RenderedLine, Rule
 from pyclingo.scoping import validate_rule
 from pyclingo.segment import Segment, When
 from pyclingo.solve_result import (
@@ -67,6 +67,19 @@ def _describe_class(pred: type[Predicate]) -> str:
     """The class name plus its definition site — colliding classes' names match by definition."""
     defined_at = pred._defined_at
     return f"{pred.__name__} defined at {defined_at.display()}" if defined_at is not None else pred.__name__
+
+
+def _head_classes(head: Term) -> set[type[Predicate]]:
+    """The classes a rule head derives: the atom's own, or a choice's element targets (conditions derive nothing)."""
+    if isinstance(head, Predicate):
+        return {type(head)}
+    assert isinstance(head, Choice)  # validate_in_context admits no other head
+    classes: set[type[Predicate]] = set()
+    for element in head.elements:
+        for target in element.targets:
+            assert isinstance(target, Predicate)  # Choice.add admits nothing else
+            classes.add(type(target))
+    return classes
 
 
 def _annotate_lines(lines: list[RenderedLine]) -> list[RenderedLine]:
@@ -789,6 +802,23 @@ class ASPProgram:
 
         predicate_types = {(pred.get_name(), pred.get_arity()): pred for pred in self._collect_predicates()}
 
+        # Deriving statements by signature, for analyze_grounding(): each
+        # rule head's classes and each raw block's declared classes, joined
+        # to the source lines that authored them
+        derivation_sites: dict[tuple[str, int], list[SourceLocation | None]] = {}
+        for segment in self._segments.values():
+            for element in segment:
+                classes: set[type[Predicate]] = set()
+                if isinstance(element, Rule) and element.head is not None:
+                    classes = _head_classes(element.head)
+                elif isinstance(element, RawASP):
+                    classes = {
+                        entry.predicate if isinstance(entry, NegatedSignature) else entry
+                        for entry in element.predicates
+                    }
+                for cls in classes:
+                    derivation_sites.setdefault((cls.get_name(), cls.get_arity()), []).append(element.source_location)
+
         # Raw text is invisible to the walkers, so with raw blocks present
         # the raw_asp contract (exhaustive declaration) is enforced here,
         # against gringo's own signature table: every ground signature must
@@ -820,6 +850,7 @@ class ASPProgram:
             message_handler,
             defined_constants=dict(self._defined_constants),
             ground_levels=ground_levels,
+            derivation_sites={signature: tuple(sites) for signature, sites in derivation_sites.items()},
         )
 
     def solve(
@@ -950,12 +981,16 @@ class GroundedProgram:
         message_handler: ClingoMessageHandler,
         defined_constants: dict[str, int | str] | None = None,
         ground_levels: tuple[int, ...] = (),
+        derivation_sites: dict[tuple[str, int], tuple[SourceLocation | None, ...]] | None = None,
     ) -> None:
         self._text = text
         self._control = control
         self._predicate_types = predicate_types
         self._message_handler = message_handler
         self._defined_constants = defined_constants or {}
+        # Signature -> the authoring lines of its deriving statements, for
+        # analyze_grounding()
+        self._derivation_sites = derivation_sites or {}
         # Ground truth from the minimize observer: the surviving priority
         # levels, highest first — bool(levels) IS "does this program optimize?"
         self._ground_levels = ground_levels
@@ -993,6 +1028,36 @@ class GroundedProgram:
         and bounds follow these levels.
         """
         return self._ground_levels
+
+    def analyze_grounding(self) -> str:
+        """
+        Where the grounding's size comes from: ground atom counts per
+        signature, largest first, each joined to the statements that
+        derive it. The first stop when grounding is slow or huge — the
+        top rows name the authoring lines to rethink. Counts are gringo's
+        ground truth (atoms simplified away at grounding are already
+        gone; both signs of a signature count together).
+
+        One blind spot, stated plainly: the report joins on HEADS, so a
+        statement whose body grounds large without deriving new atoms
+        (a wide joint feeding a small head) shows up under its head's
+        count, not as its own row.
+        """
+        counts: dict[tuple[str, int], int] = {}
+        for name, arity, positive in self._control.symbolic_atoms.signatures:
+            tally = sum(1 for _ in self._control.symbolic_atoms.by_signature(name, arity, positive=positive))
+            counts[(name, arity)] = counts.get((name, arity), 0) + tally
+        total = sum(counts.values())
+        lines = [f"Grounding profile: {total} ground atoms across {len(counts)} signatures"]
+        for (name, arity), count in sorted(counts.items(), key=lambda item: (-item[1], item[0])):
+            described: list[str] = []
+            for site in self._derivation_sites.get((name, arity), ()):
+                text = site.display() if site is not None else "unknown (source locations off)"
+                if text not in described:
+                    described.append(text)
+            origin = ", ".join(described) if described else "no pyclingo statement (declared but underived?)"
+            lines.append(f"  {name}/{arity}: {count} atoms — derived at {origin}")
+        return "\n".join(lines)
 
     def _convert_assumptions(
         self, assumptions: Sequence[Predicate | DefaultNegation]
