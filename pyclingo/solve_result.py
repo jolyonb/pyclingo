@@ -3,7 +3,7 @@ Search results: the streaming handles (SolveResult, RefinementSteps,
 OptimizeSteps) and the typed atom containers (Model, Consequences) they
 produce.
 
-Every search mode shares one lifecycle — SearchABC handles over one
+Every search mode shares one lifecycle — Search handles over one
 _search_generator — because the skeleton is mode-independent clingo fact:
 resume/wait/cancel/get ordering, the timed-out-vs-exhausted race, and
 finalization on every exit path. The modes differ at exactly three
@@ -325,7 +325,7 @@ class _ClosedCheckingIterator:
         self._state.closed = True
 
 
-class SearchABC(ABC):
+class Search(ABC):
     """
     Shared lifecycle for one search on a Control: the iterate-once guard,
     close()/with teardown, and the flags the generator finalizes on every
@@ -407,11 +407,11 @@ class SearchABC(ABC):
         return format_statistics_clingo_style(self._state.statistics)
 
 
-class SolveResult(SearchABC):
+class SolveResult(Search):
     """
     The handle for one solve: iterate it to receive Models lazily.
 
-    'satisfiable', 'exhausted', and 'solution_count' update as models arrive
+    'satisfiable', 'exhausted', and 'models_yielded' update as models arrive
     and are finalized when iteration ends on any path — exhaustion, close(),
     or leaving a with-block. Statistics are available after solving finishes.
     Each call to ASPProgram.solve() returns an independent SolveResult, so
@@ -453,7 +453,7 @@ class SolveResult(SearchABC):
         return self._state.exhausted
 
     @property
-    def solution_count(self) -> int:
+    def models_yielded(self) -> int:
         """Models yielded so far."""
         return self._state.emission_count
 
@@ -464,7 +464,7 @@ class SolveResult(SearchABC):
         return cast(Iterator[Model], self._iterator)
 
 
-class RefinementSteps(SearchABC):
+class RefinementSteps(Search):
     """
     The handle for one brave/cautious refinement, consumed step by step:
     iterate it to receive each successive approximation as a claim-free
@@ -521,7 +521,7 @@ class RefinementSteps(SearchABC):
         return self._iterator
 
 
-class OptimizeSteps(SearchABC):
+class OptimizeSteps(Search):
     """
     The handle for one optimization descent, consumed step by step:
     iterate it to receive each strictly-better answer set as a
@@ -575,7 +575,7 @@ class OptimizeSteps(SearchABC):
         return self._state.exhausted
 
     @property
-    def models_seen(self) -> int:
+    def models_yielded(self) -> int:
         """Models yielded so far, each strictly better than the one before."""
         return self._state.emission_count
 

@@ -75,8 +75,8 @@ class Aggregate(FreezableBuilder, AggregateBase, ABC):
                       If None, it's an unconditional element
 
         Example:
-            >>> from pyclingo import create_variables
-            >>> X, Y, Z, W = create_variables("X", "Y", "Z", "W")
+            >>> from pyclingo import Variable
+            >>> X, Y, Z, W = (Variable(n) for n in "XYZW")
             >>> p, q, r = (Predicate.define(name, ["x"]) for name in "pqr")
             >>> Count(X).add(Y, p(x=Y)).add((Z, W), [q(x=Z), r(x=W)]).render()
             '#count{ X; Y : p(Y); Z, W : q(Z), r(W) }'

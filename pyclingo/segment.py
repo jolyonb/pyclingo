@@ -28,7 +28,7 @@ from pyclingo.optimization import (
     OptimizationTermType,
     WeakConstraint,
 )
-from pyclingo.predicate import NegatedPredicate, Predicate, PredicateClassType
+from pyclingo.predicate import NegatedSignature, Predicate, PredicateClassType
 from pyclingo.program_elements import BlankLine, Comment, ProgramElement, RawASP, RenderedLine, Rule
 from pyclingo.scoping import validate_optimization_element, validate_weak_constraint
 from pyclingo.source_location import SourceLocation, capture_location
@@ -261,7 +261,7 @@ class Segment:
         directive.element.freeze()
         self.append(directive)
 
-    def raw_asp(self, text: str, predicates: Sequence[PredicateClassType | NegatedPredicate] = ()) -> None:
+    def raw_asp(self, text: str, predicates: Sequence[PredicateClassType | NegatedSignature] = ()) -> None:
         """
         Add a verbatim block of ASP text: the escape hatch for constructs
         pyclingo does not model.

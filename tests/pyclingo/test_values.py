@@ -23,7 +23,6 @@ from pyclingo import (
     V,
     Value,
     Variable,
-    create_variables,
     pool,
 )
 
@@ -286,11 +285,6 @@ def test_pool_helper_rejects_bad_elements() -> None:
         pool([1.5])  # type: ignore[list-item]
     with pytest.raises(TypeError, match="Expected Pool, list, tuple, or range"):
         pool(42)  # type: ignore[arg-type]
-
-
-def test_create_variables_requires_a_name() -> None:
-    with pytest.raises(ValueError, match="At least one variable name"):
-        create_variables()
 
 
 def test_subclass_inputs_take_their_natural_form_then_validate() -> None:

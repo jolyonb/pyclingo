@@ -105,7 +105,7 @@ def test_descend_early_exit_keeps_best_so_far() -> None:
     steps.close()
     assert best.cost  # a genuine costed solution in hand
     assert not steps.exhausted  # optimality unproven: we stopped
-    assert steps.models_seen == 1
+    assert steps.models_yielded == 1
     assert steps.statistics is not None
     result = grounded.optimize()  # the grounding is free for the next search
     assert result is not None and result.proven

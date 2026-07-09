@@ -1,12 +1,10 @@
 """
 Seeded differential fuzz of expression rendering: random expression trees,
 rendered by pyclingo and evaluated by clingo, must match Python's evaluation
-of the same tree. This makes MATH.md's guarantee — the renderer preserves
-the Python-built tree exactly — self-enforcing over the combinatorial space
-that test_arithmetic.py's fixed cases sample.
+of the same tree.
 
-The generator avoids clingo/Python semantic divergences (documented in
-MATH.md) so any mismatch is a RENDERING bug: division and modulo are
+The generator avoids clingo/Python semantic divergences
+so any mismatch is a RENDERING bug: division and modulo are
 excluded (truncation vs floor on negatives), ** keeps small non-negative
 exponents on positive bases (no negative-exponent or overflow cases), and
 operand magnitudes are bounded well inside 32 bits.

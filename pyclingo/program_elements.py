@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 from pyclingo.conditional_literal import ConditionalLiteral
 from pyclingo.core import PredicateOccurrence, Term
-from pyclingo.predicate import NegatedPredicate, Predicate
+from pyclingo.predicate import NegatedSignature, Predicate
 from pyclingo.scoping import validate_rule
 from pyclingo.source_location import SourceLocation
 
@@ -150,7 +150,7 @@ class RawASP(ProgramElement):
     -p/n." is emitted (P for positive, -P for negative).
     """
 
-    def __init__(self, text: str, predicates: Sequence[PredicateClassType | NegatedPredicate] = ()):
+    def __init__(self, text: str, predicates: Sequence[PredicateClassType | NegatedSignature] = ()):
         if not isinstance(text, str):
             raise TypeError(f"RawASP text must be a string, got {type(text).__name__}")
         # A subclass converts to its natural plain str first: what the scan
@@ -171,7 +171,7 @@ class RawASP(ProgramElement):
                     f"pass the class {type(entry).__name__} (declaration covers every atom of "
                     f"the signature)"
                 )
-            if not isinstance(entry, NegatedPredicate) and not (
+            if not isinstance(entry, NegatedSignature) and not (
                 isinstance(entry, type) and issubclass(entry, Predicate)
             ):
                 raise TypeError(
@@ -185,10 +185,10 @@ class RawASP(ProgramElement):
 
     def collect_predicate_occurrences(self, *, as_argument: bool) -> set[PredicateOccurrence]:
         # Raw text is invisible to the walkers, so predicates= declares its
-        # atoms: P is the positive sign, -P (a NegatedPredicate) the negative.
+        # atoms: P is the positive sign, -P (a NegatedSignature) the negative.
         # A raw block is always a top-level statement, so these are atoms.
         return {
-            (entry.predicate, True, True) if isinstance(entry, NegatedPredicate) else (entry, False, True)
+            (entry.predicate, True, True) if isinstance(entry, NegatedSignature) else (entry, False, True)
             for entry in self.predicates
         }
 

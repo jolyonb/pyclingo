@@ -10,7 +10,7 @@ from pyclingo.conditional_literal import ConditionalLiteral
 from pyclingo.conditioned_element import ConditionType
 from pyclingo.core import DefaultNegation, DefinedConstant, PredicateOccurrence, Term
 from pyclingo.optimization import OptimizationTermType, OptStrategy, WeakConstraint
-from pyclingo.predicate import NegatedPredicate, Predicate
+from pyclingo.predicate import NegatedSignature, Predicate
 from pyclingo.program_elements import RawASP, RenderedLine
 from pyclingo.scoping import validate_rule
 from pyclingo.segment import Segment, When
@@ -25,7 +25,7 @@ from pyclingo.solve_result import (
     Optimum,
     RefinementMode,
     RefinementSteps,
-    SearchABC,
+    Search,
     SearchMode,
     SolveResult,
     convert_predicate_to_symbol,
@@ -315,7 +315,7 @@ class ASPProgram:
         """Charge for each match of the conditions, in the default segment; see Segment.penalize()."""
         self._default_segment().penalize(*conditions, weight=weight, terms=terms, priority=priority)
 
-    def raw_asp(self, text: str, predicates: Sequence[type[Predicate] | NegatedPredicate] = ()) -> None:
+    def raw_asp(self, text: str, predicates: Sequence[type[Predicate] | NegatedSignature] = ()) -> None:
         """Add verbatim ASP text to the default segment; see Segment.raw_asp()."""
         self._default_segment().raw_asp(text, predicates)
 
@@ -787,7 +787,7 @@ class ASPProgram:
 
         Returns:
             A SolveResult: iterate it for Models (each with typed atoms() access);
-            its satisfiable/exhausted/solution_count/statistics finalize when
+            its satisfiable/exhausted/models_yielded/statistics finalize when
             iteration ends on any path (exhaustion, close(), or a with-block).
 
         Raises:
@@ -891,7 +891,7 @@ class GroundedProgram:
         # Ground truth from the minimize observer: the surviving priority
         # levels, highest first — bool(levels) IS "does this program optimize?"
         self._ground_levels = ground_levels
-        self._active: SearchABC | None = None
+        self._active: Search | None = None
         # Guards the guard: the sequential-solve check is check-then-set, so
         # two racing threads could both pass it and share one Control's
         # search state silently — the exact quiet overlap the check exists

@@ -11,7 +11,7 @@ import weakref
 from abc import ABC, ABCMeta, abstractmethod
 from collections.abc import Sequence
 from enum import Enum
-from typing import TYPE_CHECKING, Any, ClassVar, Never, Self, cast, overload
+from typing import TYPE_CHECKING, Any, ClassVar, Never, Self, cast
 
 from pyclingo.operators import (
     BINARY_OPERATIONS,
@@ -1406,8 +1406,8 @@ class Vars:
     """
     Variables by attribute: V.Cell is Variable("Cell"), no declaration
     needed — the module-level V is ready to use, and attribute access is
-    the whole API. Kills the create_variables preamble for authors who
-    prefer inline names; Variable name validation still applies (V.cell
+    the whole API, killing the declare-your-variables preamble for authors
+    who prefer inline names; Variable name validation still applies (V.cell
     raises with the uppercase rule). Combines with indexing: V.C[1] is
     Variable("C_1").
     """
@@ -1421,23 +1421,3 @@ class Vars:
 
 
 V = Vars()
-
-
-@overload
-def create_variables(names: str) -> Variable: ...
-
-
-@overload
-def create_variables(*names: str) -> tuple[Variable, ...]: ...
-
-
-def create_variables(*names: str) -> Variable | tuple[Variable, ...]:  # type: ignore[misc]
-    """
-    Create one or more ASP variables with the given names.
-
-    Returns a single Variable if one name is provided, otherwise a tuple of Variables.
-    """
-    if not names:
-        raise ValueError("At least one variable name must be provided")
-    variables = tuple(Variable(name) for name in names)
-    return variables[0] if len(names) == 1 else variables

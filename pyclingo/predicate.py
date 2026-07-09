@@ -175,7 +175,7 @@ def _validate_schema(name: str, namespace: str, field_names: list[str]) -> None:
 
 
 @dataclass(frozen=True)
-class NegatedPredicate:
+class NegatedSignature:
     """
     The classically negated signature of a predicate class, written -P.
 
@@ -190,12 +190,12 @@ class NegatedPredicate:
 
 class _PredicateMeta(ABCMeta):
     """
-    Unary minus on a predicate CLASS: -P is NegatedPredicate(P), for raw_asp
+    Unary minus on a predicate CLASS: -P is NegatedSignature(P), for raw_asp
     declarations. (-p(1), minus on an instance, still negates the atom.)
     """
 
-    def __neg__(cls) -> NegatedPredicate:
-        return NegatedPredicate(cast("type[Predicate]", cls))
+    def __neg__(cls) -> NegatedSignature:
+        return NegatedSignature(cast("type[Predicate]", cls))
 
 
 # dataclass_transform tells type checkers that subclasses become dataclasses

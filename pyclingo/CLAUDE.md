@@ -151,14 +151,14 @@ Key features:
 - Comprehensive error handling
 
 #### Solve Results (`solve_result.py`)
-- **SearchABC**: the shared lifecycle for one search on a Control
+- **Search**: the shared lifecycle for one search on a Control
   (close()/with, finished/satisfiable/messages/statistics); SolveResult,
   RefinementSteps, and OptimizeSteps are its three handles, all driven by
   the single _search_generator (mode-parameterized at three points:
   emission type, cost legality, timeout terminal).
 - **SolveResult**: the handle returned by solve() — iterate it for Models;
   the stream is unbounded (consume what you need; islice/break are the
-  limits). satisfiable/exhausted/solution_count/statistics finalize when
+  limits). satisfiable/exhausted/models_yielded/statistics finalize when
   iteration ends on any path (exhaustion, close(), or a with-block).
 - **RefinementSteps**: the handle returned by cautious_iter()/
   brave_iter() — iterate for successive approximations (claim-free

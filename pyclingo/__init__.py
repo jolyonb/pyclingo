@@ -34,12 +34,11 @@ from .core import (
     Value,
     Variable,
     Vars,
-    create_variables,
     pool,
 )
 from .operators import ComparisonOperator
 from .optimization import OptStrategy
-from .predicate import Field, NegatedPredicate, Predicate, PredicateField
+from .predicate import Field, NegatedSignature, Predicate, PredicateField
 from .program_elements import RenderedLine
 from .segment import Segment, When
 from .solve_result import (
@@ -52,7 +51,7 @@ from .solve_result import (
     OptimizeSteps,
     Optimum,
     RefinementSteps,
-    SearchABC,
+    Search,
     SolveResult,
 )
 from .solver import ASPProgram, GroundedProgram
@@ -82,7 +81,7 @@ __all__ = [  # noqa: RUF022 (categorized deliberately, not sorted)
     "OptimizeSteps",
     "Optimum",
     "OptStrategy",
-    "SearchABC",
+    "Search",
     "LogLevel",
     "ClingoMessage",
     "RenderedLine",
@@ -94,7 +93,7 @@ __all__ = [  # noqa: RUF022 (categorized deliberately, not sorted)
     "location_override",
     # Declaring predicates
     "Predicate",
-    "NegatedPredicate",
+    "NegatedSignature",
     "Field",
     "PredicateField",
     # Rule-building objects
@@ -113,7 +112,6 @@ __all__ = [  # noqa: RUF022 (categorized deliberately, not sorted)
     "Min",
     "Max",
     # Rule-building utilities
-    "create_variables",
     "pool",
     "Not",
     "Abs",

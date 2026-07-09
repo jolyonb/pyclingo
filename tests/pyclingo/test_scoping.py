@@ -25,7 +25,6 @@ from pyclingo import (
     Sum,
     Term,
     Variable,
-    create_variables,
 )
 from pyclingo.program_elements import render_body_terms
 from pyclingo.scoping import validate_rule
@@ -81,7 +80,7 @@ def bad(head: Term | None, body: Sequence[Term], match: str, *, gringo_rejects: 
         )
 
 
-X, Y, N = create_variables("X", "Y", "N")
+X, Y, N = Variable("X"), Variable("Y"), Variable("N")
 
 
 # --- binding through equality ---
@@ -153,7 +152,7 @@ def test_same_local_name_in_two_constructs_is_independent() -> None:
 
 def test_global_variable_inside_construct_counts_globally() -> None:
     # The regionconstructor pattern: Cell local, AnchorCell global
-    Cell, AnchorCell, Size = create_variables("Cell", "AnchorCell", "Size")
+    Cell, AnchorCell, Size = (Variable(n) for n in ("Cell", "AnchorCell", "Size"))
     Region = Predicate.define("region", ["loc", "anchor"])
     ok(
         R2(x=AnchorCell, y=Size),
@@ -226,7 +225,7 @@ def test_global_in_sum_tuple_is_rejected_even_mixed_with_locals() -> None:
 
 def test_global_in_aggregate_condition_stays_legal() -> None:
     # The per-anchor pattern: aggregation parameterized by a global is fine
-    Cell, AnchorCell, Size = create_variables("Cell", "AnchorCell", "Size")
+    Cell, AnchorCell, Size = (Variable(n) for n in ("Cell", "AnchorCell", "Size"))
     Region = Predicate.define("region2", ["loc", "anchor"])
     ok(
         R2(x=AnchorCell, y=Size),

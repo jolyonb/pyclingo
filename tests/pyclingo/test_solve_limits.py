@@ -42,7 +42,7 @@ def test_take_one_model() -> None:
     result = make_choice_program(3).solve()  # 8 models exist
     model = next(iter(result))
     assert len(model) >= 0
-    assert result.solution_count == 1
+    assert result.models_yielded == 1
     assert result.exhausted is False
 
 
@@ -72,7 +72,7 @@ def test_early_close_finalizes_bookkeeping() -> None:
     result.close()
     assert result.exhausted is False  # we stopped early, truthfully reported
     assert result.satisfiable is True
-    assert result.solution_count == 1
+    assert result.models_yielded == 1
     assert "No statistics" not in result.format_statistics()
 
 
@@ -80,7 +80,7 @@ def test_context_manager_closes() -> None:
     program = make_choice_program(3)
     with program.solve() as result:
         next(iter(result))
-    assert result.solution_count == 1
+    assert result.models_yielded == 1
     assert result.exhausted is False
 
 
@@ -92,13 +92,13 @@ def test_repeated_solves_are_independent() -> None:
     assert len(list(second)) == 4
     assert len(list(first)) == 4
     assert first.exhausted and second.exhausted
-    assert first.solution_count == second.solution_count == 4
+    assert first.models_yielded == second.models_yielded == 4
 
 
 def test_unconsumed_result_reports_honestly() -> None:
     result = make_choice_program(2).solve()
     assert result.satisfiable is None  # never iterated: nothing learned
-    assert result.solution_count == 0
+    assert result.models_yielded == 0
     assert result.format_statistics() == "No statistics available"
 
 
@@ -245,7 +245,7 @@ def test_interleaved_results_stay_independent() -> None:
     nb += list(b)  # b resumes from where it paused, unaffected by a
     assert len(na) == 4 and len(nb) == 4
     assert ra.exhausted and rb.exhausted
-    assert ra.solution_count == rb.solution_count == 4
+    assert ra.models_yielded == rb.models_yielded == 4
 
 
 def test_held_iterator_is_loud_after_timeout() -> None:
