@@ -11,7 +11,7 @@ import inspect
 
 import pytest
 
-from pyclingo import ASPProgram, Choice, Field, Optimum, Predicate, Sum, Variable
+from pyclingo import SUP, ASPProgram, Choice, Field, Optimum, Predicate, Sum, Variable
 
 
 def test_e2e_plain_facts_typed() -> None:
@@ -224,9 +224,10 @@ def test_e2e_tuple_argument_diagnosed_as_argument_not_show_form() -> None:
         list(program.solve())
 
 
-def test_e2e_sup_argument_names_the_remedy() -> None:
+def test_e2e_sup_argument_round_trips_as_the_sup_value() -> None:
     # The realistic route to #sup: a #min over an empty set takes its
-    # identity value. The error decodes the jargon and names the guard.
+    # identity value. The atom round-trips, carrying the SUP singleton —
+    # comparing against it asks "was the set empty".
     program = ASPProgram()
     Smallest = Predicate.define("m_sup", ["v"])
     Never = Predicate.define("never_sup", ["x"], show=False)
@@ -234,8 +235,13 @@ def test_e2e_sup_argument_names_the_remedy() -> None:
         "{ never_sup(1) }.\n:- never_sup(1).\nm_sup(M) :- M = #min{ X : never_sup(X) }.",
         predicates=[Smallest, Never],
     )
-    with pytest.raises(ValueError, match="min of nothing is #sup"):
-        list(program.solve())
+    Empty = Predicate.define("empty_sup", [])
+    M = Variable("M")
+    program.when(Smallest(v=M), M == SUP).derive(Empty())  # write-side: renders "M = #sup"
+    model = program.solve().first()
+    (atom,) = model.atoms(Smallest)
+    assert atom["v"] is SUP  # interned: identity is value
+    assert model.atoms(Empty)  # the comparison held: the set was empty
 
 
 def test_e2e_grounding_diagnostics_ride_in_the_error() -> None:

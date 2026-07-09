@@ -323,15 +323,16 @@ class _ValueMeta(ABCMeta):
     so values nothing references anymore are evicted with their keys — a
     long-running generator does not accumulate dead values. Construction runs
     before the cache is written, so a value whose validation raises is never
-    cached. All concrete Value subclasses take exactly one constructor
-    argument; other shapes fall through so __init__ can raise its own error,
-    and the cache key includes the argument's type so equal-but-distinct-type
-    arguments never share an instance.
+    cached. Concrete Value subclasses take exactly one constructor argument
+    (keyed with its type, so equal-but-distinct-type arguments never share an
+    instance) or none at all (Supremum/Infimum, keyed as the argument None —
+    which no one-argument value accepts, so the keys cannot collide); other
+    shapes fall through so __init__ can raise its own error.
     """
 
     def __call__[T](cls: type[T], *args: Any, **kwargs: Any) -> T:
-        if len(args) + len(kwargs) == 1:
-            value = args[0] if args else next(iter(kwargs.values()))
+        if len(args) + len(kwargs) <= 1:
+            value = args[0] if args else next(iter(kwargs.values()), None)
             key = (cls, type(value), value)
             try:
                 cached = Value._cache.get(key)
@@ -684,6 +685,62 @@ class DefinedConstant(ConstantBase):
         return str(self.value)
 
 
+class ExtremeConstant(ConstantBase, ABC):
+    """
+    clingo's ordering end markers, #sup and #inf: every ground term sorts
+    strictly between them. They arise naturally as the value of a
+    #min/#max aggregate over an EMPTY set (the min of nothing is #sup,
+    the max of nothing is #inf), so a solution atom can carry one — and a
+    comparison against it asks "was the set empty": M == SUP. Ordinary
+    comparable values otherwise; SUP and INF are the two instances —
+    true singletons (Supremum() is SUP even across a clear_cache(),
+    which ordinary interned values do not promise). No arithmetic: like
+    Strings, #sup/#inf in an expression is undefined for every program.
+    """
+
+    _TEXT: ClassVar[str]
+    # One instance per concrete class, held strongly: unlike the weak value
+    # cache, a singleton's identity must survive clear_cache()
+    _instances: ClassVar[dict[type, ExtremeConstant]] = {}
+
+    def __new__(cls) -> Self:
+        instance = cls._instances.get(cls)
+        if instance is None:
+            instance = super().__new__(cls)
+            cls._instances[cls] = instance
+        return cast(Self, instance)
+
+    def render(
+        self,
+        context: RenderingContext = RenderingContext.DEFAULT,
+        parent_op: Operation | None = None,
+        is_right_operand: bool = False,
+    ) -> str:
+        return self._TEXT
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}()"
+
+    def __str__(self) -> str:
+        return self._TEXT
+
+
+class Supremum(ExtremeConstant):
+    """#sup, the greatest term of clingo's ordering; SUP is the instance."""
+
+    _TEXT = "#sup"
+
+
+class Infimum(ExtremeConstant):
+    """#inf, the least term of clingo's ordering; INF is the instance."""
+
+    _TEXT = "#inf"
+
+
+SUP = Supremum()
+INF = Infimum()
+
+
 class Pool(BasicTerm, ABC):
     """
     Abstract base class for pools in ASP programs.
@@ -946,6 +1003,11 @@ class Expression(ComparableTerm, ArithmeticOps):
                     f"Strings have no arithmetic in clingo ({operand.render()} in an "
                     f"expression is undefined for every program). Compute with integers, "
                     f"or use a #const via define_constant() for a named value."
+                )
+            if isinstance(operand, ExtremeConstant):
+                raise TypeError(
+                    f"{operand.render()} has no arithmetic in clingo: #sup/#inf are the "
+                    f"ordering's end markers, defined for comparison only."
                 )
 
         # Convert Python literals to ASP values

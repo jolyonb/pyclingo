@@ -282,3 +282,40 @@ def test_bound_keys_are_best_effort_hints() -> None:
     assert [m.cost for m in applied.path] == [(1,)]  # tier-0 bound still pruned
     assert grounded.optimize(bound={0: 1}) is not None
     assert grounded.optimize(bound=1) is not None  # single tier: bare int fine
+
+
+def test_optimum_levels_keys_cost_by_priority() -> None:
+    # The cost tuple is positional (highest tier first); levels reads it
+    # by priority name
+    program = ASPProgram()
+    X = Variable("X")
+    program.choose(Choice(Pick(x=1)).add(Pick(x=2)).at_least(1))
+    program.minimize(X, condition=Pick(x=X), priority=2)
+    program.minimize(1, X, condition=Pick(x=X), priority=1)
+    result = program.optimize()
+    assert result is not None and result.proven
+    assert result.cost == (1, 1)  # pick(1) alone: value 1, count 1
+    assert result.levels == {2: 1, 1: 1}
+    assert result.timed_out is False
+
+
+def test_optimize_timeout_with_model_in_hand_reports_timed_out() -> None:
+    # 14 pigeons, 13 holes, but a pigeon may stay unplaced at cost 1: the
+    # descent to one-unplaced is instant, and proving zero-unplaced
+    # impossible is the classic hard pigeonhole proof — a deterministic
+    # optimization timeout with a genuine solution in hand
+    Pigeon = Predicate.define("pigeon_to", ["p"], show=False)
+    Assign = Predicate.define("assign_to", ["p", "h"])
+    Unplaced = Predicate.define("unplaced_to", ["p"], show=False)
+    program = ASPProgram()
+    P, P2, H = Variable("P"), Variable("P2"), Variable("H")
+    program.fact(*[Pigeon(p=i) for i in range(1, 15)])
+    program.when(Pigeon(p=P)).derive(Choice(Assign(p=P, h=RangePool(1, 13))).at_most(1))
+    program.forbid(Assign(p=P, h=H), Assign(p=P2, h=H), P < P2)
+    program.when(Pigeon(p=P), ~Assign(p=P, h=ANY)).derive(Unplaced(p=P))
+    program.minimize(1, P, condition=Unplaced(p=P))
+    result = program.optimize(timeout=0.5)
+    assert result is not None  # a genuine solution is in hand
+    assert result.cost == (1,)  # descended to the true optimum...
+    assert result.timed_out is True  # ...but the deadline cut off its proof
+    assert result.proven is False

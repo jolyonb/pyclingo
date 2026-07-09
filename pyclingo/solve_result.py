@@ -48,7 +48,7 @@ from typing import Any, Literal, Self, cast, overload
 import clingo
 
 from pyclingo.clingo_handler import ClingoMessage, ClingoMessageHandler
-from pyclingo.core import DefinedConstant, Number, String
+from pyclingo.core import INF, SUP, DefinedConstant, ExtremeConstant, Infimum, Number, String, Supremum
 from pyclingo.predicate import Predicate
 from pyclingo.statistics import format_statistics_clingo_style
 
@@ -118,6 +118,27 @@ class AtomCollection:
             described = predicate.__name__ if isinstance(predicate, type) else type(predicate).__name__
             raise TypeError(f"atoms() takes a Predicate class, got {described}")
         return list(self._by_class.get(predicate, []))
+
+    def __iter__(self) -> Iterator[Predicate]:
+        """Iterate all atoms — the same list atoms() returns."""
+        return iter(self._atoms)
+
+    def __contains__(self, atom: object) -> bool:
+        """
+        Whether this exact grounded atom is present: value equality, sign
+        included. Anything that could never be present is rejected rather
+        than quietly False.
+        """
+        if isinstance(atom, type) and issubclass(atom, Predicate):
+            raise TypeError(
+                f"Membership takes a grounded atom, got the class {atom.__name__} — "
+                f"ask atoms({atom.__name__}) for its instances"
+            )
+        if not isinstance(atom, Predicate):
+            raise TypeError(f"Membership takes a grounded atom, got {type(atom).__name__}")
+        if not atom.is_grounded:
+            raise ValueError(f"Membership takes a grounded atom, but {atom.render()} contains variables")
+        return atom in self._by_class.get(type(atom), [])
 
     def __len__(self) -> int:
         return len(self._atoms)
@@ -205,11 +226,20 @@ class Optimum(CostedModel):
         messages: list[ClingoMessage] | None = None,
         optima: tuple[CostedModel, ...] | None = None,
         complete: bool = False,
+        levels: dict[int, int] | None = None,
+        timed_out: bool = False,
     ) -> None:
         super().__init__(atoms, cost, proven, messages)
         self.path = path
         self.optima = optima
         self.complete = complete
+        # The cost keyed by its declared priorities: {priority: cost} over
+        # the SURVIVING levels, so multi-tier costs read by name instead of
+        # by position
+        self.levels = levels if levels is not None else {}
+        # Whether a wall-clock deadline cut the search short (one cause of
+        # proven=False; an iteration cap is the other)
+        self.timed_out = timed_out
 
 
 class Consequences(AtomCollection):
@@ -237,11 +267,15 @@ class Consequences(AtomCollection):
         path: tuple[AtomCollection, ...],
         complete: bool,
         messages: list[ClingoMessage],
+        timed_out: bool = False,
     ) -> None:
         super().__init__(atoms)
         self.path = path
         self.complete = complete
         self.messages = messages
+        # Whether a wall-clock deadline cut the refinement short (one cause
+        # of complete=False; an iteration cap is the other)
+        self.timed_out = timed_out
 
 
 class BraveConsequences(Consequences):
@@ -279,6 +313,7 @@ class _SearchState:
 
     satisfiable: bool | None = None
     exhausted: bool = False
+    timed_out: bool = False
     emission_count: int = 0
     statistics: dict[str, Any] | None = None
     finished: bool = False
@@ -400,6 +435,16 @@ class Search(ABC):
         return self._state.finished
 
     @property
+    def timed_out(self) -> bool:
+        """
+        Whether the wall-clock deadline ended this search early. Complements
+        exhausted: a quietly-stopped stream (models in hand) reads False /
+        False on exhausted/timed_out when closed early by the CALLER, and
+        False / True when the deadline did it.
+        """
+        return self._state.timed_out
+
+    @property
     def satisfiable(self) -> bool | None:
         """True/False once known; None if nothing has been learned yet."""
         return self._state.satisfiable
@@ -475,6 +520,22 @@ class SolveResult(Search):
         # mode=None (enumeration) makes every emission a Model; the generator
         # is typed by the shared element type, so this cast is the one honest seam
         return cast(Iterator[Model], self._iterator)
+
+    def first(self) -> Model:
+        """
+        The first model, closing the search: the one-answer sugar for
+        programs expected to be satisfiable. Raises ValueError on an
+        unsatisfiable program — to handle UNSAT as a value instead,
+        iterate: next(iter(result), None).
+        """
+        for model in self:
+            self.close()
+            return model
+        raise ValueError(
+            "first() found no model: the program is unsatisfiable. To handle "
+            "UNSAT as a value rather than an exception, iterate instead: "
+            "next(iter(result), None)."
+        )
 
 
 class RefinementSteps(Search):
@@ -678,6 +739,7 @@ def _search_generator(
                 # A fast search can finish between resume() and the deadline
                 # check; a timed-out search must never claim exhaustion
                 state.exhausted = False if timed_out else outcome.exhausted
+                state.timed_out = timed_out
                 final = outcome
     finally:
         state.finished = True
@@ -740,6 +802,10 @@ def convert_predicate_to_symbol(
             arguments.append(clingo.Number(value.value))
         elif isinstance(value, String):
             arguments.append(clingo.String(value.value))
+        elif isinstance(value, Supremum):
+            arguments.append(clingo.Supremum)
+        elif isinstance(value, Infimum):
+            arguments.append(clingo.Infimum)
         elif isinstance(value, Predicate):
             arguments.append(convert_predicate_to_symbol(value, defined_constants))
         else:
@@ -776,13 +842,20 @@ def convert_symbol_to_predicate(symbol: clingo.Symbol, predicate_types: Predicat
     pred_class = predicate_types[key]
     field_names = [f.name for f in pred_class.argument_fields()]
 
-    kwargs: dict[str, Predicate | int | str] = {}
+    kwargs: dict[str, Predicate | int | str | ExtremeConstant] = {}
     for i, (arg, field_name) in enumerate(zip(symbol.arguments, field_names, strict=True)):
         if arg.type == clingo.SymbolType.Number:
             kwargs[field_name] = arg.number
         elif arg.type == clingo.SymbolType.String:
             kwargs[field_name] = arg.string
-        elif arg.type == clingo.SymbolType.Function:
+        elif arg.type == clingo.SymbolType.Supremum:
+            # #sup/#inf are clingo's greatest/least terms — usually the value
+            # of a #min/#max over an EMPTY set (the min of nothing is #sup)
+            kwargs[field_name] = SUP
+        elif arg.type == clingo.SymbolType.Infimum:
+            kwargs[field_name] = INF
+        else:
+            # Function is the last symbol type; tuples are its nameless form
             if arg.name == "":
                 # A clingo tuple argument, not a #show term form: diagnose the
                 # actual limitation instead of blaming the (real) atom around it
@@ -792,13 +865,6 @@ def convert_symbol_to_predicate(symbol: clingo.Symbol, predicate_types: Predicat
                 )
             # Recursively convert nested predicates; bare atoms are nullary predicates
             kwargs[field_name] = convert_symbol_to_predicate(arg, predicate_types)
-        else:
-            raise ValueError(
-                f"Unsupported symbol type in argument {i} of {pred_name}: {arg.type}. "
-                f"#sup/#inf are clingo's greatest/least terms — usually the value of a "
-                f"#min/#max over an EMPTY set (min of nothing is #sup). pyclingo has no "
-                f"value for them; guard the producing rule so the set is non-empty."
-            )
 
     instance = pred_class(**kwargs)
     return -instance if symbol.negative else instance

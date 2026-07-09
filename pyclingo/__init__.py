@@ -17,6 +17,8 @@ from .conditional_literal import ConditionalLiteral
 from .conditioned_element import ConditionType
 from .core import (
     ANY,
+    INF,
+    SUP,
     Abs,
     Comparison,
     Compl,
@@ -24,11 +26,13 @@ from .core import (
     DefinedConstant,
     ExplicitPool,
     Expression,
+    Infimum,
     Not,
     Number,
     Pool,
     RangePool,
     String,
+    Supremum,
     Term,
     V,
     Value,
@@ -53,6 +57,8 @@ from .solve_result import (
     RefinementSteps,
     Search,
     SolveResult,
+    convert_predicate_to_symbol,
+    convert_symbol_to_predicate,
 )
 from .solver import ASPProgram, GroundedProgram
 from .source_location import (
@@ -105,6 +111,8 @@ __all__ = [  # noqa: RUF022 (categorized deliberately, not sorted)
     "ConditionalLiteral",
     "RangePool",
     "ExplicitPool",
+    "SUP",
+    "INF",
     # Aggregates
     "Count",
     "Sum",
@@ -130,6 +138,11 @@ __all__ = [  # noqa: RUF022 (categorized deliberately, not sorted)
     "Pool",
     "Number",
     "String",
+    "Supremum",
+    "Infimum",
+    # Interop with raw clingo symbols
+    "convert_predicate_to_symbol",
+    "convert_symbol_to_predicate",
     # Metadata
     "__version__",
 ]

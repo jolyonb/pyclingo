@@ -6,6 +6,7 @@ from pyclingo.conditioned_element import ConditionedElement, ConditionType, Free
 from pyclingo.core import (
     AggregateBase,
     Expression,
+    ExtremeConstant,
     PredicateOccurrence,
     RenderingContext,
     String,
@@ -90,14 +91,21 @@ class Aggregate(FreezableBuilder, AggregateBase, ABC):
                 )
 
         # Per-class: #sum/#sum+ SUM the first tuple term, so a literal String
-        # there draws gringo's "tuple ignored" info at ground — weights are
-        # integer-valued. Min/Max/Count order terms and take strings legally.
-        if self.AGGREGATE_TYPE in (AggregateType.SUM, AggregateType.SUM_PLUS) and isinstance(element_tuple[0], String):
-            raise TypeError(
-                f"{self.AGGREGATE_TYPE.value} weights are integer-valued; the first tuple term "
-                f"{element_tuple[0].render()} is a String, which gringo silently ignores. For "
-                f"term-ordered aggregation over strings use Min/Max, or Count for cardinality."
-            )
+        # (or #sup/#inf) there draws gringo's "tuple ignored" info at ground —
+        # weights are integer-valued. Min/Max/Count order terms and take
+        # strings (and the ordering's end markers) legally.
+        if self.AGGREGATE_TYPE in (AggregateType.SUM, AggregateType.SUM_PLUS):
+            if isinstance(element_tuple[0], String):
+                raise TypeError(
+                    f"{self.AGGREGATE_TYPE.value} weights are integer-valued; the first tuple term "
+                    f"{element_tuple[0].render()} is a String, which gringo silently ignores. For "
+                    f"term-ordered aggregation over strings use Min/Max, or Count for cardinality."
+                )
+            if isinstance(element_tuple[0], ExtremeConstant):
+                raise TypeError(
+                    f"{self.AGGREGATE_TYPE.value} weights are integer-valued, got "
+                    f"{element_tuple[0].render()} as the first tuple term."
+                )
         self._elements.append(ConditionedElement(element_tuple, condition, "aggregate"))
 
         return self

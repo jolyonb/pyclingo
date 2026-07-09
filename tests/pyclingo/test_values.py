@@ -13,13 +13,17 @@ import pytest
 
 from pyclingo import (
     ANY,
+    INF,
+    SUP,
     ASPProgram,
     DefinedConstant,
     ExplicitPool,
+    Infimum,
     Number,
     Predicate,
     RangePool,
     String,
+    Supremum,
     V,
     Value,
     Variable,
@@ -354,3 +358,28 @@ def test_vars_factory_signals_absence_for_protocol_probes() -> None:
     # hasattr/copy/IPython probe dunders; only AttributeError reads as absence
     assert not hasattr(V, "_ipython_canary_method_should_not_exist_")
     assert copy.deepcopy(V) is not None  # __deepcopy__ probe no longer raises ValueError
+
+
+def test_extreme_values_are_interned_singletons() -> None:
+    # SUP/INF are ordinary interned values built with no argument: every
+    # construction is the module singleton
+    assert Supremum() is SUP
+    assert Infimum() is INF
+    assert SUP is not INF
+    assert repr(SUP) == "Supremum()"
+    assert str(INF) == "#inf"
+    assert SUP.render() == "#sup"
+    assert SUP.is_grounded
+    assert SUP.collect_variables() == set()
+
+
+def test_extreme_values_compare_but_do_no_arithmetic() -> None:
+    # Comparison is their whole meaning (every ground term sorts between
+    # them); arithmetic on an end marker is undefined for every program
+    X = Variable("X")
+    assert (X == SUP).render() == "X = #sup"
+    assert (X < SUP).render() == "X < #sup"
+    with pytest.raises(TypeError, match="ordering's end markers"):
+        SUP + 1
+    with pytest.raises(TypeError, match="ordering's end markers"):
+        1 + INF

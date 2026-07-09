@@ -301,6 +301,7 @@ def test_brave_timeout_with_zero_emissions_returns_empty_partial() -> None:
     result = _pigeonhole().brave(timeout=0.05)
     assert isinstance(result, BraveConsequences)
     assert not result.complete
+    assert result.timed_out is True  # the deadline (not a cap) cut it short
     assert result.path == ()
     assert result.atoms() == []
 

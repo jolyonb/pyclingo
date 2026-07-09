@@ -14,6 +14,7 @@ The library is built around a rich hierarchy of term types that represent differ
         - `Number` (numeric constants, e.g., `42`)
         - `String` (string literals, e.g., `"hello"`)
         - `DefinedConstant` (#const-defined constants, e.g., `max_size`)
+        - `Supremum` / `Infimum` (`#sup`/`#inf`, the ordering's end markers; `SUP` and `INF` are the singletons)
     - `Expression` (arithmetic expressions, e.g., `X+Y*2`)
     - `AggregateBase` (abstract marker so core can recognize aggregates)
       - `Aggregate` (abstract)
@@ -84,8 +85,7 @@ class Score(Predicate):
 
 program = ASPProgram()
 program.fact(Score(player="ada", points=3), Score(player="ben", points=5))
-model = next(iter(program.solve()), None)
-assert model is not None  # None here means unsatisfiable
+model = program.solve().first()  # raises if unsatisfiable; next(iter(result), None) to get None instead
 total = sum(score.points for score in model.atoms(Score))  # plain ints
 assert total == 8
 ```

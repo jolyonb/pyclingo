@@ -7,7 +7,7 @@ import re
 
 import pytest
 
-from pyclingo import ANY, ASPProgram, Count, Max, Number, Predicate, SourceLocation, String, Sum, Variable
+from pyclingo import ANY, SUP, ASPProgram, Count, Max, Number, Predicate, SourceLocation, String, Sum, Variable
 
 
 def test_aggregates_rejected_in_aggregate_conditions() -> None:
@@ -152,5 +152,8 @@ def test_sum_rejects_literal_string_weights() -> None:
     P = Predicate.define("p_sw", ["x"])
     with pytest.raises(TypeError, match="weights are integer-valued"):
         Sum((String("a"), X), condition=P(x=X))
-    # Min/Max order terms: strings are legal there
+    with pytest.raises(TypeError, match="weights are integer-valued, got #sup"):
+        Sum((SUP, X), condition=P(x=X))
+    # Min/Max order terms: strings and the ordering's end markers are legal there
     Max((String("a"), X), condition=P(x=X))
+    Max((SUP, X), condition=P(x=X))

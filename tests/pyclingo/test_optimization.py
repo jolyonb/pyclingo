@@ -13,6 +13,7 @@ import pytest
 
 from pyclingo import (
     ANY,
+    INF,
     ASPProgram,
     Choice,
     ConditionalLiteral,
@@ -105,6 +106,8 @@ def test_weight_types_validated() -> None:
         program.minimize("three", condition=Pick(x=ANY))  # type: ignore[arg-type]
     with pytest.raises(TypeError, match="integer-valued"):
         program.minimize(String("three"), condition=Pick(x=ANY))  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match="integer-valued, got #inf"):
+        program.minimize(INF, condition=Pick(x=ANY))
     with pytest.raises(TypeError, match="priority must be an int"):
         program.minimize(1, condition=Pick(x=ANY), priority="high")  # type: ignore[arg-type]
 

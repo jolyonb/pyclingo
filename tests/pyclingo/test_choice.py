@@ -7,7 +7,7 @@ import re
 
 import pytest
 
-from pyclingo import ASPProgram, Choice, Count, Not, Number, Predicate, SourceLocation, String, Variable
+from pyclingo import SUP, ASPProgram, Choice, Count, Not, Number, Predicate, SourceLocation, String, Variable
 
 
 def test_impossible_cardinality_rejected() -> None:
@@ -159,6 +159,13 @@ def test_cardinality_string_rejected() -> None:
     P = Predicate.define("p", ["x"])
     with pytest.raises(TypeError, match="cannot be a String"):
         Choice(P(x=1)).exactly(String("three"))
+
+
+def test_cardinality_extreme_value_rejected() -> None:
+    # SUP/INF are Values too; a cardinality bound is integer-valued
+    P = Predicate.define("p", ["x"])
+    with pytest.raises(TypeError, match="must be integer-valued, got #sup"):
+        Choice(P(x=1)).at_most(SUP)
 
 
 def test_exactly_after_bound_already_set_rejected() -> None:

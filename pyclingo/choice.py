@@ -3,6 +3,7 @@ from typing import Self
 from pyclingo.conditioned_element import ConditionedElement, ConditionType, FreezableBuilder
 from pyclingo.core import (
     Expression,
+    ExtremeConstant,
     Number,
     PredicateOccurrence,
     RenderingContext,
@@ -93,6 +94,8 @@ class Choice(FreezableBuilder, Term):
         # Reject string constants which don't make sense for cardinality
         if isinstance(count, String):
             raise TypeError(f"{description} cannot be a String")
+        if isinstance(count, ExtremeConstant):
+            raise TypeError(f"{description} must be integer-valued, got {count.render()}")
 
         count = Number(count) if isinstance(count, int) else count
         # Checked after coercion so Number(-1) is caught the same as -1

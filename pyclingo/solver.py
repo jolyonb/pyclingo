@@ -411,6 +411,11 @@ class ASPProgram:
 
         return constant
 
+    @property
+    def defined_constants(self) -> dict[str, int | str]:
+        """The #const definitions registered so far, name to value (a copy — register through define_constant())."""
+        return dict(self._defined_constants)
+
     def show(self, predicate: type[Predicate]) -> None:
         """
         Show this predicate in output, overriding its default visibility.
@@ -707,12 +712,18 @@ class ASPProgram:
         if unregistered := used_constants - set(self._defined_constants.keys()):
             raise ValueError(f"Undefined constants used in program: {', '.join(sorted(unregistered))}")
 
-    def ground(self, stop_on_log_level: LogLevel = LogLevel.INFO) -> GroundedProgram:
+    def ground(self, stop_on_log_level: LogLevel = LogLevel.INFO, context: object = None) -> GroundedProgram:
         """
         Render and ground the program once, returning a handle that can be
         solved repeatedly — the re.compile() of this API. solve() is sugar
         for ground().solve(); use ground() directly when the same program
         will be solved many times (grounding is the expensive step).
+
+        context is clingo's grounding context, passed through verbatim: an
+        object whose methods back @-function calls in raw_asp() text
+        (@stone(...) calls context.stone(...)). Raw-clingo territory —
+        pyclingo does not model @-terms, so the text and the context must
+        agree on their own.
 
         The handle is an independent snapshot — it holds the rendered text
         and solves exactly that program forever, like a compiled regex holds
@@ -746,7 +757,7 @@ class ASPProgram:
             raise RuntimeError(error_msg) from e
 
         try:
-            control.ground([("base", [])])
+            control.ground([("base", [])], context=context)
         except RuntimeError as e:
             error_msg = f"Grounding failed: {e}\n\n"
             if formatted_messages := message_handler.format_all_messages(verb="grounding"):
@@ -1372,6 +1383,10 @@ class GroundedProgram:
             messages=steps.messages,
             optima=tuple(certified) if all_optima else None,
             complete=complete,
+            # The cost tuple has one entry per surviving level, highest
+            # first — the same order optimization_levels reports
+            levels=dict(zip(self._ground_levels, best.cost, strict=True)),
+            timed_out=steps.timed_out,
         )
 
     def _refine_eagerly[C: Consequences](
@@ -1423,4 +1438,5 @@ class GroundedProgram:
             path=tuple(path),
             complete=complete,
             messages=steps.messages,
+            timed_out=steps.timed_out,
         )

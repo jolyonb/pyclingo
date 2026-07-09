@@ -293,3 +293,20 @@ def test_sugar_verbs_take_assumptions() -> None:
     optimizing.minimize(X, condition=Q(x=X))
     best = optimizing.optimize(assumptions=[Q(x=3)])
     assert best is not None and best.cost == (3,)  # q(3) forced in; the rest minimized away
+
+
+class _Doubler:
+    """A grounding context: @double(...) in raw text calls this method."""
+
+    def double(self, x: clingo.Symbol) -> clingo.Symbol:
+        return clingo.Number(x.number * 2)
+
+
+def test_ground_context_backs_at_functions() -> None:
+    # Raw-clingo territory passed through verbatim: the context object's
+    # methods evaluate @-terms at grounding
+    program = ASPProgram()
+    Val = Predicate.define("val_ctx", ["x"])
+    program.raw_asp("val_ctx(@double(21)).", predicates=[Val])
+    model = program.ground(context=_Doubler()).solve().first()
+    assert model.atoms(Val)[0]["x"] is Number(42)  # interned: identity is value

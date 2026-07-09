@@ -56,6 +56,7 @@ def test_timeout_yields_partial_results() -> None:
     elapsed = time.monotonic() - start
     assert len(models) > 0  # models found before the deadline were yielded
     assert result.exhausted is False
+    assert result.timed_out is True  # the deadline ended it, not the caller
     assert result.satisfiable is True  # learned from the yielded models
     assert elapsed < 2  # cancelled promptly rather than enumerating forever
 
@@ -64,6 +65,7 @@ def test_no_timeout_unaffected() -> None:
     result = make_choice_program(2).solve(timeout=60)  # 4 models
     assert len(list(result)) == 4
     assert result.exhausted is True
+    assert result.timed_out is False
 
 
 def test_early_close_finalizes_bookkeeping() -> None:

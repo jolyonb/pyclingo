@@ -23,7 +23,16 @@ WeakConstraint).
 from enum import StrEnum
 
 from pyclingo.conditioned_element import ConditionedElement, ConditionType
-from pyclingo.core import Expression, Number, PredicateOccurrence, String, Term, Value, Variable
+from pyclingo.core import (
+    Expression,
+    ExtremeConstant,
+    Number,
+    PredicateOccurrence,
+    String,
+    Term,
+    Value,
+    Variable,
+)
 from pyclingo.predicate import Predicate
 from pyclingo.program_elements import ProgramElement, render_body_terms
 from pyclingo.scoping import body_global_variables
@@ -38,6 +47,8 @@ def _validated_weight(weight: int | OptimizationTermType, noun: str) -> Value | 
         weight = Number(weight)
     if isinstance(weight, String):
         raise TypeError(f"{noun} weight must be integer-valued, got a String")
+    if isinstance(weight, ExtremeConstant):
+        raise TypeError(f"{noun} weight must be integer-valued, got {weight.render()}")
     if not isinstance(weight, (Value, Expression)):
         raise TypeError(f"{noun} weight must be an int, Value, or Expression, got {type(weight).__name__}")
     return weight

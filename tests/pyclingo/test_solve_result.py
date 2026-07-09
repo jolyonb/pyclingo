@@ -2,14 +2,18 @@ import clingo
 import pytest
 
 from pyclingo import (
+    INF,
+    SUP,
     ASPProgram,
     AtomCollection,
     CostedModel,
     DefinedConstant,
     Model,
+    Number,
     OptimizeSteps,
     Predicate,
     RefinementSteps,
+    Variable,
 )
 from pyclingo.clingo_handler import ClingoMessageHandler, LogLevel
 from pyclingo.solve_result import (
@@ -118,12 +122,16 @@ def test_convert_symbol_unknown_predicate_type_raises() -> None:
         convert_symbol_to_predicate(clingo.Function("mystery", [clingo.Number(1)]), {})
 
 
-def test_convert_symbol_unsupported_argument_type_raises() -> None:
-    # An argument that is neither Number, String, nor Function (here #sup) falls
-    # through to the unsupported-symbol guard.
+def test_convert_symbol_extreme_arguments_become_the_singletons() -> None:
+    # #sup/#inf arguments round-trip as the interned SUP/INF values
     P = Predicate.define("p_sup", ["x"])
-    with pytest.raises(ValueError, match="Unsupported symbol type in argument"):
-        convert_symbol_to_predicate(clingo.Function("p_sup", [clingo.Supremum]), {("p_sup", 1): P})
+    atom = convert_symbol_to_predicate(clingo.Function("p_sup", [clingo.Supremum]), {("p_sup", 1): P})
+    assert atom["x"] is SUP
+    atom = convert_symbol_to_predicate(clingo.Function("p_sup", [clingo.Infimum]), {("p_sup", 1): P})
+    assert atom["x"] is INF
+    # And back again, in the mirror converter
+    assert convert_predicate_to_symbol(P(x=SUP)) == clingo.Function("p_sup", [clingo.Supremum])
+    assert convert_predicate_to_symbol(P(x=INF)) == clingo.Function("p_sup", [clingo.Infimum])
 
 
 def test_atoms_rejects_instances_and_non_classes() -> None:
@@ -137,3 +145,46 @@ def test_atoms_rejects_instances_and_non_classes() -> None:
         model.atoms(P(x=1))  # type: ignore[call-overload]
     with pytest.raises(TypeError, match="takes a Predicate class, got int"):
         model.atoms(int)  # type: ignore[type-var]
+
+
+def test_first_returns_one_model_and_frees_the_grounding() -> None:
+    program = ASPProgram()
+    P = Predicate.define("p_first", ["x"])
+    program.fact(P(x=1))
+    grounded = program.ground()
+    model = grounded.solve().first()
+    assert isinstance(model, Model)
+    assert model.atoms(P)[0]["x"] is Number(1)  # interned: identity is value
+    grounded.solve().close()  # first() closed its search: no still-open guard
+
+
+def test_first_on_unsatisfiable_raises_teaching() -> None:
+    program = ASPProgram()
+    P = Predicate.define("p_first_unsat", ["x"])
+    program.fact(P(x=1))
+    program.forbid(P(x=1))
+    with pytest.raises(ValueError, match=r"unsatisfiable.*next\(iter\(result\), None\)"):
+        program.solve().first()
+
+
+def test_model_iterates_and_answers_membership() -> None:
+    program = ASPProgram()
+    P = Predicate.define("p_member", ["x"])
+    program.fact(P(x=1), P(x=2))
+    model = program.solve().first()
+    assert sorted(str(atom) for atom in model) == ["p_member(1)", "p_member(2)"]
+    assert P(x=1) in model
+    assert P(x=3) not in model
+
+
+def test_model_membership_rejects_what_could_never_be_present() -> None:
+    program = ASPProgram()
+    P = Predicate.define("p_member_guard", ["x"])
+    program.fact(P(x=1))
+    model = program.solve().first()
+    with pytest.raises(TypeError, match=r"got the class p_member_guard.*atoms\(p_member_guard\)"):
+        P in model  # type: ignore[operator]  # noqa: B015 (the membership test is the act under test)
+    with pytest.raises(TypeError, match="got str"):
+        "p_member_guard(1)" in model  # type: ignore[operator]  # noqa: B015
+    with pytest.raises(ValueError, match="contains variables"):
+        P(x=Variable("X")) in model  # noqa: B015

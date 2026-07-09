@@ -486,3 +486,13 @@ def test_unknown_public_attribute_assignment_rejected() -> None:
     with pytest.raises(AttributeError, match="no assignable attribute 'fact'"):
         program.fact = None  # type: ignore[method-assign, assignment]
     assert program.project_shown is False  # the typo configured nothing
+
+
+def test_defined_constants_reads_back_a_copy() -> None:
+    program = ASPProgram()
+    program.define_constant("width", 9)
+    program.define_constant("label", "grid")
+    assert program.defined_constants == {"width": 9, "label": "grid"}
+    snapshot = program.defined_constants
+    snapshot["width"] = 0  # mutating the copy changes nothing
+    assert program.defined_constants["width"] == 9
