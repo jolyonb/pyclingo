@@ -14,7 +14,7 @@ from .aggregates import (
 from .choice import Choice
 from .clingo_handler import ClingoMessage, LogLevel
 from .conditional_literal import ConditionalLiteral
-from .conditioned_element import CONDITION_TYPE
+from .conditioned_element import ConditionType
 from .core import (
     ANY,
     Abs,
@@ -120,7 +120,7 @@ __all__ = [  # noqa: RUF022 (categorized deliberately, not sorted)
     "Compl",
     # Hierarchy types: these appear in public signatures and return types —
     # annotate with them; you rarely construct them directly
-    "CONDITION_TYPE",
+    "ConditionType",
     "Term",
     "Value",
     "Expression",

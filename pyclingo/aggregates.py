@@ -2,7 +2,7 @@ from abc import ABC
 from enum import StrEnum
 from typing import ClassVar, Self
 
-from pyclingo.conditioned_element import CONDITION_TYPE, ConditionedElement, FreezableBuilder
+from pyclingo.conditioned_element import ConditionedElement, ConditionType, FreezableBuilder
 from pyclingo.core import (
     AggregateBase,
     Expression,
@@ -12,7 +12,7 @@ from pyclingo.core import (
 )
 from pyclingo.predicate import Predicate
 
-type AGGREGATE_ELEMENT_TYPE = Value | Expression | Predicate
+type AggregateElementType = Value | Expression | Predicate
 
 
 class AggregateType(StrEnum):
@@ -46,8 +46,8 @@ class Aggregate(FreezableBuilder, AggregateBase, ABC):
 
     def __init__(
         self,
-        element: AGGREGATE_ELEMENT_TYPE | tuple[AGGREGATE_ELEMENT_TYPE, ...],
-        condition: CONDITION_TYPE | list[CONDITION_TYPE] | None = None,
+        element: AggregateElementType | tuple[AggregateElementType, ...],
+        condition: ConditionType | list[ConditionType] | None = None,
     ):
         """
         Create an aggregate with an initial element; see add() for further elements.
@@ -62,8 +62,8 @@ class Aggregate(FreezableBuilder, AggregateBase, ABC):
 
     def add(
         self,
-        element: AGGREGATE_ELEMENT_TYPE | tuple[AGGREGATE_ELEMENT_TYPE, ...],
-        condition: CONDITION_TYPE | list[CONDITION_TYPE] | None = None,
+        element: AggregateElementType | tuple[AggregateElementType, ...],
+        condition: ConditionType | list[ConditionType] | None = None,
     ) -> Self:
         """
         Add an element with optional condition(s); returns self for chaining.

@@ -20,15 +20,15 @@ part is the situation and which is the violation.
 from collections.abc import Iterator, Sequence
 
 from pyclingo.choice import Choice
-from pyclingo.conditioned_element import CONDITION_TYPE
+from pyclingo.conditioned_element import ConditionType
 from pyclingo.core import Comparison, Pool, PredicateOccurrence, Term
 from pyclingo.optimization import (
-    OPTIMIZATION_TERM_TYPE,
     Optimization,
     OptimizationDirective,
+    OptimizationTermType,
     WeakConstraint,
 )
-from pyclingo.predicate import PREDICATE_CLASS_TYPE, NegatedPredicate, Predicate
+from pyclingo.predicate import NegatedPredicate, Predicate, PredicateClassType
 from pyclingo.program_elements import BlankLine, Comment, ProgramElement, RawASP, RenderedLine, Rule
 from pyclingo.scoping import validate_optimization_element, validate_weak_constraint
 from pyclingo.source_location import SourceLocation, capture_location
@@ -156,8 +156,8 @@ class Segment:
     def penalize(
         self,
         *conditions: Term,
-        weight: int | OPTIMIZATION_TERM_TYPE = 1,
-        terms: Sequence[OPTIMIZATION_TERM_TYPE] | None = None,
+        weight: int | OptimizationTermType = 1,
+        terms: Sequence[OptimizationTermType] | None = None,
         priority: int = 0,
     ) -> None:
         """
@@ -184,9 +184,9 @@ class Segment:
 
     def minimize(
         self,
-        weight: int | OPTIMIZATION_TERM_TYPE,
-        *tuple_terms: OPTIMIZATION_TERM_TYPE,
-        condition: CONDITION_TYPE | list[CONDITION_TYPE] | None = None,
+        weight: int | OptimizationTermType,
+        *tuple_terms: OptimizationTermType,
+        condition: ConditionType | list[ConditionType] | None = None,
         priority: int = 0,
     ) -> None:
         """
@@ -212,9 +212,9 @@ class Segment:
 
     def maximize(
         self,
-        weight: int | OPTIMIZATION_TERM_TYPE,
-        *tuple_terms: OPTIMIZATION_TERM_TYPE,
-        condition: CONDITION_TYPE | list[CONDITION_TYPE] | None = None,
+        weight: int | OptimizationTermType,
+        *tuple_terms: OptimizationTermType,
+        condition: ConditionType | list[ConditionType] | None = None,
         priority: int = 0,
     ) -> None:
         """
@@ -228,9 +228,9 @@ class Segment:
     def _add_optimization(
         self,
         sense: Optimization,
-        weight: int | OPTIMIZATION_TERM_TYPE,
-        tuple_terms: tuple[OPTIMIZATION_TERM_TYPE, ...],
-        condition: CONDITION_TYPE | list[CONDITION_TYPE] | None,
+        weight: int | OptimizationTermType,
+        tuple_terms: tuple[OptimizationTermType, ...],
+        condition: ConditionType | list[ConditionType] | None,
         priority: int,
     ) -> None:
         directive = OptimizationDirective(sense, weight, tuple_terms, condition, priority)
@@ -238,7 +238,7 @@ class Segment:
         directive.element.freeze()
         self.append(directive)
 
-    def raw_asp(self, text: str, predicates: Sequence[PREDICATE_CLASS_TYPE | NegatedPredicate] = ()) -> None:
+    def raw_asp(self, text: str, predicates: Sequence[PredicateClassType | NegatedPredicate] = ()) -> None:
         """
         Add a verbatim block of ASP text: the escape hatch for constructs
         pyclingo does not model.
@@ -431,8 +431,8 @@ class When:
     def penalize(
         self,
         *violation: Term,
-        weight: int | OPTIMIZATION_TERM_TYPE = 1,
-        terms: Sequence[OPTIMIZATION_TERM_TYPE] | None = None,
+        weight: int | OptimizationTermType = 1,
+        terms: Sequence[OptimizationTermType] | None = None,
         priority: int = 0,
     ) -> None:
         """

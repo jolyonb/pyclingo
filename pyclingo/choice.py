@@ -1,6 +1,6 @@
 from typing import Self
 
-from pyclingo.conditioned_element import CONDITION_TYPE, ConditionedElement, FreezableBuilder
+from pyclingo.conditioned_element import ConditionedElement, ConditionType, FreezableBuilder
 from pyclingo.core import (
     Expression,
     Number,
@@ -12,8 +12,8 @@ from pyclingo.core import (
 )
 from pyclingo.predicate import Predicate
 
-type CHOICE_ELEMENT_TYPE = Predicate
-type CARDINALITY_TYPE = int | Value | Expression
+type ChoiceElementType = Predicate
+type CardinalityType = int | Value | Expression
 
 
 class Choice(FreezableBuilder, Term):
@@ -39,8 +39,8 @@ class Choice(FreezableBuilder, Term):
 
     def __init__(
         self,
-        element: CHOICE_ELEMENT_TYPE,
-        condition: CONDITION_TYPE | list[CONDITION_TYPE] | None = None,
+        element: ChoiceElementType,
+        condition: ConditionType | list[ConditionType] | None = None,
     ):
         """
         Create a choice rule with an initial element; see add() for further elements.
@@ -58,8 +58,8 @@ class Choice(FreezableBuilder, Term):
 
     def add(
         self,
-        element: CHOICE_ELEMENT_TYPE,
-        condition: CONDITION_TYPE | list[CONDITION_TYPE] | None = None,
+        element: ChoiceElementType,
+        condition: ConditionType | list[ConditionType] | None = None,
     ) -> Self:
         """
         Add another element with optional condition(s); returns self for chaining.
@@ -107,7 +107,7 @@ class Choice(FreezableBuilder, Term):
         if isinstance(minimum, Number) and isinstance(maximum, Number) and minimum.value > maximum.value:
             raise ValueError(f"Choice cardinality is impossible: at_least({minimum.value}) > at_most({maximum.value})")
 
-    def exactly(self, count: CARDINALITY_TYPE) -> Self:
+    def exactly(self, count: CardinalityType) -> Self:
         """
         Set the exact cardinality (min = max = count); returns self for chaining.
 
@@ -124,7 +124,7 @@ class Choice(FreezableBuilder, Term):
 
         return self
 
-    def at_least(self, count: CARDINALITY_TYPE) -> Self:
+    def at_least(self, count: CardinalityType) -> Self:
         """
         Set the minimum cardinality; returns self for chaining.
 
@@ -141,7 +141,7 @@ class Choice(FreezableBuilder, Term):
 
         return self
 
-    def at_most(self, count: CARDINALITY_TYPE) -> Self:
+    def at_most(self, count: CardinalityType) -> Self:
         """
         Set the maximum cardinality; returns self for chaining.
 

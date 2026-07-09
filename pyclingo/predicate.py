@@ -26,8 +26,8 @@ from pyclingo.core import (
 type PredicateField = int | str | Value | Predicate | Expression | Pool
 # The Term view of a stored field: primitives are wrapped by read_as_term,
 # so int/str never appear here (unlike PredicateField, the write union)
-type FIELD_AS_TERM_TYPE = Value | Predicate | Expression | Pool
-type PREDICATE_CLASS_TYPE = type[Predicate]
+type FieldAsTermType = Value | Predicate | Expression | Pool
+type PredicateClassType = type[Predicate]
 
 
 class Field[T]:
@@ -420,7 +420,7 @@ class Predicate(PredicateBase, Negatable, metaclass=_PredicateMeta):
         """Get field names that represent predicate arguments (not starting with _)."""
         return [f.name for f in fields(cls) if not f.name.startswith("_")]
 
-    def read_as_term(self, field_name: str) -> FIELD_AS_TERM_TYPE:
+    def read_as_term(self, field_name: str) -> FieldAsTermType:
         """
         Read a field as a Term: the plain int/str values that Field[...]-typed
         slots store are wrapped back into Number/String (cached, so this is
@@ -434,10 +434,10 @@ class Predicate(PredicateBase, Negatable, metaclass=_PredicateMeta):
             return Number(value)
         if isinstance(value, str):
             return String(value)
-        return cast(FIELD_AS_TERM_TYPE, value)
+        return cast(FieldAsTermType, value)
 
     @property
-    def arguments(self) -> list[FIELD_AS_TERM_TYPE]:
+    def arguments(self) -> list[FieldAsTermType]:
         """Get the values of all argument fields, as Terms."""
         return [self.read_as_term(f.name) for f in self.argument_fields()]
 
@@ -447,7 +447,7 @@ class Predicate(PredicateBase, Negatable, metaclass=_PredicateMeta):
             raise KeyError(f"Predicate has no field named '{key}'")
         return self.read_as_term(key)
 
-    def items(self) -> list[tuple[str, FIELD_AS_TERM_TYPE]]:
+    def items(self) -> list[tuple[str, FieldAsTermType]]:
         """Return (field_name, field_value) tuples for all argument fields, values as Terms."""
         return [(f.name, self.read_as_term(f.name)) for f in self.argument_fields()]
 

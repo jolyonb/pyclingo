@@ -6,16 +6,15 @@ import clingo
 from pyclingo.choice import Choice
 from pyclingo.clingo_handler import ClingoMessageHandler, LogLevel
 from pyclingo.conditional_literal import ConditionalLiteral
-from pyclingo.conditioned_element import CONDITION_TYPE
+from pyclingo.conditioned_element import ConditionType
 from pyclingo.core import DefaultNegation, DefinedConstant, PredicateOccurrence, Term
-from pyclingo.optimization import OPTIMIZATION_TERM_TYPE, OptStrategy
+from pyclingo.optimization import OptimizationTermType, OptStrategy
 from pyclingo.predicate import NegatedPredicate, Predicate
 from pyclingo.program_elements import RawASP, RenderedLine
 from pyclingo.scoping import validate_rule
 from pyclingo.segment import Segment, When
 from pyclingo.solve_result import (
     OPTIMIZE,
-    SEARCH_MODE,
     AtomCollection,
     BraveConsequences,
     CautiousConsequences,
@@ -26,6 +25,7 @@ from pyclingo.solve_result import (
     RefinementMode,
     RefinementSteps,
     SearchABC,
+    SearchMode,
     SolveResult,
     convert_predicate_to_symbol,
 )
@@ -232,9 +232,9 @@ class ASPProgram:
 
     def minimize(
         self,
-        weight: int | OPTIMIZATION_TERM_TYPE,
-        *tuple_terms: OPTIMIZATION_TERM_TYPE,
-        condition: CONDITION_TYPE | list[CONDITION_TYPE] | None = None,
+        weight: int | OptimizationTermType,
+        *tuple_terms: OptimizationTermType,
+        condition: ConditionType | list[ConditionType] | None = None,
         priority: int = 0,
     ) -> None:
         """Add a #minimize statement to the default segment; see Segment.minimize()."""
@@ -242,9 +242,9 @@ class ASPProgram:
 
     def maximize(
         self,
-        weight: int | OPTIMIZATION_TERM_TYPE,
-        *tuple_terms: OPTIMIZATION_TERM_TYPE,
-        condition: CONDITION_TYPE | list[CONDITION_TYPE] | None = None,
+        weight: int | OptimizationTermType,
+        *tuple_terms: OptimizationTermType,
+        condition: ConditionType | list[ConditionType] | None = None,
         priority: int = 0,
     ) -> None:
         """Add a #maximize statement to the default segment; see Segment.maximize()."""
@@ -253,8 +253,8 @@ class ASPProgram:
     def penalize(
         self,
         *conditions: Term,
-        weight: int | OPTIMIZATION_TERM_TYPE = 1,
-        terms: Sequence[OPTIMIZATION_TERM_TYPE] | None = None,
+        weight: int | OptimizationTermType = 1,
+        terms: Sequence[OptimizationTermType] | None = None,
         priority: int = 0,
     ) -> None:
         """Charge for each match of the conditions, in the default segment; see Segment.penalize()."""
@@ -852,7 +852,7 @@ class GroundedProgram:
 
     def _begin_solve(
         self,
-        mode: SEARCH_MODE,
+        mode: SearchMode,
         timeout: float,
         assumptions: Sequence[Predicate | DefaultNegation] | None,
     ) -> list[tuple[clingo.Symbol, bool]] | None:

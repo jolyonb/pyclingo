@@ -24,18 +24,18 @@ from pyclingo.operators import (
 if TYPE_CHECKING:
     # The one annotation-only upward reference in the package: collect_predicates
     # returns predicate classes, but core cannot import predicate at runtime
-    from pyclingo.predicate import PREDICATE_CLASS_TYPE
+    from pyclingo.predicate import PredicateClassType
 
 
 # One occurrence of a predicate class: (class, classically negated, is_atom).
 # is_atom marks whether it occurs as an atom (a statement, which can be true
 # or false) or as an argument (data nested inside another predicate);
 # Term.collect_predicate_occurrences decides that role.
-type PredicateOccurrence = tuple[PREDICATE_CLASS_TYPE, bool, bool]
+type PredicateOccurrence = tuple[PredicateClassType, bool, bool]
 
 # Type aliases for the operator cluster
-type EXPRESSION_FIELD_TYPE = Value | Expression | int
-type VALUE_EXPRESSION_TYPE = Value | Expression
+type ExpressionFieldType = Value | Expression | int
+type ValueExpressionType = Value | Expression
 
 
 class RenderingContext(Enum):
@@ -113,7 +113,7 @@ class Term(ABC):
         """
         return set()
 
-    def collect_predicates(self) -> set[PREDICATE_CLASS_TYPE]:
+    def collect_predicates(self) -> set[PredicateClassType]:
         """All Predicate classes used in this term."""
         return {predicate for predicate, _negated, _is_atom in self.collect_predicate_occurrences(as_argument=False)}
 
@@ -296,61 +296,61 @@ class Value(BasicTerm, ComparableTerm, ABC, metaclass=_ValueMeta):
         """
         pass
 
-    def __add__(self, other: int | VALUE_EXPRESSION_TYPE) -> Expression:
+    def __add__(self, other: int | ValueExpressionType) -> Expression:
         return Expression(self, Operation.ADD, other)
 
-    def __radd__(self, other: int | VALUE_EXPRESSION_TYPE) -> Expression:
+    def __radd__(self, other: int | ValueExpressionType) -> Expression:
         return Expression(other, Operation.ADD, self)
 
-    def __sub__(self, other: int | VALUE_EXPRESSION_TYPE) -> Expression:
+    def __sub__(self, other: int | ValueExpressionType) -> Expression:
         return Expression(self, Operation.SUBTRACT, other)
 
-    def __rsub__(self, other: int | VALUE_EXPRESSION_TYPE) -> Expression:
+    def __rsub__(self, other: int | ValueExpressionType) -> Expression:
         return Expression(other, Operation.SUBTRACT, self)
 
-    def __mul__(self, other: int | VALUE_EXPRESSION_TYPE) -> Expression:
+    def __mul__(self, other: int | ValueExpressionType) -> Expression:
         return Expression(self, Operation.MULTIPLY, other)
 
-    def __rmul__(self, other: int | VALUE_EXPRESSION_TYPE) -> Expression:
+    def __rmul__(self, other: int | ValueExpressionType) -> Expression:
         return Expression(other, Operation.MULTIPLY, self)
 
     def __neg__(self) -> Expression:
         return Expression(None, Operation.UNARY_MINUS, self)
 
-    def __floordiv__(self, other: int | VALUE_EXPRESSION_TYPE) -> Expression:
+    def __floordiv__(self, other: int | ValueExpressionType) -> Expression:
         return Expression(self, Operation.INTEGER_DIVIDE, other)
 
-    def __rfloordiv__(self, other: int | VALUE_EXPRESSION_TYPE) -> Expression:
+    def __rfloordiv__(self, other: int | ValueExpressionType) -> Expression:
         return Expression(other, Operation.INTEGER_DIVIDE, self)
 
-    def __mod__(self, other: int | VALUE_EXPRESSION_TYPE) -> Expression:
+    def __mod__(self, other: int | ValueExpressionType) -> Expression:
         return Expression(self, Operation.MODULO, other)
 
-    def __rmod__(self, other: int | VALUE_EXPRESSION_TYPE) -> Expression:
+    def __rmod__(self, other: int | ValueExpressionType) -> Expression:
         return Expression(other, Operation.MODULO, self)
 
-    def __pow__(self, other: int | VALUE_EXPRESSION_TYPE) -> Expression:
+    def __pow__(self, other: int | ValueExpressionType) -> Expression:
         return Expression(self, Operation.POWER, other)
 
-    def __rpow__(self, other: int | VALUE_EXPRESSION_TYPE) -> Expression:
+    def __rpow__(self, other: int | ValueExpressionType) -> Expression:
         return Expression(other, Operation.POWER, self)
 
-    def __and__(self, other: int | VALUE_EXPRESSION_TYPE) -> Expression:
+    def __and__(self, other: int | ValueExpressionType) -> Expression:
         return Expression(self, Operation.BITAND, other)
 
-    def __rand__(self, other: int | VALUE_EXPRESSION_TYPE) -> Expression:
+    def __rand__(self, other: int | ValueExpressionType) -> Expression:
         return Expression(other, Operation.BITAND, self)
 
-    def __or__(self, other: int | VALUE_EXPRESSION_TYPE) -> Expression:
+    def __or__(self, other: int | ValueExpressionType) -> Expression:
         return Expression(self, Operation.BITOR, other)
 
-    def __ror__(self, other: int | VALUE_EXPRESSION_TYPE) -> Expression:
+    def __ror__(self, other: int | ValueExpressionType) -> Expression:
         return Expression(other, Operation.BITOR, self)
 
-    def __xor__(self, other: int | VALUE_EXPRESSION_TYPE) -> Expression:
+    def __xor__(self, other: int | ValueExpressionType) -> Expression:
         return Expression(self, Operation.BITXOR, other)
 
-    def __rxor__(self, other: int | VALUE_EXPRESSION_TYPE) -> Expression:
+    def __rxor__(self, other: int | ValueExpressionType) -> Expression:
         return Expression(other, Operation.BITXOR, self)
 
     def __invert__(self) -> Never:
@@ -862,9 +862,9 @@ class Expression(ComparableTerm):
 
     def __init__(
         self,
-        first_term: EXPRESSION_FIELD_TYPE | None,
+        first_term: ExpressionFieldType | None,
         operator: Operation,
-        second_term: EXPRESSION_FIELD_TYPE,
+        second_term: ExpressionFieldType,
     ):
         """first_term is None for unary operations; int operands are coerced to Number."""
         if first_term is not None and not isinstance(first_term, (int, Value, Expression)):
@@ -883,7 +883,7 @@ class Expression(ComparableTerm):
         self._second_term = self._convert_if_needed(second_term)
 
     @staticmethod
-    def _convert_if_needed(value: EXPRESSION_FIELD_TYPE) -> VALUE_EXPRESSION_TYPE:
+    def _convert_if_needed(value: ExpressionFieldType) -> ValueExpressionType:
         """Coerces Python ints to Number; Values and Expressions pass through."""
         if isinstance(value, (Value, Expression)):
             return value
@@ -895,7 +895,7 @@ class Expression(ComparableTerm):
         raise TypeError(f"Cannot convert {type(value).__name__} to an ASP term")  # pragma: no cover
 
     @property
-    def first_term(self) -> VALUE_EXPRESSION_TYPE | None:
+    def first_term(self) -> ValueExpressionType | None:
         """The left term; None for unary operations."""
         return self._first_term
 
@@ -904,7 +904,7 @@ class Expression(ComparableTerm):
         return self._operator
 
     @property
-    def second_term(self) -> VALUE_EXPRESSION_TYPE:
+    def second_term(self) -> ValueExpressionType:
         return self._second_term
 
     @property
@@ -992,61 +992,61 @@ class Expression(ComparableTerm):
         raise ValueError("Expressions can only be used as parts of comparisons, assignments, or as predicate arguments")
 
     # Arithmetic operator methods
-    def __add__(self, other: EXPRESSION_FIELD_TYPE) -> Expression:
+    def __add__(self, other: ExpressionFieldType) -> Expression:
         return Expression(self, Operation.ADD, other)
 
-    def __radd__(self, other: EXPRESSION_FIELD_TYPE) -> Expression:
+    def __radd__(self, other: ExpressionFieldType) -> Expression:
         return Expression(other, Operation.ADD, self)
 
-    def __sub__(self, other: EXPRESSION_FIELD_TYPE) -> Expression:
+    def __sub__(self, other: ExpressionFieldType) -> Expression:
         return Expression(self, Operation.SUBTRACT, other)
 
-    def __rsub__(self, other: EXPRESSION_FIELD_TYPE) -> Expression:
+    def __rsub__(self, other: ExpressionFieldType) -> Expression:
         return Expression(other, Operation.SUBTRACT, self)
 
-    def __mul__(self, other: EXPRESSION_FIELD_TYPE) -> Expression:
+    def __mul__(self, other: ExpressionFieldType) -> Expression:
         return Expression(self, Operation.MULTIPLY, other)
 
-    def __rmul__(self, other: EXPRESSION_FIELD_TYPE) -> Expression:
+    def __rmul__(self, other: ExpressionFieldType) -> Expression:
         return Expression(other, Operation.MULTIPLY, self)
 
     def __neg__(self) -> Expression:
         return Expression(None, Operation.UNARY_MINUS, self)
 
-    def __floordiv__(self, other: EXPRESSION_FIELD_TYPE) -> Expression:
+    def __floordiv__(self, other: ExpressionFieldType) -> Expression:
         return Expression(self, Operation.INTEGER_DIVIDE, other)
 
-    def __rfloordiv__(self, other: EXPRESSION_FIELD_TYPE) -> Expression:
+    def __rfloordiv__(self, other: ExpressionFieldType) -> Expression:
         return Expression(other, Operation.INTEGER_DIVIDE, self)
 
-    def __mod__(self, other: EXPRESSION_FIELD_TYPE) -> Expression:
+    def __mod__(self, other: ExpressionFieldType) -> Expression:
         return Expression(self, Operation.MODULO, other)
 
-    def __rmod__(self, other: EXPRESSION_FIELD_TYPE) -> Expression:
+    def __rmod__(self, other: ExpressionFieldType) -> Expression:
         return Expression(other, Operation.MODULO, self)
 
-    def __pow__(self, other: EXPRESSION_FIELD_TYPE) -> Expression:
+    def __pow__(self, other: ExpressionFieldType) -> Expression:
         return Expression(self, Operation.POWER, other)
 
-    def __rpow__(self, other: EXPRESSION_FIELD_TYPE) -> Expression:
+    def __rpow__(self, other: ExpressionFieldType) -> Expression:
         return Expression(other, Operation.POWER, self)
 
-    def __and__(self, other: EXPRESSION_FIELD_TYPE) -> Expression:
+    def __and__(self, other: ExpressionFieldType) -> Expression:
         return Expression(self, Operation.BITAND, other)
 
-    def __rand__(self, other: EXPRESSION_FIELD_TYPE) -> Expression:
+    def __rand__(self, other: ExpressionFieldType) -> Expression:
         return Expression(other, Operation.BITAND, self)
 
-    def __or__(self, other: EXPRESSION_FIELD_TYPE) -> Expression:
+    def __or__(self, other: ExpressionFieldType) -> Expression:
         return Expression(self, Operation.BITOR, other)
 
-    def __ror__(self, other: EXPRESSION_FIELD_TYPE) -> Expression:
+    def __ror__(self, other: ExpressionFieldType) -> Expression:
         return Expression(other, Operation.BITOR, self)
 
-    def __xor__(self, other: EXPRESSION_FIELD_TYPE) -> Expression:
+    def __xor__(self, other: ExpressionFieldType) -> Expression:
         return Expression(self, Operation.BITXOR, other)
 
-    def __rxor__(self, other: EXPRESSION_FIELD_TYPE) -> Expression:
+    def __rxor__(self, other: ExpressionFieldType) -> Expression:
         return Expression(other, Operation.BITXOR, self)
 
     def __invert__(self) -> Never:
@@ -1358,12 +1358,12 @@ def Not(term: Negatable) -> DefaultNegation:
     return DefaultNegation(term)
 
 
-def Abs(term: EXPRESSION_FIELD_TYPE) -> Expression:
+def Abs(term: ExpressionFieldType) -> Expression:
     """Builds an absolute-value expression, |term|."""
     return Expression(None, Operation.ABS, term)
 
 
-def Compl(term: EXPRESSION_FIELD_TYPE) -> Expression:
+def Compl(term: ExpressionFieldType) -> Expression:
     """
     Builds a bitwise-complement expression, rendered ~term.
 

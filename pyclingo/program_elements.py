@@ -10,7 +10,7 @@ from pyclingo.scoping import validate_rule
 from pyclingo.source_location import SourceLocation
 
 if TYPE_CHECKING:
-    from pyclingo.predicate import PREDICATE_CLASS_TYPE
+    from pyclingo.predicate import PredicateClassType
 
 
 class ProgramElement(ABC):
@@ -41,7 +41,7 @@ class ProgramElement(ABC):
         """Collects (class, negated, is_atom) occurrences; empty by default. See Term.collect_predicate_occurrences."""
         return set()
 
-    def collect_predicates(self) -> set[PREDICATE_CLASS_TYPE]:
+    def collect_predicates(self) -> set[PredicateClassType]:
         """All Predicate classes used in this element (both signs, any position)."""
         return {predicate for predicate, _negated, _is_atom in self.collect_predicate_occurrences(as_argument=False)}
 
@@ -97,7 +97,7 @@ class RawASP(ProgramElement):
     -p/n." is emitted (P for positive, -P for negative).
     """
 
-    def __init__(self, text: str, predicates: Sequence[PREDICATE_CLASS_TYPE | NegatedPredicate] = ()):
+    def __init__(self, text: str, predicates: Sequence[PredicateClassType | NegatedPredicate] = ()):
         if not isinstance(text, str):
             raise TypeError(f"RawASP text must be a string, got {type(text).__name__}")
         self.text = text

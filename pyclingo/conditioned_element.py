@@ -20,7 +20,7 @@ from pyclingo.predicate import Predicate
 from pyclingo.source_location import SourceLocation, capture_location
 
 # The condition union every conditional construct shares
-type CONDITION_TYPE = Predicate | DefaultNegation | Comparison
+type ConditionType = Predicate | DefaultNegation | Comparison
 
 
 class FreezableBuilder:
@@ -60,7 +60,7 @@ class ConditionedElement:
     def __init__(
         self,
         targets: tuple[Term, ...],
-        condition: CONDITION_TYPE | list[CONDITION_TYPE] | None,
+        condition: ConditionType | list[ConditionType] | None,
         construct: str,
     ) -> None:
         """
@@ -100,7 +100,7 @@ class ConditionedElement:
         return self._targets
 
     @property
-    def conditions(self) -> list[CONDITION_TYPE]:
+    def conditions(self) -> list[ConditionType]:
         """The element's conditions (a defensive copy)."""
         return self._conditions.copy()
 

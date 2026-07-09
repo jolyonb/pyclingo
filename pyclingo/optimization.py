@@ -18,14 +18,14 @@ so accumulating elements into one statement would be cosmetic only.
 
 from enum import StrEnum
 
-from pyclingo.conditioned_element import CONDITION_TYPE, ConditionedElement
+from pyclingo.conditioned_element import ConditionedElement, ConditionType
 from pyclingo.core import Expression, Number, PredicateOccurrence, String, Term, Value, Variable
 from pyclingo.predicate import Predicate
 from pyclingo.program_elements import ProgramElement, render_body_terms
 from pyclingo.scoping import body_global_variables
 
 # What may be aggregated over: the same universe as aggregate tuple terms
-type OPTIMIZATION_TERM_TYPE = Value | Expression | Predicate
+type OptimizationTermType = Value | Expression | Predicate
 
 
 class WeakConstraint(ProgramElement):
@@ -41,8 +41,8 @@ class WeakConstraint(ProgramElement):
     def __init__(
         self,
         conditions: tuple[Term, ...],
-        weight: int | OPTIMIZATION_TERM_TYPE,
-        tuple_terms: tuple[OPTIMIZATION_TERM_TYPE, ...] | None,
+        weight: int | OptimizationTermType,
+        tuple_terms: tuple[OptimizationTermType, ...] | None,
         priority: int,
     ) -> None:
         if isinstance(weight, int):
@@ -161,9 +161,9 @@ class OptimizationDirective(ProgramElement):
     def __init__(
         self,
         optimization: Optimization,
-        weight: int | OPTIMIZATION_TERM_TYPE,
-        tuple_terms: tuple[OPTIMIZATION_TERM_TYPE, ...],
-        condition: CONDITION_TYPE | list[CONDITION_TYPE] | None,
+        weight: int | OptimizationTermType,
+        tuple_terms: tuple[OptimizationTermType, ...],
+        condition: ConditionType | list[ConditionType] | None,
         priority: int,
     ) -> None:
         if isinstance(weight, int):

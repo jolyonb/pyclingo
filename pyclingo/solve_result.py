@@ -53,12 +53,12 @@ from pyclingo.statistics import format_statistics_clingo_style
 
 # Solution reconstruction is keyed by (name, arity): p/1 and p/2 are distinct
 # predicates in ASP
-type PREDICATE_TYPES = dict[tuple[str, int], type[Predicate]]
+type PredicateTypes = dict[tuple[str, int], type[Predicate]]
 
 
 # The search generator's full mode range: None enumerates models, a
 # RefinementMode refines consequences, OPTIMIZE descends a cost
-type SEARCH_MODE = RefinementMode | Literal["optimize"] | None
+type SearchMode = RefinementMode | Literal["optimize"] | None
 OPTIMIZE: Literal["optimize"] = "optimize"
 
 
@@ -417,7 +417,7 @@ class SolveResult(SearchABC):
     def __init__(
         self,
         control: clingo.Control,
-        predicate_types: PREDICATE_TYPES,
+        predicate_types: PredicateTypes,
         timeout: float,
         message_handler: ClingoMessageHandler,
         assumptions: list[tuple[clingo.Symbol, bool]] | None = None,
@@ -475,7 +475,7 @@ class RefinementSteps(SearchABC):
     def __init__(
         self,
         control: clingo.Control,
-        predicate_types: PREDICATE_TYPES,
+        predicate_types: PredicateTypes,
         timeout: float,
         message_handler: ClingoMessageHandler,
         assumptions: list[tuple[clingo.Symbol, bool]],
@@ -539,7 +539,7 @@ class OptimizeSteps(SearchABC):
     def __init__(
         self,
         control: clingo.Control,
-        predicate_types: PREDICATE_TYPES,
+        predicate_types: PredicateTypes,
         timeout: float,
         message_handler: ClingoMessageHandler,
         assumptions: list[tuple[clingo.Symbol, bool]],
@@ -576,13 +576,13 @@ class OptimizeSteps(SearchABC):
 
 def _search_generator(
     control: clingo.Control,
-    predicate_types: PREDICATE_TYPES,
+    predicate_types: PredicateTypes,
     timeout: float,
     tic: float,
     state: _SearchState,
     message_handler: ClingoMessageHandler,
     assumptions: list[tuple[clingo.Symbol, bool]],
-    mode: SEARCH_MODE,
+    mode: SearchMode,
 ) -> Generator[AtomCollection]:
     """
     One loop for every search mode, finalizing bookkeeping on every exit
@@ -750,7 +750,7 @@ def convert_predicate_to_symbol(
     return clingo.Function(predicate.get_name(), arguments, positive=not predicate.negated)
 
 
-def convert_symbol_to_predicate(symbol: clingo.Symbol, predicate_types: PREDICATE_TYPES) -> Predicate:
+def convert_symbol_to_predicate(symbol: clingo.Symbol, predicate_types: PredicateTypes) -> Predicate:
     """
     Convert a clingo model symbol back into a typed Predicate instance, recursively.
 
