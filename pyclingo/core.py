@@ -316,6 +316,12 @@ class ArithmeticOps:
         )
 
 
+# The cache key for constructing a Value with no argument (Supremum/Infimum).
+# A sentinel rather than None, so an explicit None argument never keys like
+# the no-argument spelling.
+_NO_ARGUMENT = object()
+
+
 class _ValueMeta(ABCMeta):
     """
     Caches Value instances: constructing the same value twice returns the same
@@ -323,32 +329,46 @@ class _ValueMeta(ABCMeta):
     so values nothing references anymore are evicted with their keys — a
     long-running generator does not accumulate dead values. Construction runs
     before the cache is written, so a value whose validation raises is never
-    cached. Concrete Value subclasses take exactly one constructor argument
-    (keyed with its type, so equal-but-distinct-type arguments never share an
-    instance) or none at all (Supremum/Infimum, keyed as the argument None —
-    which no one-argument value accepts, so the keys cannot collide); other
-    shapes fall through so __init__ can raise its own error.
+    cached.
+
+    Only plain values enter the cache. The argument converts to its natural
+    plain form first — str/int subclasses exactly as construction stores
+    them, so what is keyed is what is stored, and equal-after-conversion
+    inputs share one canonical instance. After conversion, every valid
+    Value argument is exactly a plain str, a plain int, or absent
+    (Supremum/Infimum); those shapes key as (class, value), unambiguous
+    because no two of them compare equal across types. Every other shape —
+    bool, float, an unhashable — never touches the cache (so it cannot
+    cache-hit an equal resident like Number(1) and be laundered past
+    validation) and falls through for __init__ to reject.
     """
 
     def __call__[T](cls: type[T], *args: Any, **kwargs: Any) -> T:
         if len(args) + len(kwargs) <= 1:
-            value = args[0] if args else next(iter(kwargs.values()), None)
-            key = (cls, type(value), value)
-            try:
+            value = args[0] if args else next(iter(kwargs.values()), _NO_ARGUMENT)
+            if isinstance(value, str):
+                # Converted once, here: key and constructor see the same
+                # plain value (a second str() of a subclass is a second
+                # call to ITS __str__, which need not agree with the first)
+                value = str(value)
+                args, kwargs = (value,), {}
+            elif isinstance(value, int) and not isinstance(value, bool):
+                value = int(value)
+                args, kwargs = (value,), {}
+            if type(value) in (str, int) or value is _NO_ARGUMENT:
+                key = (cls, value)
                 cached = Value._cache.get(key)
-            except TypeError:
-                # Unhashable constructor argument; let __init__ reject it with a clear error
-                return super().__call__(*args, **kwargs)  # type: ignore[misc, no-any-return]
-            if cached is None:
-                # Double-checked under the lock: two racing constructors must
-                # agree on ONE canonical object — identity hashing rests on
-                # every live equal value being that object. Hits stay lock-free.
-                with Value._cache_lock:
-                    cached = Value._cache.get(key)
-                    if cached is None:
-                        cached = super().__call__(*args, **kwargs)  # type: ignore[misc]
-                        Value._cache[key] = cached
-            return cast(T, cached)
+                if cached is None:
+                    # Double-checked under the lock: two racing constructors
+                    # must agree on ONE canonical object — identity hashing
+                    # rests on every live equal value being that object.
+                    # Hits stay lock-free.
+                    with Value._cache_lock:
+                        cached = Value._cache.get(key)
+                        if cached is None:
+                            cached = super().__call__(*args, **kwargs)  # type: ignore[misc]
+                            Value._cache[key] = cached
+                return cast(T, cached)
         return super().__call__(*args, **kwargs)  # type: ignore[misc, no-any-return]
 
 
@@ -371,7 +391,7 @@ class Value(BasicTerm, ComparableTerm, ArithmeticOps, ABC, metaclass=_ValueMeta)
     return the object itself, so the guarantee survives copying a program.
     """
 
-    _cache: ClassVar[weakref.WeakValueDictionary[tuple[type, type, Any], Value]] = weakref.WeakValueDictionary()
+    _cache: ClassVar[weakref.WeakValueDictionary[tuple[type, Any], Value]] = weakref.WeakValueDictionary()
     _cache_lock: ClassVar[threading.Lock] = threading.Lock()
 
     @classmethod

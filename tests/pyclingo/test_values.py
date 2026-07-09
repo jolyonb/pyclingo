@@ -383,3 +383,38 @@ def test_extreme_values_compare_but_do_no_arithmetic() -> None:
         SUP + 1
     with pytest.raises(TypeError, match="ordering's end markers"):
         1 + INF
+
+
+def test_equal_after_conversion_inputs_intern_to_one_object() -> None:
+    # Convert-then-validate's cache-side twin: what is keyed is exactly what
+    # is stored, so a subclass input shares the canonical instance — a set
+    # holding "both" holds one
+    class PlainStr(str):
+        pass
+
+    class PlainInt(int):
+        pass
+
+    assert String(PlainStr("cache_canon")) is String("cache_canon")
+    assert Number(PlainInt(741852)) is Number(741852)
+    assert len({Number(PlainInt(741852)), Number(741852)}) == 1
+    assert Variable(PlainStr("CACHECANON")) is Variable("CACHECANON")
+
+
+def test_conversion_keying_never_launders_invalid_inputs() -> None:
+    # The lookup runs before validation, so the key must not collapse an
+    # invalid input onto a cached valid one
+    Number(1)  # the cached resident a laundering bug would hand back
+    with pytest.raises(TypeError, match="got bool"):
+        Number(True)  # bool never enters the cache: it reaches its rejection
+    with pytest.raises(TypeError, match="must be an integer"):
+        Number(1.0)  # type: ignore[arg-type]  # float never enters the cache either
+
+    class LoudCacheStr(str):
+        def __str__(self) -> str:
+            return f"loud-{str.__str__(self)}"
+
+    # The subclass keys by its natural (converted) form, so it interns with
+    # the plain spelling of THAT form, not with its base string
+    assert String(LoudCacheStr("safe")) is String("loud-safe")
+    assert String(LoudCacheStr("safe")) is not String("safe")
