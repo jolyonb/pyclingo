@@ -103,6 +103,7 @@ def test_statistics_finalize_after_a_timeout() -> None:
     P = Predicate.define("p_timeout", ["x"])
     program.fact(Choice(P(x=RangePool(1, 60))))  # 2^60 models: never finishes
     result = program.solve(timeout=0.2)
-    list(result)
+    # islice bound: a timeout regression fails loudly instead of hanging
+    list(islice(result, 100_000))
     assert not result.exhausted
     assert result.statistics is not None and "wall_time" in result.statistics

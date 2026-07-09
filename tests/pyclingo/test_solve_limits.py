@@ -50,7 +50,9 @@ def test_timeout_yields_partial_results() -> None:
     # 2^60 models: unlimited enumeration can never finish, so the timeout must fire
     result = make_choice_program(60).solve(timeout=0.2)
     start = time.monotonic()
-    models = list(result)
+    # islice bound: if the timeout machinery regressed to never firing,
+    # this fails loudly instead of hanging the suite on 2^60 models
+    models = list(islice(result, 100_000))
     elapsed = time.monotonic() - start
     assert len(models) > 0  # models found before the deadline were yielded
     assert result.exhausted is False
@@ -98,28 +100,6 @@ def test_unconsumed_result_reports_honestly() -> None:
     assert result.satisfiable is None  # never iterated: nothing learned
     assert result.solution_count == 0
     assert result.format_statistics() == "No statistics available"
-
-
-def test_unsafe_rules_raise_at_construction() -> None:
-    # Unsafe variables do not wait for clingo's grounding error: the rule
-    # is rejected at the when() call, on the author's own line
-    program = ASPProgram()
-    P = Predicate.define("p", ["x"])
-    Q = Predicate.define("q", ["x"])
-    X, Y = Variable("X"), Variable("Y")
-    with pytest.raises(ValueError, match="Unsafe variable"):
-        program.when(P(x=X)).derive(Q(x=Y))
-
-
-def test_grounding_diagnostics_ride_in_the_error() -> None:
-    # An info-level message (q never appears in a head) halts at the default
-    # threshold, and the formatted diagnostics are part of the raised error
-    program = ASPProgram()
-    P = Predicate.define("p", ["x"])
-    Q = Predicate.define("q", ["x"])
-    program.when(Q(x=1)).derive(P(x=1))
-    with pytest.raises(RuntimeError, match="does not occur"):
-        program.solve()
 
 
 def test_negative_timeout_rejected() -> None:
@@ -204,8 +184,8 @@ def test_timeout_before_any_model_raises() -> None:
     A = Predicate.define("h_pig", ["p", "h"])
     B = Predicate.define("h_p", ["p"], show=False)
     P, P2, H = Variable("P"), Variable("P2"), Variable("H")
-    program.fact(*[B(p=i) for i in range(1, 13)])
-    program.when(B(p=P)).derive(Choice(A(p=P, h=RangePool(1, 11))).exactly(1))
+    program.fact(*[B(p=i) for i in range(1, 15)])
+    program.when(B(p=P)).derive(Choice(A(p=P, h=RangePool(1, 13))).exactly(1))
     program.forbid(A(p=P, h=H), A(p=P2, h=H), P < P2)
     result = program.solve(timeout=0.05)
     with pytest.raises(TimeoutError, match="no model within"):
@@ -277,8 +257,8 @@ def test_held_iterator_is_loud_after_timeout() -> None:
     A = Predicate.define("h2_pig", ["p", "h"])
     B = Predicate.define("h2_p", ["p"], show=False)
     P, P2, H = Variable("P"), Variable("P2"), Variable("H")
-    program.fact(*[B(p=i) for i in range(1, 13)])
-    program.when(B(p=P)).derive(Choice(A(p=P, h=RangePool(1, 11))).exactly(1))
+    program.fact(*[B(p=i) for i in range(1, 15)])
+    program.when(B(p=P)).derive(Choice(A(p=P, h=RangePool(1, 13))).exactly(1))
     program.forbid(A(p=P, h=H), A(p=P2, h=H), P < P2)
     result = program.solve(timeout=0.05)
     iterator = iter(result)

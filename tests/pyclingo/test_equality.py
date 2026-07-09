@@ -12,7 +12,7 @@ from typing import cast
 
 import pytest
 
-from pyclingo import Comparison, DefinedConstant, Number, Predicate, String, Variable
+from pyclingo import Comparison, Number, Predicate, String, Variable
 
 
 class TestComparisonBool:
@@ -40,16 +40,9 @@ class TestComparisonBool:
 
 
 class TestValueCaching:
-    def test_variables_are_cached(self) -> None:
-        assert Variable("X") is Variable("X")
-        assert Variable("X") is not Variable("Y")
-
-    def test_constants_are_cached(self) -> None:
-        assert Number(1) is Number(1)
-        assert Number(1) is not Number(2)
-        assert String("a") is String("a")
-        assert DefinedConstant("foo") is DefinedConstant("foo")
-
+    # Interning itself is test_values.py's subject; these tests pin what
+    # identity HASHING needs from it: type-distinct keys, bool rejection,
+    # and set/dict semantics
     def test_caching_distinguishes_classes_and_types(self) -> None:
         assert String("1") is not Number(1)  # str "1" vs int 1
 

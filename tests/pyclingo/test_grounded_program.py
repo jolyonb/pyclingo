@@ -271,3 +271,25 @@ def test_assumption_class_names_the_instance_spelling() -> None:
     program.fact(P(x=1))
     with pytest.raises(TypeError, match=r"pass a grounded instance: p_asmcls\(\.\.\.\)"):
         program.ground().solve(assumptions=[P])  # type: ignore[list-item]
+
+
+def test_sugar_verbs_take_assumptions() -> None:
+    # The ASPProgram sugar verbs forward assumptions like every other
+    # per-solve knob (previously the one missing parameter)
+    program = ASPProgram()
+    P = Predicate.define("p_sugar_asm", ["x"])
+    program.fact(Choice(P(x=RangePool(1, 3))))
+    models = list(program.solve(assumptions=[P(x=2)]))
+    assert models and all(any(a["x"].value == 2 for a in m.atoms(P)) for m in models)
+    cautious = program.cautious(assumptions=[P(x=2)])
+    assert cautious is not None and P(x=2) in cautious.atoms(P)
+    brave = program.brave(assumptions=[~P(x=1)])
+    assert brave is not None and P(x=1) not in brave.atoms(P)
+
+    optimizing = ASPProgram()
+    Q = Predicate.define("q_sugar_asm", ["x"])
+    X = Variable("X")
+    optimizing.fact(Choice(Q(x=RangePool(1, 3))).at_least(1))
+    optimizing.minimize(X, condition=Q(x=X))
+    best = optimizing.optimize(assumptions=[Q(x=3)])
+    assert best is not None and best.cost == (3,)  # q(3) forced in; the rest minimized away

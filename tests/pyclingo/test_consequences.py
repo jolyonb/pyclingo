@@ -276,14 +276,14 @@ def test_raw_asp_contract_applies_to_refinements() -> None:
 
 
 def _pigeonhole() -> ASPProgram:
-    # 12 pigeons, 11 holes: UNSAT, and the proof takes clasp far longer
+    # 14 pigeons, 13 holes: UNSAT, and the proof takes clasp far longer
     # than the test deadlines below — a deterministic timeout trigger
     Pigeon = Predicate.define("pigeon", ["p"], show=False)
     Assign = Predicate.define("assign", ["p", "h"])
     program = ASPProgram()
     P, P2, H = Variable("P"), Variable("P2"), Variable("H")
-    program.fact(*[Pigeon(p=i) for i in range(1, 13)])
-    program.when(Pigeon(p=P)).derive(Choice(Assign(p=P, h=RangePool(1, 11))).exactly(1))
+    program.fact(*[Pigeon(p=i) for i in range(1, 15)])
+    program.when(Pigeon(p=P)).derive(Choice(Assign(p=P, h=RangePool(1, 13))).exactly(1))
     program.forbid(Assign(p=P, h=H), Assign(p=P2, h=H), P < P2)
     return program
 
@@ -341,13 +341,17 @@ def test_refinement_timeout_mid_stream_raises() -> None:
     program = ASPProgram()
     P, P2, H = Variable("P"), Variable("P2"), Variable("H")
     program.fact(Choice(Free()))
-    program.fact(*[PigeonM(p=i) for i in range(1, 13)])
-    program.when(PigeonM(p=P)).derive(Choice(AssignM(p=P, h=RangePool(1, 11))).at_most(1))
+    program.fact(*[PigeonM(p=i) for i in range(1, 15)])
+    program.when(PigeonM(p=P)).derive(Choice(AssignM(p=P, h=RangePool(1, 13))).at_most(1))
     program.forbid(AssignM(p=P, h=H), AssignM(p=P2, h=H), P < P2)
-    # hard_mid needs all 12 pigeons placed in 11 distinct holes: impossible,
+    # hard_mid needs all 14 pigeons placed in 13 distinct holes: impossible,
     # but proving that is the slow step
-    program.when(Count((P, H), condition=AssignM(p=P, h=H)) >= 12).derive(Hard())
-    steps = program.ground().brave_iter(timeout=0.1)
+    program.when(Count((P, H), condition=AssignM(p=P, h=H)) >= 14).derive(Hard())
+    # The deadline window is two-sided: the FIRST approximation must land
+    # inside it (steps_taken >= 1) while the proof must not finish — the
+    # instance size guards the slow side, the deadline gives the fast side
+    # generous slack for a loaded machine
+    steps = program.ground().brave_iter(timeout=0.3)
     with pytest.raises(TimeoutError, match="did not finish"):
         list(steps)
     assert steps.steps_taken >= 1  # approximations were in hand — raised anyway

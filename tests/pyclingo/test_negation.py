@@ -1,7 +1,7 @@
 """
 Tests for the ~ operator and Not(): default negation on predicates and
-comparisons, ground-truthed by solving (render-only pins let invalid ASP
-ship once; see AUDIT_v2 H1).
+comparisons. Negation semantics are asserted by solving, not by render
+strings — a render-only pin cannot tell valid ASP from invalid.
 """
 
 import pytest

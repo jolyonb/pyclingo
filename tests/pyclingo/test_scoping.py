@@ -333,3 +333,12 @@ def test_optimization_singleton_lint_off_under_allow_singletons() -> None:
     Pair = Predicate.define("pair", ["a", "b"])
     program.minimize(X, condition=Pair(a=X, b=Y))  # Y singleton, lint disabled
     assert "#minimize" in program.render()
+
+
+def test_unsafe_rules_raise_at_the_statement_verb() -> None:
+    # The program-level door: rejection lands at the when() call, on the
+    # author's own line, not at clingo's grounding error
+    program = ASPProgram()
+    X, Y = Variable("X"), Variable("Y")
+    with pytest.raises(ValueError, match="Unsafe variable"):
+        program.when(P(x=X)).derive(Q(x=Y))

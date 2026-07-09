@@ -1,5 +1,7 @@
 """
-Tests for the content rules of Number, String, and pools.
+Tests for Values: content rules (Number, String, pools), the interning
+cache (weakness, threads, copy semantics), the V/Vars factories and
+variable indexing, and comparison-operand guards.
 """
 
 import copy
@@ -61,6 +63,10 @@ def test_empty_pools_raise_everywhere() -> None:
 
 
 def test_cache_can_be_cleared() -> None:
+    # This clears the PROCESS-GLOBAL intern cache: anything running later
+    # that held a pre-clear Value would see equal-but-not-identical twins.
+    # Nothing in the suite does (asserted intents are all name/value-based),
+    # but reorder with care.
     before = Variable("CacheProbe")
     assert Variable("CacheProbe") is before
     Value.clear_cache()
@@ -90,6 +96,13 @@ def test_copy_and_deepcopy_return_the_interned_object() -> None:
     n = Number(42)
     nested = copy.deepcopy({"nested": n})
     assert nested["nested"] is n
+
+
+def test_keyword_construction_hits_the_cache_too() -> None:
+    # The one-arg cache branch covers kwargs: a mutant restricting it to
+    # positional args survived all 625 tests at the time it was probed
+    assert Variable(name="KwProbe") is Variable("KwProbe")
+    assert Number(value=41) is Number(41)
 
 
 def test_concurrent_construction_agrees_on_one_object() -> None:

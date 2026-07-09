@@ -236,3 +236,14 @@ def test_e2e_sup_argument_names_the_remedy() -> None:
     )
     with pytest.raises(ValueError, match="min of nothing is #sup"):
         list(program.solve())
+
+
+def test_e2e_grounding_diagnostics_ride_in_the_error() -> None:
+    # An info-level message (q never appears in a head) halts at the default
+    # threshold, and the formatted diagnostics are part of the raised error
+    program = ASPProgram()
+    P = Predicate.define("p_diag_ride", ["x"])
+    Q = Predicate.define("q_diag_ride", ["x"])
+    program.when(Q(x=1)).derive(P(x=1))
+    with pytest.raises(RuntimeError, match="does not occur"):
+        program.solve()

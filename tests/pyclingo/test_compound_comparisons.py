@@ -1,8 +1,9 @@
 """
 Tests for predicates as comparison operands: X == Cell(1, 2) binds,
-C == Cell(X, ANY) destructures, C != Cell(1, 1) excludes. A Variable must
-be on the other side — clingo orders terms by type, so comparing a number
-or expression against a compound term is vacuous.
+C == Cell(X, ANY) destructures, and the guards around that carve-out.
+Also home to the generic Comparison construction guards, repr/str
+formats, and negation groundedness — comparison-adjacent behaviors
+without a construct-specific file.
 """
 
 import pytest

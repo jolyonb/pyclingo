@@ -754,7 +754,12 @@ class ASPProgram:
             ground_levels=ground_levels,
         )
 
-    def solve(self, timeout: float = 0, stop_on_log_level: LogLevel = LogLevel.INFO) -> SolveResult:
+    def solve(
+        self,
+        timeout: float = 0,
+        assumptions: Sequence[Predicate | DefaultNegation] | None = None,
+        stop_on_log_level: LogLevel = LogLevel.INFO,
+    ) -> SolveResult:
         """
         Solve the ASP program, returning a SolveResult that yields Models lazily.
 
@@ -774,6 +779,8 @@ class ASPProgram:
                      start of iteration. On timeout, models found so far will have
                      been yielded and 'exhausted' remains False; a timeout before
                      ANY model raises TimeoutError.
+            assumptions: Atoms fixed for this solve only (a grounded Predicate
+                assumes it true, ~Predicate false); see GroundedProgram.solve().
             stop_on_log_level: Log level at which to abort — applies to parsing
                 and grounding. Solve-phase messages never halt; they are
                 captured on each Model (.messages) and the SolveResult
@@ -794,19 +801,31 @@ class ASPProgram:
             model enumeration is lazy. Every call returns an independent SolveResult,
             so repeated solves on one program never interfere.
         """
-        return self.ground(stop_on_log_level=stop_on_log_level).solve(timeout=timeout)
+        return self.ground(stop_on_log_level=stop_on_log_level).solve(timeout=timeout, assumptions=assumptions)
 
     def cautious(
-        self, timeout: float = 0, max_iterations: int = 0, stop_on_log_level: LogLevel = LogLevel.INFO
+        self,
+        timeout: float = 0,
+        max_iterations: int = 0,
+        assumptions: Sequence[Predicate | DefaultNegation] | None = None,
+        stop_on_log_level: LogLevel = LogLevel.INFO,
     ) -> CautiousConsequences | None:
         """The atoms true in every answer set; sugar for ground().cautious(). See GroundedProgram.cautious()."""
-        return self.ground(stop_on_log_level=stop_on_log_level).cautious(timeout=timeout, max_iterations=max_iterations)
+        return self.ground(stop_on_log_level=stop_on_log_level).cautious(
+            timeout=timeout, max_iterations=max_iterations, assumptions=assumptions
+        )
 
     def brave(
-        self, timeout: float = 0, max_iterations: int = 0, stop_on_log_level: LogLevel = LogLevel.INFO
+        self,
+        timeout: float = 0,
+        max_iterations: int = 0,
+        assumptions: Sequence[Predicate | DefaultNegation] | None = None,
+        stop_on_log_level: LogLevel = LogLevel.INFO,
     ) -> BraveConsequences | None:
         """The atoms true in at least one answer set; sugar for ground().brave(). See GroundedProgram.brave()."""
-        return self.ground(stop_on_log_level=stop_on_log_level).brave(timeout=timeout, max_iterations=max_iterations)
+        return self.ground(stop_on_log_level=stop_on_log_level).brave(
+            timeout=timeout, max_iterations=max_iterations, assumptions=assumptions
+        )
 
     def optimize(
         self,
@@ -815,11 +834,17 @@ class ASPProgram:
         strategy: OptStrategy = OptStrategy.BB,
         all_optima: bool = False,
         bound: int | Mapping[int, int] | None = None,
+        assumptions: Sequence[Predicate | DefaultNegation] | None = None,
         stop_on_log_level: LogLevel = LogLevel.INFO,
     ) -> Optimum | None:
         """The best answer set by the objectives; sugar for ground().optimize(). See GroundedProgram.optimize()."""
         return self.ground(stop_on_log_level=stop_on_log_level).optimize(
-            timeout=timeout, max_iterations=max_iterations, strategy=strategy, all_optima=all_optima, bound=bound
+            timeout=timeout,
+            max_iterations=max_iterations,
+            strategy=strategy,
+            all_optima=all_optima,
+            bound=bound,
+            assumptions=assumptions,
         )
 
 

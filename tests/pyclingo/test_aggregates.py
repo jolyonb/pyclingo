@@ -18,6 +18,13 @@ def test_aggregates_rejected_in_aggregate_conditions() -> None:
         Count(X, condition=[P(x=X), Count(Y, condition=P(x=Y)) > 0])
 
 
+def test_aggregates_on_both_comparison_sides_rejected() -> None:
+    P = Predicate.define("p", ["x"])
+    X, Y = Variable("X"), Variable("Y")
+    with pytest.raises(ValueError, match="both sides"):
+        _ = Count(X, condition=P(x=X)) == Count(Y, condition=P(x=Y))
+
+
 def test_aggregate_freezes_when_captured_inside_a_comparison() -> None:
     program = ASPProgram()
     P, Q = Predicate.define("p", ["x"]), Predicate.define("q", ["x"])

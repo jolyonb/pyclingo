@@ -82,12 +82,12 @@ AssignOpt = Predicate.define("assign_opt", ["p", "h"])
 
 
 def _slow_unsat_optimizing() -> ASPProgram:
-    # 12 pigeons, 11 holes with an objective: UNSAT and slow, so a short
+    # 14 pigeons, 13 holes with an objective: UNSAT and slow, so a short
     # deadline reliably lands before any model exists
     program = ASPProgram()
     P, P2, H = Variable("P"), Variable("P2"), Variable("H")
-    program.fact(*[PigeonOpt(p=i) for i in range(1, 13)])
-    program.when(PigeonOpt(p=P)).derive(Choice(AssignOpt(p=P, h=RangePool(1, 11))).exactly(1))
+    program.fact(*[PigeonOpt(p=i) for i in range(1, 15)])
+    program.when(PigeonOpt(p=P)).derive(Choice(AssignOpt(p=P, h=RangePool(1, 13))).exactly(1))
     program.forbid(AssignOpt(p=P, h=H), AssignOpt(p=P2, h=H), P < P2)
     program.minimize(1, P, condition=AssignOpt(p=P, h=ANY))
     return program
