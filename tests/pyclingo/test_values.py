@@ -2,6 +2,11 @@
 Tests for the content rules of Number, String, and pools.
 """
 
+import copy
+import gc
+import threading
+import weakref
+
 import pytest
 
 from pyclingo import (
@@ -62,6 +67,48 @@ def test_cache_can_be_cleared() -> None:
     after = Variable("CacheProbe")
     assert after is not before  # identity resets across a clear
     assert Variable("CacheProbe") is after  # caching resumes
+
+
+def test_cache_evicts_dead_values() -> None:
+    # The cache holds its entries weakly: a value nothing references anymore
+    # is evicted with its key instead of accumulating for the process
+    # lifetime, and re-interning afterwards resumes normally
+    probe = Number(987_654_321)
+    ref = weakref.ref(probe)
+    del probe
+    gc.collect()
+    assert ref() is None  # the cache alone did not keep it alive
+    assert Number(987_654_321) is Number(987_654_321)
+
+
+def test_copy_and_deepcopy_return_the_interned_object() -> None:
+    # A distinct copy would be equal-but-not-identical to the cache
+    # resident; stdlib copying must not break the interning guarantee
+    x = Variable("CopyProbe")
+    assert copy.copy(x) is x
+    assert copy.deepcopy(x) is x
+    n = Number(42)
+    nested = copy.deepcopy({"nested": n})
+    assert nested["nested"] is n
+
+
+def test_concurrent_construction_agrees_on_one_object() -> None:
+    # Racing constructors must all hold the canonical object — identity
+    # hashing rests on every live equal value being that one object
+    results: list[Variable] = []
+    barrier = threading.Barrier(8)
+
+    def construct() -> None:
+        barrier.wait()
+        results.append(Variable("RaceProbe"))
+
+    threads = [threading.Thread(target=construct) for _ in range(8)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert len(results) == 8
+    assert len({id(v) for v in results}) == 1
 
 
 def test_failed_construction_does_not_poison_the_cache() -> None:

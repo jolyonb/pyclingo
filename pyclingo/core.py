@@ -6,10 +6,12 @@ Comparison), so they are merged into one module to avoid deferred imports.
 Everything else in the package imports downward from here.
 """
 
+import threading
+import weakref
 from abc import ABC, ABCMeta, abstractmethod
 from collections.abc import Sequence
 from enum import Enum
-from typing import TYPE_CHECKING, Any, ClassVar, Never, cast, overload
+from typing import TYPE_CHECKING, Any, ClassVar, Never, Self, cast, overload
 
 from pyclingo.operators import (
     BINARY_OPERATIONS,
@@ -227,11 +229,14 @@ class Negatable(Term, ABC):
 class _ValueMeta(ABCMeta):
     """
     Caches Value instances: constructing the same value twice returns the same
-    object. Construction runs before the cache is written, so a value whose
-    validation raises is never cached. All concrete Value subclasses take
-    exactly one constructor argument; other shapes fall through so __init__
-    can raise its own error, and the cache key includes the argument's type so
-    equal-but-distinct-type arguments never share an instance.
+    object for as long as the first lives. The cache holds its entries weakly,
+    so values nothing references anymore are evicted with their keys — a
+    long-running generator does not accumulate dead values. Construction runs
+    before the cache is written, so a value whose validation raises is never
+    cached. All concrete Value subclasses take exactly one constructor
+    argument; other shapes fall through so __init__ can raise its own error,
+    and the cache key includes the argument's type so equal-but-distinct-type
+    arguments never share an instance.
     """
 
     def __call__[T](cls: type[T], *args: Any, **kwargs: Any) -> T:
@@ -244,8 +249,14 @@ class _ValueMeta(ABCMeta):
                 # Unhashable constructor argument; let __init__ reject it with a clear error
                 return super().__call__(*args, **kwargs)  # type: ignore[misc, no-any-return]
             if cached is None:
-                cached = super().__call__(*args, **kwargs)  # type: ignore[misc]
-                Value._cache[key] = cached
+                # Double-checked under the lock: two racing constructors must
+                # agree on ONE canonical object — identity hashing rests on
+                # every live equal value being that object. Hits stay lock-free.
+                with Value._cache_lock:
+                    cached = Value._cache.get(key)
+                    if cached is None:
+                        cached = super().__call__(*args, **kwargs)  # type: ignore[misc]
+                        Value._cache[key] = cached
             return cast(T, cached)
         return super().__call__(*args, **kwargs)  # type: ignore[misc, no-any-return]
 
@@ -265,20 +276,36 @@ class Value(BasicTerm, ComparableTerm, ABC, metaclass=_ValueMeta):
     same object, e.g. Variable("X") is Variable("X"). Values are immutable, so sharing
     is safe — and because equal values are the same object, sets and dicts of Values
     behave correctly even though __eq__ builds Comparison terms instead of comparing.
+    The cache is weak (dead values are evicted, not hoarded), and copy/deepcopy
+    return the object itself, so the guarantee survives copying a program.
     """
 
-    _cache: ClassVar[dict[tuple[type, type, Any], Value]] = {}
+    _cache: ClassVar[weakref.WeakValueDictionary[tuple[type, type, Any], Value]] = weakref.WeakValueDictionary()
+    _cache_lock: ClassVar[threading.Lock] = threading.Lock()
 
     @classmethod
     def clear_cache(cls) -> None:
         """
-        Empty the value cache (it grows monotonically across a process).
+        Empty the value cache. Rarely needed: entries whose values are no
+        longer referenced anywhere are evicted automatically.
 
         Values held from before the clear remain valid but are no longer the
         same objects as newly constructed equal values, so avoid mixing them
         in identity-keyed containers like sets across a clear.
         """
         Value._cache.clear()
+
+    def __copy__(self) -> Self:
+        """Values are immutable and interned: the copy IS the original."""
+        return self
+
+    def __deepcopy__(self, memo: dict[int, Any]) -> Self:
+        """
+        Values are immutable and interned: the deep copy IS the original. A
+        distinct copy would be equal-but-not-identical to the cache resident,
+        breaking the same-object guarantee identity hashing rests on.
+        """
+        return self
 
     @abstractmethod
     def render(

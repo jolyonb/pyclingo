@@ -244,7 +244,7 @@ segments the program creates, while a Segment attached as-is keeps its own):
 ## Key Design Principles
 
 1. **Type Safety**: Extensive use of type hints and runtime validation
-2. **Immutability**: Values and Predicates are immutable (cached/frozen); Choice and Aggregate are mutable builders that freeze when a rule captures them — mutating one afterwards raises (naming the capturing rule's file:line) instead of silently rewriting the recorded rule. A frozen builder is a value: further rules may capture and share it
+2. **Immutability**: Values and Predicates are immutable (cached/frozen); Choice and Aggregate are mutable builders that freeze when a rule captures them — mutating one afterwards raises (naming the capturing rule's file:line) instead of silently rewriting the recorded rule. A frozen builder is a value: further rules may capture and share it. The Value cache interns weakly (dead values are evicted, racing constructors agree on one object under a lock, copy/deepcopy return the interned object), so equal-live-values-are-the-same-object holds under threads, copying, and long-running generation
 3. **Composability**: Rich operator overloading for natural expression building
 4. **Validation**: Context-aware validation for rule construction, at the
    line that built the rule. Unsafe-variable rejection is an

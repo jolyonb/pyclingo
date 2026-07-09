@@ -4,6 +4,7 @@ raw_asp, define_constant, the guards on their inputs, and the
 annotated / line-paired render paths.
 """
 
+import copy
 import inspect
 
 import pytest
@@ -14,6 +15,7 @@ from pyclingo import (
     ConditionalLiteral,
     Count,
     DefinedConstant,
+    Number,
     Predicate,
     RangePool,
     SourceLocation,
@@ -290,6 +292,22 @@ def test_annotate_appends_the_authoring_line_to_each_statement() -> None:
     lines = program.render(annotate=True).splitlines()
     assert f"q_ann(1).  % {fact_note}" in lines
     assert f"p_ann(1) :- q_ann(1).  % {rule_note}" in lines
+
+
+def test_deepcopied_program_diverges_without_uninterning_values() -> None:
+    # deepcopy(program) is a supported fork: the clone diverges freely, and
+    # the Values inside remain the canonical interned objects (Value's
+    # __deepcopy__ returns self), so identity-keyed uses stay safe
+    program = ASPProgram()
+    P = Predicate.define("p_fork", ["x"])
+    program.fact(P(x=1))
+    clone = copy.deepcopy(program)
+    clone.fact(P(x=2))
+    assert "p_fork(2)." in clone.render()
+    assert "p_fork(2)." not in program.render()  # the original is untouched
+    cloned_rule = next(iter(clone["Rules"]))
+    assert isinstance(cloned_rule, Rule) and isinstance(cloned_rule.head, Predicate)
+    assert cloned_rule.head["x"] is Number(1)  # still the cache resident
 
 
 def test_formatting_elements_are_never_stamped() -> None:
