@@ -175,3 +175,35 @@ def test_show_when_condition_cannot_self_vouch_a_directive() -> None:
     assert "#show ghost_sv/1." not in program.render()  # no self-vouched directive
     with pytest.raises(RuntimeError, match="ghost_sv"):
         program.solve()  # the underived condition atom halts at ground, loudly
+
+
+def test_atom_vs_term_position_is_computed_by_position() -> None:
+    # collect_predicate_occurrences threads grammatical position down the walk:
+    # a predicate is an atom (is_atom=True) only where a literal would
+    # stand, a term (False) in any argument position. Predicate is the
+    # sole producer of the bit; every composite forwards position.
+    Region = Predicate.define("region_pos", ["loc"])
+    Cell = Predicate.define("cell_pos", ["r", "c"])
+    Island = Predicate.define("island_pos", ["loc"])
+    Q = Predicate.define("q_pos", ["x"])
+    X = Variable("X")
+
+    # region(cell(1, 2)): region is the atom, its nested cell is data
+    nested = Region(loc=Cell(r=1, c=2))
+    assert (Region, False, True) in nested.collect_predicate_occurrences(as_argument=False)
+    assert (Cell, False, False) in nested.collect_predicate_occurrences(as_argument=False)
+
+    # the same predicate in an argument position is never an atom
+    assert (Region, False, False) in nested.collect_predicate_occurrences(as_argument=True)
+
+    # Count(island(X) : q(X)): the tuple term is data, the condition an atom
+    aggregate = Count(Island(loc=X), condition=Q(x=X))
+    comparison = aggregate == 1
+    signs = comparison.collect_predicate_occurrences(as_argument=False)
+    assert (Island, False, False) in signs  # tuple term
+    assert (Q, False, True) in signs  # condition
+
+    # a predicate in a pool is a term
+    Dom = Predicate.define("dom_pos", [])
+    pool_cmp = X.in_((Dom(),))
+    assert (Dom, False, False) in pool_cmp.collect_predicate_occurrences(as_argument=False)

@@ -5,8 +5,8 @@ from typing import ClassVar, Self
 from pyclingo.conditioned_element import CONDITION_TYPE, ConditionedElement
 from pyclingo.core import (
     AggregateBase,
-    AtomSign,
     Expression,
+    PredicateOccurrence,
     RenderingContext,
     Value,
 )
@@ -145,16 +145,16 @@ class Aggregate(AggregateBase, ABC):
 
         return variables
 
-    def collect_predicate_signs(self) -> set[AtomSign]:
-        # Tuple terms sit in argument positions — a predicate there is
-        # data, not an atom — while conditions hold real atoms
-        signs: set[AtomSign] = set()
+    def collect_predicate_occurrences(self, *, as_argument: bool) -> set[PredicateOccurrence]:
+        # Tuple terms sit in argument positions (data); conditions hold real
+        # atoms in the aggregate's own position
+        occurrences: set[PredicateOccurrence] = set()
         for element in self._elements:
             for target in element.targets:
-                signs.update((predicate, negated, False) for predicate, negated, _ in target.collect_predicate_signs())
+                occurrences.update(target.collect_predicate_occurrences(as_argument=True))
             for condition in element.conditions:
-                signs.update(condition.collect_predicate_signs())
-        return signs
+                occurrences.update(condition.collect_predicate_occurrences(as_argument=as_argument))
+        return occurrences
 
 
 class Count(Aggregate):

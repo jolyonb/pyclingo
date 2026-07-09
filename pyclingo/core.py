@@ -28,17 +28,10 @@ if TYPE_CHECKING:
 
 
 # One occurrence of a predicate class: (class, classically negated, is_atom).
-#
-# The same p(...) syntax plays two grammatical roles in ASP. As an ATOM it is
-# a statement with a truth value — a fact, a rule head, a body literal, or an
-# element/condition inside an aggregate, choice, or conditional literal. As a
-# TERM it is a piece of data sitting inside another predicate's argument, with
-# no truth value of its own. In region(cell(1, 2), a), region/2 occurs as an
-# atom; cell/2 occurs only as a term. is_atom records which role: #show
-# signatures exist only for atom occurrences (a directive for cell/2 here
-# would draw gringo's "no atoms over signature" info), while term occurrences
-# still matter for reconstructing solutions into typed instances.
-type AtomSign = tuple[PREDICATE_CLASS_TYPE, bool, bool]
+# is_atom marks whether it occurs as an atom (a statement, which can be true
+# or false) or as an argument (data nested inside another predicate);
+# Term.collect_predicate_occurrences decides that role.
+type PredicateOccurrence = tuple[PREDICATE_CLASS_TYPE, bool, bool]
 
 # Type aliases for the operator cluster
 type EXPRESSION_FIELD_TYPE = Value | Expression | int
@@ -87,17 +80,42 @@ class Term(ABC):
         """
         pass
 
-    def collect_predicate_signs(self) -> set[AtomSign]:
+    def collect_predicate_occurrences(self, *, as_argument: bool) -> set[PredicateOccurrence]:
         """
-        Collects (class, negated, is_atom) occurrences in this term; empty by
-        default, composites recurse, Predicate reports itself and demotes its
-        argument-position children.
+        Collect (class, negated, is_atom) occurrences of predicate classes in
+        this node. Every predicate occurrence is one of two things: an ATOM —
+        a statement that can be true or false (a fact, rule head, body literal,
+        or an aggregate/choice/conditional-literal condition), which gets a
+        #show signature — or an ARGUMENT: a predicate sitting in a data slot
+        inside another, just a value with no truth of its own. The same class
+        can be either, depending on where it sits: in region(cell(1, 2)),
+        region is an atom and cell is an argument.
+
+        A node cannot know its own role: whether cell(1, 2) is a statement or
+        an argument depends entirely on what encloses it. So the caller states
+        it, in as_argument — the slot the PARENT places this node in. It starts
+        False at a top-level statement and, once you descend into a data slot,
+        turns True and stays True (an argument's contents are arguments too);
+        it never turns back off. Three kinds of edge:
+
+        - The boundary starts it False (a segment's statements, a show_when
+          condition): those stand where statements stand, not in a data slot.
+        - An argument edge forces True — a predicate's own arguments, pool
+          elements, aggregate/weak/optimization tuple terms, a predicate
+          operand of a comparison. Everything nested below stays an argument.
+        - Every other edge passes as_argument through unchanged (a conditional
+          literal, a choice element, an aggregate's conditions, default
+          negation): these do not change whether their content is a statement.
+
+        Only Predicate reads as_argument, recording is_atom = not as_argument;
+        every other node is plumbing that routes the slot to its children.
+        Leaves (values, constants) contain no predicates and report nothing.
         """
         return set()
 
     def collect_predicates(self) -> set[PREDICATE_CLASS_TYPE]:
-        """All Predicate classes used in this term (both signs, any position)."""
-        return {predicate for predicate, _negated, _is_atom in self.collect_predicate_signs()}
+        """All Predicate classes used in this term."""
+        return {predicate for predicate, _negated, _is_atom in self.collect_predicate_occurrences(as_argument=False)}
 
     @abstractmethod
     def collect_defined_constants(self) -> set[str]:
@@ -764,13 +782,12 @@ class ExplicitPool(Pool):
 
         return variables
 
-    def collect_predicate_signs(self) -> set[AtomSign]:
-        # Pool elements sit in argument positions: demote to non-atoms
-        return {
-            (predicate, negated, False)
-            for element in self.elements
-            for predicate, negated, _is_atom in element.collect_predicate_signs()
-        }
+    def collect_predicate_occurrences(self, *, as_argument: bool) -> set[PredicateOccurrence]:
+        # Pool elements are always arguments (a pool is a predicate's data), never atoms
+        occurrences: set[PredicateOccurrence] = set()
+        for element in self.elements:
+            occurrences.update(element.collect_predicate_occurrences(as_argument=True))
+        return occurrences
 
 
 def pool(elements: range | Sequence[int | str | BasicTerm] | Pool) -> Pool:
@@ -1154,16 +1171,18 @@ class Comparison(Negatable):
         self.left_term.freeze()
         self.right_term.freeze()
 
-    def collect_predicate_signs(self) -> set[AtomSign]:
-        signs: set[AtomSign] = set()
+    def collect_predicate_occurrences(self, *, as_argument: bool) -> set[PredicateOccurrence]:
+        # A predicate operand is data (a compound value), so its edge forces
+        # as_argument True. An aggregate operand is different: it evaluates to
+        # a value, but its own conditions are atoms — so the edge passes
+        # as_argument through, letting the aggregate place its conditions as
+        # atoms and its tuple terms as arguments. See
+        # Term.collect_predicate_occurrences.
+        occurrences: set[PredicateOccurrence] = set()
         for side in (self.left_term, self.right_term):
-            side_signs = side.collect_predicate_signs()
-            if isinstance(side, PredicateBase):
-                # A predicate used as a comparison operand is a compound TERM
-                # (data), not an atom: no show signature of its own
-                side_signs = {(predicate, negated, False) for predicate, negated, _ in side_signs}
-            signs |= side_signs
-        return signs
+            child_as_argument = True if isinstance(side, PredicateBase) else as_argument
+            occurrences |= side.collect_predicate_occurrences(as_argument=child_as_argument)
+        return occurrences
 
     def __bool__(self) -> bool:
         """
@@ -1293,8 +1312,8 @@ class DefaultNegation(Negatable):
     def freeze(self) -> None:
         self._term.freeze()
 
-    def collect_predicate_signs(self) -> set[AtomSign]:
-        return self._term.collect_predicate_signs()
+    def collect_predicate_occurrences(self, *, as_argument: bool) -> set[PredicateOccurrence]:
+        return self._term.collect_predicate_occurrences(as_argument=as_argument)
 
     def render(self, context: RenderingContext = RenderingContext.DEFAULT) -> str:
         return f"not {self._term.render()}"

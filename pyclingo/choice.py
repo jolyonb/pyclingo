@@ -2,9 +2,9 @@ from typing import Self
 
 from pyclingo.conditioned_element import CONDITION_TYPE, ConditionedElement
 from pyclingo.core import (
-    AtomSign,
     Expression,
     Number,
+    PredicateOccurrence,
     RenderingContext,
     String,
     Term,
@@ -268,8 +268,8 @@ class Choice(Term):
 
         return variables
 
-    def collect_predicate_signs(self) -> set[AtomSign]:
-        signs: set[AtomSign] = set()
+    def collect_predicate_occurrences(self, *, as_argument: bool) -> set[PredicateOccurrence]:
+        occurrences: set[PredicateOccurrence] = set()
         for element in self._elements:
-            signs.update(element.collect_predicate_signs())
-        return signs
+            occurrences.update(element.collect_predicate_occurrences(as_argument=as_argument))
+        return occurrences

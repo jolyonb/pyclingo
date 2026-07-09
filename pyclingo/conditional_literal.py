@@ -1,5 +1,5 @@
 from pyclingo.conditioned_element import ConditionedElement
-from pyclingo.core import AtomSign, Comparison, DefaultNegation, RenderingContext, Term
+from pyclingo.core import Comparison, DefaultNegation, PredicateOccurrence, RenderingContext, Term
 from pyclingo.predicate import Predicate
 
 # Terms that can be used in a conditional literal
@@ -83,5 +83,5 @@ class ConditionalLiteral(Term):
     def collect_variables(self) -> set[str]:
         return self._element.collect_variables()
 
-    def collect_predicate_signs(self) -> set[AtomSign]:
-        return self._element.collect_predicate_signs()
+    def collect_predicate_occurrences(self, *, as_argument: bool) -> set[PredicateOccurrence]:
+        return self._element.collect_predicate_occurrences(as_argument=as_argument)

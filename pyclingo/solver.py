@@ -7,7 +7,7 @@ from pyclingo.choice import Choice
 from pyclingo.clingo_handler import ClingoMessageHandler, LogLevel
 from pyclingo.conditional_literal import ConditionalLiteral
 from pyclingo.conditioned_element import CONDITION_TYPE
-from pyclingo.core import AtomSign, DefaultNegation, DefinedConstant, Term
+from pyclingo.core import DefaultNegation, DefinedConstant, PredicateOccurrence, Term
 from pyclingo.optimization import OPTIMIZATION_TERM_TYPE, OptStrategy
 from pyclingo.predicate import Predicate
 from pyclingo.program_elements import RawASP
@@ -324,16 +324,16 @@ class ASPProgram:
         as fully as predicates= does, because the class object itself is
         what a declaration provides.
         """
-        return {cls for cls, _negated, _is_atom in self._collect_predicate_signs()} | set(self._show_overrides)
+        return {cls for cls, _negated, _is_atom in self._collect_predicate_occurrences()} | set(self._show_overrides)
 
-    def _collect_predicate_signs(self) -> set[AtomSign]:
+    def _collect_predicate_occurrences(self) -> set[PredicateOccurrence]:
         """(class, negated, is_atom) occurrences across the whole program."""
-        signs: set[AtomSign] = set()
+        occurrences: set[PredicateOccurrence] = set()
         for segment in self._segments.values():
-            signs.update(segment.collect_predicate_signs())
+            occurrences.update(segment.collect_predicate_occurrences())
         for condition in self._show_when_overrides.values():
-            signs.update(condition.collect_predicate_signs())
-        return signs
+            occurrences.update(condition.collect_predicate_occurrences(as_argument=False))
+        return occurrences
 
     def _has_raw_asp(self) -> bool:
         """Whether any segment contains a RawASP block (raw text is invisible to the tree walkers)."""
@@ -350,13 +350,13 @@ class ASPProgram:
             return
         # Derivation evidence comes from the program's own rules: a show_when
         # condition's atoms must not vouch for themselves
-        segment_signs = {
+        atom_occurrences = {
             (cls, negated)
             for segment in self._segments.values()
-            for cls, negated, is_atom in segment.collect_predicate_signs()
+            for cls, negated, is_atom in segment.collect_predicate_occurrences()
             if is_atom
         }
-        atom_classes = {cls for cls, _negated in segment_signs}
+        atom_classes = {cls for cls, _negated in atom_occurrences}
         for pred, visibility in self._show_overrides.items():
             if visibility is True and pred not in atom_classes:
                 raise ValueError(
@@ -365,7 +365,7 @@ class ASPProgram:
                     f"emitted, gringo would reject the dangling #show directive.)"
                 )
         for pred, negated in self._show_when_overrides:
-            if (pred, negated) not in segment_signs:
+            if (pred, negated) not in atom_occurrences:
                 sign = "-" if negated else ""
                 raise ValueError(
                     f"show_when was registered for {sign}{pred.get_name()}/{pred.get_arity()}, "
@@ -460,8 +460,8 @@ class ASPProgram:
         # Presence comes from the program's own segments (raw declarations
         # included) — the same evidence validation uses, so a show_when
         # condition can never vouch a dangling directive past the check
-        signs = {sign for segment in self._segments.values() for sign in segment.collect_predicate_signs()}
-        walked_positive = {cls for cls, negated, is_atom in signs if is_atom and not negated}
+        occurrences = {occ for segment in self._segments.values() for occ in segment.collect_predicate_occurrences()}
+        walked_positive = {cls for cls, negated, is_atom in occurrences if is_atom and not negated}
         has_raw = self._has_raw_asp()
         override_positive = {
             cls
@@ -469,7 +469,7 @@ class ASPProgram:
             if visibility is True and (cls in walked_positive or has_raw)
         }
         positive_classes = walked_positive | override_positive
-        negated_classes = {cls for cls, negated, is_atom in signs if is_atom and negated}
+        negated_classes = {cls for cls, negated, is_atom in occurrences if is_atom and negated}
         all_classes = (
             self._collect_predicates() | set(self._show_overrides) | {cls for cls, _ in self._show_when_overrides}
         )

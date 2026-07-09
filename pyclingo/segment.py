@@ -21,7 +21,7 @@ from collections.abc import Iterator, Sequence
 
 from pyclingo.choice import Choice
 from pyclingo.conditioned_element import CONDITION_TYPE
-from pyclingo.core import AtomSign, Comparison, Pool, Term
+from pyclingo.core import Comparison, Pool, PredicateOccurrence, Term
 from pyclingo.optimization import (
     OPTIMIZATION_TERM_TYPE,
     Optimization,
@@ -284,12 +284,12 @@ class Segment:
                 f"Complete each with .derive/.require/.forbid/.penalize."
             )
 
-    def collect_predicate_signs(self) -> set[AtomSign]:
-        """(class, negated, is_atom) occurrences across the segment's elements."""
-        signs: set[AtomSign] = set()
+    def collect_predicate_occurrences(self) -> set[PredicateOccurrence]:
+        """(class, negated, is_atom) across the segment's elements, which are top-level statements (atom position)."""
+        occurrences: set[PredicateOccurrence] = set()
         for element in self._elements:
-            signs.update(element.collect_predicate_signs())
-        return signs
+            occurrences.update(element.collect_predicate_occurrences(as_argument=False))
+        return occurrences
 
     def collect_defined_constants(self) -> set[str]:
         """All defined constant names used in the segment's elements."""

@@ -7,13 +7,13 @@ from dataclasses import dataclass, fields
 from typing import Any, ClassVar, Self, cast, dataclass_transform, get_args, get_origin, overload
 
 from pyclingo.core import (
-    AtomSign,
     DefinedConstant,
     Expression,
     Negatable,
     Number,
     Pool,
     PredicateBase,
+    PredicateOccurrence,
     RenderingContext,
     String,
     Value,
@@ -519,14 +519,16 @@ class Predicate(PredicateBase, Negatable):
         object.__setattr__(negation, "_negated", not self.negated)
         return negation
 
-    def collect_predicate_signs(self) -> set[AtomSign]:
-        # This predicate is an atom occurrence; anything nested in its
-        # arguments is a term, not an atom — demoted, but still collected
-        # (the converter needs nested classes registered)
-        signs: set[AtomSign] = {(type(self), self.negated, True)}
+    def collect_predicate_occurrences(self, *, as_argument: bool) -> set[PredicateOccurrence]:
+        # The one node that reads as_argument: this occurrence is an atom
+        # unless it was placed as an argument (is_atom = not as_argument). A
+        # predicate's own arguments are always arguments, so they recurse with
+        # as_argument True — still collected, since the converter needs nested
+        # classes registered. See Term.collect_predicate_occurrences.
+        occurrences: set[PredicateOccurrence] = {(type(self), self.negated, not as_argument)}
         for arg in self.arguments:
-            signs.update((predicate, negated, False) for predicate, negated, _ in arg.collect_predicate_signs())
-        return signs
+            occurrences.update(arg.collect_predicate_occurrences(as_argument=True))
+        return occurrences
 
     def canonical_str(self) -> str:
         """

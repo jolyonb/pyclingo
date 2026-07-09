@@ -9,7 +9,7 @@ ConditionedElement owns those mechanics once; each construct validates its
 own targets and renders its own wrapper around the elements it holds.
 """
 
-from pyclingo.core import AggregateBase, AtomSign, Comparison, DefaultNegation, Term
+from pyclingo.core import AggregateBase, Comparison, DefaultNegation, PredicateOccurrence, Term
 from pyclingo.predicate import Predicate
 
 # The condition union every conditional construct shares
@@ -101,10 +101,12 @@ class ConditionedElement:
             constants.update(cond.collect_defined_constants())
         return constants
 
-    def collect_predicate_signs(self) -> set[AtomSign]:
-        signs: set[AtomSign] = set()
+    def collect_predicate_occurrences(self, *, as_argument: bool) -> set[PredicateOccurrence]:
+        # Targets (a choice element, a conditional-literal head) and
+        # conditions are all in the element's own position: forward as_argument
+        occurrences: set[PredicateOccurrence] = set()
         for target in self._targets:
-            signs.update(target.collect_predicate_signs())
+            occurrences.update(target.collect_predicate_occurrences(as_argument=as_argument))
         for cond in self._conditions:
-            signs.update(cond.collect_predicate_signs())
-        return signs
+            occurrences.update(cond.collect_predicate_occurrences(as_argument=as_argument))
+        return occurrences

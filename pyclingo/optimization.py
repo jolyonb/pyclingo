@@ -19,7 +19,7 @@ so accumulating elements into one statement would be cosmetic only.
 from enum import StrEnum
 
 from pyclingo.conditioned_element import CONDITION_TYPE, ConditionedElement
-from pyclingo.core import AtomSign, Expression, Number, String, Term, Value, Variable
+from pyclingo.core import Expression, Number, PredicateOccurrence, String, Term, Value, Variable
 from pyclingo.predicate import Predicate
 from pyclingo.program_elements import ProgramElement, render_body_terms
 from pyclingo.scoping import body_global_variables
@@ -114,15 +114,15 @@ class WeakConstraint(ProgramElement):
             constants.update(term.collect_defined_constants())
         return constants
 
-    def collect_predicate_signs(self) -> set[AtomSign]:
-        # The body holds atoms; weight and tuple terms sit in argument
-        # positions — demote their predicate occurrences to non-atoms
-        signs: set[AtomSign] = set()
+    def collect_predicate_occurrences(self, *, as_argument: bool) -> set[PredicateOccurrence]:
+        # The body holds atoms in this element's position; weight and tuple
+        # terms sit in argument positions (data)
+        occurrences: set[PredicateOccurrence] = set()
         for target in self._targets:
-            signs.update((predicate, negated, False) for predicate, negated, _ in target.collect_predicate_signs())
+            occurrences.update(target.collect_predicate_occurrences(as_argument=True))
         for cond in self._conditions:
-            signs.update(cond.collect_predicate_signs())
-        return signs
+            occurrences.update(cond.collect_predicate_occurrences(as_argument=as_argument))
+        return occurrences
 
 
 class OptStrategy(StrEnum):
@@ -212,12 +212,12 @@ class OptimizationDirective(ProgramElement):
     def collect_defined_constants(self) -> set[str]:
         return self._element.collect_defined_constants()
 
-    def collect_predicate_signs(self) -> set[AtomSign]:
-        # Conditions hold atoms; the weight and tuple terms sit in argument
-        # positions — demote their predicate occurrences to non-atoms
-        signs: set[AtomSign] = set()
+    def collect_predicate_occurrences(self, *, as_argument: bool) -> set[PredicateOccurrence]:
+        # Conditions hold atoms in this directive's position; the weight and
+        # tuple terms sit in argument positions (data)
+        occurrences: set[PredicateOccurrence] = set()
         for target in self._element.targets:
-            signs.update((predicate, negated, False) for predicate, negated, _ in target.collect_predicate_signs())
+            occurrences.update(target.collect_predicate_occurrences(as_argument=True))
         for cond in self._element.conditions:
-            signs.update(cond.collect_predicate_signs())
-        return signs
+            occurrences.update(cond.collect_predicate_occurrences(as_argument=as_argument))
+        return occurrences
