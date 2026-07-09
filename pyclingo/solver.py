@@ -51,6 +51,12 @@ class _MinimizeLevelObserver(clingo.Observer):
         self.priorities.add(priority)
 
 
+def _describe_class(pred: type[Predicate]) -> str:
+    """The class name plus its definition site — colliding classes' names match by definition."""
+    defined_at = pred._defined_at
+    return f"{pred.__name__} defined at {defined_at.display()}" if defined_at is not None else pred.__name__
+
+
 def _annotate_lines(lines: list[RenderedLine]) -> list[RenderedLine]:
     """
     Append a "  % file:line" comment to each statement line, naming the
@@ -448,8 +454,8 @@ class ASPProgram:
             if other is not None and other is not pred:
                 raise ValueError(
                     f"Predicate name collision: '{key[0]}/{key[1]}' is produced by two distinct "
-                    f"classes ({other.__name__} and {pred.__name__}); solutions cannot be "
-                    f"reconstructed unambiguously. Give one a namespace in Predicate.define()."
+                    f"classes ({_describe_class(other)} and {_describe_class(pred)}); solutions "
+                    f"cannot be reconstructed unambiguously. Give one a namespace in Predicate.define()."
                 )
             by_signature[key] = pred
 

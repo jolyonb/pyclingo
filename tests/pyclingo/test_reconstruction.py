@@ -2,9 +2,12 @@
 Tests for solution reconstruction: model symbols back into typed Predicates.
 """
 
+import inspect
+import re
+
 import pytest
 
-from pyclingo import ASPProgram, Predicate
+from pyclingo import ASPProgram, Predicate, SourceLocation
 
 
 def test_arity_overloads_reconstruct_as_their_own_classes() -> None:
@@ -26,6 +29,23 @@ def test_same_signature_collision_raises_at_render() -> None:
     program.fact(A(x=1), B(y=2))
     with pytest.raises(ValueError, match="Predicate name collision: 'cell/1'"):
         program.render()
+
+
+def test_collision_error_names_both_definition_sites() -> None:
+    # The colliding classes' names match by definition, so the error
+    # disambiguates by where each was defined
+    program = ASPProgram()
+    frame = inspect.currentframe()
+    assert frame is not None
+    lineno = frame.f_lineno
+    A = Predicate.define("clash", ["x"])  # lineno + 1
+    B = Predicate.define("clash", ["y"])  # lineno + 2
+    program.fact(A(x=1), B(y=2))
+    first = SourceLocation(frame.f_code.co_filename, lineno + 1).display()
+    second = SourceLocation(frame.f_code.co_filename, lineno + 2).display()
+    with pytest.raises(ValueError, match=re.escape(f"defined at {first}")) as excinfo:
+        program.render()
+    assert f"defined at {second}" in str(excinfo.value)
 
 
 def test_bare_atoms_reconstruct_as_nullary_predicates() -> None:

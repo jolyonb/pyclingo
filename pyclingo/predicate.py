@@ -20,6 +20,7 @@ from pyclingo.core import (
     Value,
     Variable,
 )
+from pyclingo.source_location import SourceLocation, capture_location
 
 # Type aliases. PredicateField is any argument a predicate accepts, and doubles
 # as the field annotation for class-syntax predicates
@@ -239,6 +240,10 @@ class Predicate(PredicateBase, Negatable, metaclass=_PredicateMeta):
     # in_namespace() clones, cached so repeated calls return the same class —
     # two distinct classes sharing a (name, arity) would be a collision
     _namespace_clones: ClassVar[dict[tuple[type, str], type[Predicate]]] = {}
+    # Where user code defined this class (its class statement, define() call,
+    # or in_namespace() call); a name-collision error needs it — the colliding
+    # classes' names match by definition, so names alone cannot disambiguate
+    _defined_at: ClassVar[SourceLocation | None] = None
 
     def __init__(self, *args: PredicateField, **kwargs: PredicateField) -> None:
         # Satisfies the type checker for dynamically defined classes (type[Predicate]),
@@ -260,6 +265,11 @@ class Predicate(PredicateBase, Negatable, metaclass=_PredicateMeta):
         inherit their own __eq__/__hash__ instead.
         """
         super().__init_subclass__(**kwargs)
+        # Right for class-syntax subclasses (the class statement's frame is
+        # the first user frame); define() and in_namespace() go through
+        # stdlib types.new_class, whose frame would be blamed instead, so
+        # they re-stamp with their own caller after creation
+        cls._defined_at = capture_location()
         # The default ASP name snake-cases the class name: HasSymbol -> has_symbol
         cls._predicate_name = name if name is not None else re.sub(r"(?<!^)(?=[A-Z])", "_", cls.__name__).lower()
         cls._namespace = namespace
@@ -315,6 +325,7 @@ class Predicate(PredicateBase, Negatable, metaclass=_PredicateMeta):
                 kwds={"name": cls._predicate_name, "namespace": namespace, "show": cls._show},
             )
             assert issubclass(clone, Predicate)
+            clone._defined_at = capture_location()  # the in_namespace() call, not types.new_class
             Predicate._namespace_clones[key] = clone
         return cast(type[Self], clone)
 
@@ -387,6 +398,7 @@ class Predicate(PredicateBase, Negatable, metaclass=_PredicateMeta):
             exec_body=set_annotations,
         )
         assert issubclass(new_class, cls)
+        new_class._defined_at = capture_location()  # the define() call, not types.new_class
         return cast(type[Self], new_class)
 
     def __post_init__(self) -> None:

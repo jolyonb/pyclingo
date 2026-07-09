@@ -8,6 +8,17 @@ class CluePred(Predicate):
     value: Field[int]
 
 
+def test_definition_sites_are_recorded_for_both_syntaxes() -> None:
+    # Collision errors disambiguate same-named classes by definition site,
+    # so both creation paths must record one pointing into user code
+    class_syntax_at = CluePred._defined_at  # the module-level class statement above
+    assert class_syntax_at is not None and class_syntax_at.filename == __file__
+    defined = Predicate.define("p_site", ["x"])
+    assert defined._defined_at is not None and defined._defined_at.filename == __file__
+    cloned = defined.in_namespace("ns_site")
+    assert cloned._defined_at is not None and cloned._defined_at.filename == __file__
+
+
 def test_predicate_default_negation_operator() -> None:
     """Test the ~ operator creates DefaultNegation."""
     Person = Predicate.define("person", ["name"])
