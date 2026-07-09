@@ -2,20 +2,14 @@
 *.DS_Store
 *__pycache__/
 .claude/
-TODO.md
-AUDIT.md
-VALIDATION.md
-DESIGN_REVIEW.md
-DESIGN_REVIEW_v2.md
-AUDIT_v2.md
-DESIGN_REVIEW_v3.md
-AUDIT_v3.md
-DEAD_CODE.md
-AUDIT_v4.md
-DESIGN_REVIEW_v4.md
-AUDIT_v5.md
-DESIGN_REVIEW_v5.md
 .venv/
+
+# Working notes and audit/review outputs (never committed)
+TODO.md
+AUDIT*.md
+DESIGN_REVIEW*.md
+DEAD_CODE.md
+VALIDATION.md
 
 # Coverage
 .coverage
