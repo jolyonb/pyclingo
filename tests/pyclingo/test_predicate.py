@@ -140,3 +140,27 @@ def test_ne_non_predicate_returns_not_implemented() -> None:
     comparison = P(x=1) != Variable("X")
     assert isinstance(comparison, Comparison)
     assert "!=" in comparison.render()
+
+
+def test_define_rejects_a_bare_string_of_field_names() -> None:
+    # list("loc") is ['l', 'o', 'c']: a silently wrong arity-3 predicate
+    with pytest.raises(TypeError, match="one field per character"):
+        Predicate.define("r_bare", "loc")  # type: ignore[arg-type]
+
+
+def test_define_show_must_be_a_bool() -> None:
+    # show=None silently meant hidden
+    with pytest.raises(TypeError, match="show must be a bool"):
+        Predicate.define("p_shownone", ["x"], show=None)  # type: ignore[arg-type]
+
+
+def test_deep_predicate_nesting_rejected_at_construction() -> None:
+    # Mirrors Expression.MAX_DEPTH: a linked-list encoding built in a loop
+    # would die mid-walk with a raw RecursionError
+    Wrap = Predicate.define("wrap_deep", ["inner"])
+    chain: Predicate = Predicate.define("nil_deep", [], show=False)()
+    for _ in range(Predicate.MAX_DEPTH - 1):
+        chain = Wrap(inner=chain)
+    chain.render()  # at the cap: walkers still fine
+    with pytest.raises(ValueError, match="indexed facts"):
+        Wrap(inner=chain)

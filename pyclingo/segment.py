@@ -86,6 +86,10 @@ class Segment:
         line that authored it (unless the When machinery already did).
         Formatting elements (locatable=False) are never stamped.
         """
+        if not isinstance(element, ProgramElement):
+            raise TypeError(
+                f"append() takes a ProgramElement, got {type(element).__name__}; for verbatim ASP text use raw_asp()"
+            )
         if self._capture_locations and element.locatable and element.source_location is None:
             element.source_location = capture_location()
         self._elements.append(element)

@@ -7,7 +7,7 @@ import re
 
 import pytest
 
-from pyclingo import ASPProgram, Count, Number, Predicate, SourceLocation, Sum, Variable
+from pyclingo import ANY, ASPProgram, Count, Max, Number, Predicate, SourceLocation, String, Sum, Variable
 
 
 def test_aggregates_rejected_in_aggregate_conditions() -> None:
@@ -124,3 +124,26 @@ def test_aggregate_collect_variables_spans_elements_and_conditions() -> None:
     P = Predicate.define("p", ["x"])
     X, Y = Variable("X"), Variable("Y")
     assert Count(X, condition=P(x=Y)).collect_variables() == {"X", "Y"}
+
+
+def test_anonymous_variable_rejected_in_aggregate_tuples() -> None:
+    # gringo makes _ in an aggregate tuple unsafe — and the tuple defines
+    # distinctness, so a don't-care there is meaningless anyway. The check
+    # matches the weak-constraint sibling.
+    program = ASPProgram()
+    P = Predicate.define("p_anon", ["x"])
+    Q = Predicate.define("q_anon", ["n"])
+    N = Variable("N")
+    with pytest.raises(ValueError, match="cannot appear in an aggregate tuple"):
+        program.when(N == Count(ANY, condition=P(x=ANY))).derive(Q(n=N))
+
+
+def test_sum_rejects_literal_string_weights() -> None:
+    # #sum sums the first tuple term; a literal String there draws gringo's
+    # "tuple ignored" info at ground — rejected at add() instead
+    X = Variable("X")
+    P = Predicate.define("p_sw", ["x"])
+    with pytest.raises(TypeError, match="weights are integer-valued"):
+        Sum((String("a"), X), condition=P(x=X))
+    # Min/Max order terms: strings are legal there
+    Max((String("a"), X), condition=P(x=X))

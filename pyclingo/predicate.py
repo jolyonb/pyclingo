@@ -252,6 +252,10 @@ class Predicate(PredicateBase, Negatable, metaclass=_PredicateMeta):
     # or in_namespace() call); a name-collision error needs it — the colliding
     # classes' names match by definition, so names alone cannot disambiguate
     _defined_at: ClassVar[SourceLocation | None] = None
+    # Nesting cap and per-instance depth (1 + deepest Predicate argument);
+    # see __post_init__
+    MAX_DEPTH: ClassVar[int] = 250
+    _depth: ClassVar[int] = 0
 
     def __init__(self, *args: PredicateField, **kwargs: PredicateField) -> None:
         # Satisfies the type checker for dynamically defined classes (type[Predicate]),
@@ -273,6 +277,8 @@ class Predicate(PredicateBase, Negatable, metaclass=_PredicateMeta):
         inherit their own __eq__/__hash__ instead.
         """
         super().__init_subclass__(**kwargs)
+        if not isinstance(show, bool):
+            raise TypeError(f"show must be a bool, got {type(show).__name__}")
         # Right for class-syntax subclasses (the class statement's frame is
         # the first user frame); define() and in_namespace() go through
         # stdlib types.new_class, whose frame would be blamed instead, so
@@ -385,6 +391,12 @@ class Predicate(PredicateBase, Negatable, metaclass=_PredicateMeta):
         Predicate.define("john", [], show=False)().
         """
 
+        if isinstance(field_names, str):
+            raise TypeError(
+                f"field_names takes a list or dict, not a bare string: "
+                f"list({field_names!r}) would make one field per character "
+                f"({list(field_names)!r}). Wrap it: [{field_names!r}]."
+            )
         # Validate the raw list here: the annotations dict would silently
         # collapse duplicates before __init_subclass__ could see them
         _validate_schema(name, namespace, list(field_names))
@@ -435,6 +447,26 @@ class Predicate(PredicateBase, Negatable, metaclass=_PredicateMeta):
                     f"Predicate argument {field_info.name} must be a Value, Predicate, Expression, Pool, int or str, "
                     f"got {type(value).__name__}"
                 )
+
+        # Nesting cap, mirroring Expression.MAX_DEPTH: the tree walkers
+        # recurse per level, and a linked-list encoding accumulated in a loop
+        # (chain = wrap(chain)) would die mid-walk with a raw RecursionError
+        depth = 1 + max(
+            (
+                argument._depth
+                for field_info in self.argument_fields()
+                if isinstance(argument := getattr(self, field_info.name), Predicate)
+            ),
+            default=0,
+        )
+        if depth > self.MAX_DEPTH:
+            raise ValueError(
+                f"This predicate nests more than {self.MAX_DEPTH} levels deep — almost "
+                f"certainly accumulated in a loop (chain = wrap(chain)). Deeper nesting "
+                f"overflows Python's recursion inside the tree walkers; encode the chain "
+                f"as indexed facts instead (e.g. link(I, I + 1))."
+            )
+        object.__setattr__(self, "_depth", depth)
 
     @classmethod
     def argument_fields(cls) -> list[DataclassField]:

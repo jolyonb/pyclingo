@@ -193,6 +193,13 @@ def _analyze_aggregate(aggregate: Aggregate, scopes: RuleScopes) -> set[str]:
     for element in aggregate.elements:
         scope = LocalScope(description=f"{aggregate.AGGREGATE_TYPE.value} element", is_aggregate_element=True)
         for target in element.targets:
+            if "_" in target.collect_variables():
+                raise ValueError(
+                    f"The anonymous variable '_' cannot appear in an aggregate tuple "
+                    f"(gringo makes it unsafe) — and the tuple defines distinctness, "
+                    f"so a don't-care there is meaningless. Name a condition variable "
+                    f"instead: {aggregate.render()}"
+                )
             _count_variables(target, scope.target_counts)
         for condition in element.conditions:
             _analyze_local_condition(condition, scope)
@@ -333,6 +340,12 @@ def validate_optimization_element(element: ConditionedElement, rule_text: str, c
     """
     scope = LocalScope(description="optimization element")
     for target in element.targets:
+        if "_" in target.collect_variables():
+            raise ValueError(
+                f"The anonymous variable '_' cannot appear in an optimization tuple "
+                f"(gringo makes it unsafe) — and the tuple defines distinctness, so a "
+                f"don't-care there is meaningless. Name a condition variable instead: {rule_text}"
+            )
         _count_variables(target, scope.target_counts)
     for condition in element.conditions:
         _analyze_local_condition(condition, scope)

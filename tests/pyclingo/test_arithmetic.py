@@ -326,3 +326,29 @@ def test_deep_expression_chain_rejected_at_construction() -> None:
     assert expr.render().count("+") == Expression.MAX_DEPTH  # at the cap: walkers still fine
     with pytest.raises(ValueError, match="aggregate instead"):
         expr + 1
+
+
+def test_true_division_teaches_floordiv() -> None:
+    # / is the first division a Python user tries; the wall points at //
+    X = Variable("X")
+    with pytest.raises(TypeError, match="clingo has no true division"):
+        X / 2  # type: ignore[operator]
+    with pytest.raises(TypeError, match="clingo has no true division"):
+        2 / X  # type: ignore[operator]
+    with pytest.raises(TypeError, match="clingo has no true division"):
+        (X + 1) / 2  # type: ignore[operator]
+    with pytest.raises(TypeError, match="clingo has no true division"):
+        2 / (X + 1)  # type: ignore[operator]
+
+
+def test_string_operands_rejected_at_construction() -> None:
+    # clingo arithmetic over strings is undefined for EVERY program — and an
+    # Expression used to smuggle a String past the cardinality, weight, and
+    # range checks that each reject bare Strings
+    X = Variable("X")
+    with pytest.raises(TypeError, match="no arithmetic in clingo"):
+        String("a") + 1
+    with pytest.raises(TypeError, match="no arithmetic in clingo"):
+        X + String("a")
+    with pytest.raises(TypeError, match="no arithmetic in clingo"):
+        Abs(String("a"))

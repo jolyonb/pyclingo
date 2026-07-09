@@ -350,6 +350,16 @@ class Value(BasicTerm, ComparableTerm, ABC, metaclass=_ValueMeta):
     def __rfloordiv__(self, other: int | ValueExpressionType) -> Expression:
         return Expression(other, Operation.INTEGER_DIVIDE, self)
 
+    def __truediv__(self, other: object) -> Never:
+        raise TypeError(
+            "clingo has no true division; use // (renders as ASP '/', integer division truncating toward zero)"
+        )
+
+    def __rtruediv__(self, other: object) -> Never:
+        raise TypeError(
+            "clingo has no true division; use // (renders as ASP '/', integer division truncating toward zero)"
+        )
+
     def __mod__(self, other: int | ValueExpressionType) -> Expression:
         return Expression(self, Operation.MODULO, other)
 
@@ -583,9 +593,9 @@ class String(ConstantBase):
 
         if '"' in value:
             raise ValueError(f"String constant cannot contain double quotes (no escaping support): {value}")
-        if "\\" in value or "\n" in value or "\r" in value:
+        if "\\" in value or "\n" in value or "\r" in value or "\x00" in value:
             raise ValueError(
-                f"String constant cannot contain backslashes or newlines "
+                f"String constant cannot contain backslashes, newlines, or NUL "
                 f"(they break clingo's lexer; there is no escaping support): {value!r}"
             )
 
@@ -762,6 +772,12 @@ class ExplicitPool(Pool):
 
         Raises if any element is of an unsupported type or an ungrounded basic term.
         """
+        if isinstance(elements, str):
+            raise TypeError(
+                'A bare string is a sequence of characters: ExplicitPool("abc") would '
+                'become ("a"; "b"; "c"). Pass a list — ExplicitPool(["abc"]) — for a '
+                "one-string pool."
+            )
         if not elements:
             raise ValueError("ExplicitPool cannot be empty")
 
@@ -919,6 +935,18 @@ class Expression(ComparableTerm):
             raise ValueError(f"Unsupported unary operator: {operator}")
         if first_term is not None and operator not in BINARY_OPERATIONS:
             raise ValueError(f"Unsupported binary operator: {operator}")
+        # clingo arithmetic over strings is undefined for EVERY program, so
+        # this is rejectable with certainty here — which also closes the
+        # String-inside-an-Expression bypass of the cardinality, weight, and
+        # range checks. DefinedConstant stays accepted: its value is
+        # unknowable at construction.
+        for operand in (first_term, second_term):
+            if isinstance(operand, String):
+                raise TypeError(
+                    f"Strings have no arithmetic in clingo ({operand.render()} in an "
+                    f"expression is undefined for every program). Compute with integers, "
+                    f"or use a #const via define_constant() for a named value."
+                )
 
         # Convert Python literals to ASP values
         self._first_term = None if first_term is None else self._convert_if_needed(first_term)
@@ -1073,6 +1101,16 @@ class Expression(ComparableTerm):
 
     def __rfloordiv__(self, other: ExpressionFieldType) -> Expression:
         return Expression(other, Operation.INTEGER_DIVIDE, self)
+
+    def __truediv__(self, other: object) -> Never:
+        raise TypeError(
+            "clingo has no true division; use // (renders as ASP '/', integer division truncating toward zero)"
+        )
+
+    def __rtruediv__(self, other: object) -> Never:
+        raise TypeError(
+            "clingo has no true division; use // (renders as ASP '/', integer division truncating toward zero)"
+        )
 
     def __mod__(self, other: ExpressionFieldType) -> Expression:
         return Expression(self, Operation.MODULO, other)

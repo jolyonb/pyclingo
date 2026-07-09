@@ -448,3 +448,10 @@ def test_append_keeps_an_already_set_source_location() -> None:
     rule.source_location = preset
     segment.append(rule)
     assert rule.source_location is preset
+
+
+def test_append_rejects_non_elements_with_teaching() -> None:
+    # A bare string died three stages later with a raw AttributeError
+    segment = Segment("Guard")
+    with pytest.raises(TypeError, match=r"for verbatim ASP text use raw_asp\(\)"):
+        segment.append("q(2).")  # type: ignore[arg-type]

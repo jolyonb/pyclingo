@@ -354,8 +354,8 @@ class ASPProgram:
         # A subclass converts to its natural plain form first, so the check
         # below sees exactly the value that will render
         value = int(value) if isinstance(value, int) else str(value)
-        if isinstance(value, str) and any(c in value for c in ('"', "\\", "\n", "\r")):
-            raise ValueError(f"Constant string value cannot contain quotes, backslashes, or newlines: {value!r}")
+        if isinstance(value, str) and any(c in value for c in ('"', "\\", "\n", "\r", "\x00")):
+            raise ValueError(f"Constant string value cannot contain quotes, backslashes, newlines, or NUL: {value!r}")
 
         self._defined_constants[name] = value
 
@@ -933,6 +933,8 @@ class GroundedProgram:
         cap would silently truncate refinements. Returns the converted
         assumptions.
         """
+        if isinstance(timeout, bool) or not isinstance(timeout, (int, float)):
+            raise TypeError(f"timeout is seconds (a number), got {type(timeout).__name__}")
         if timeout < 0 or math.isnan(timeout):
             raise ValueError(f"timeout must be non-negative, got {timeout}")
         if self._ground_levels and mode is None:
@@ -1234,6 +1236,8 @@ class GroundedProgram:
         before any model at all (no best-so-far exists to return), and
         ValueError if the program has no objective.
         """
+        if isinstance(max_iterations, bool) or not isinstance(max_iterations, int):
+            raise TypeError(f"max_iterations is a count, got {type(max_iterations).__name__}")
         if max_iterations < 0:
             raise ValueError(f"max_iterations must be non-negative (0 means unbounded), got {max_iterations}")
         steps = self.optimize_iter(timeout, assumptions, strategy, all_optima=all_optima, bound=bound)
@@ -1285,6 +1289,8 @@ class GroundedProgram:
         it short, including a cap landing exactly on the final step).
         Returns None for proven unsatisfiability.
         """
+        if isinstance(max_iterations, bool) or not isinstance(max_iterations, int):
+            raise TypeError(f"max_iterations is a count, got {type(max_iterations).__name__}")
         if max_iterations < 0:
             raise ValueError(f"max_iterations must be non-negative (0 means unbounded), got {max_iterations}")
         steps = self._refine_iter(mode, timeout, assumptions)

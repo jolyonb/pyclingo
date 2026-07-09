@@ -8,6 +8,7 @@ from pyclingo.core import (
     Expression,
     PredicateOccurrence,
     RenderingContext,
+    String,
     Value,
 )
 from pyclingo.predicate import Predicate
@@ -88,6 +89,15 @@ class Aggregate(FreezableBuilder, AggregateBase, ABC):
                     f"Aggregate element items must be Values, Expressions, or Predicates, got {type(item).__name__}"
                 )
 
+        # Per-class: #sum/#sum+ SUM the first tuple term, so a literal String
+        # there draws gringo's "tuple ignored" info at ground — weights are
+        # integer-valued. Min/Max/Count order terms and take strings legally.
+        if self.AGGREGATE_TYPE in (AggregateType.SUM, AggregateType.SUM_PLUS) and isinstance(element_tuple[0], String):
+            raise TypeError(
+                f"{self.AGGREGATE_TYPE.value} weights are integer-valued; the first tuple term "
+                f"{element_tuple[0].render()} is a String, which gringo silently ignores. For "
+                f"term-ordered aggregation over strings use Min/Max, or Count for cardinality."
+            )
         self._elements.append(ConditionedElement(element_tuple, condition, "aggregate"))
 
         return self

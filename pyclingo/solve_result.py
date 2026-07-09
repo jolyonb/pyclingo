@@ -749,7 +749,7 @@ def convert_predicate_to_symbol(
             raise ValueError(
                 f"Cannot convert {predicate.render()} to a symbol: field '{field_name}' holds "
                 f"{type(value).__name__}. clingo evaluates arithmetic at grounding (with its own "
-                f"semantics — see MATH.md), so pass the computed value instead."
+                f"semantics), so pass the computed value instead."
             )
     return clingo.Function(predicate.get_name(), arguments, positive=not predicate.negated)
 

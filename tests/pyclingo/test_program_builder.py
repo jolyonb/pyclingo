@@ -187,7 +187,7 @@ def test_define_constant_rejects_duplicate_registration() -> None:
 
 def test_define_constant_rejects_unsafe_string_value() -> None:
     program = ASPProgram()
-    with pytest.raises(ValueError, match="quotes, backslashes, or newlines"):
+    with pytest.raises(ValueError, match="quotes, backslashes, newlines, or NUL"):
         program.define_constant("greet", 'he"llo')
 
 

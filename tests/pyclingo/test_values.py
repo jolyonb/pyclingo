@@ -317,3 +317,15 @@ def test_subclass_inputs_take_their_natural_form_then_validate() -> None:
     rendered = program.render()
     assert "evil" not in rendered
     assert '#const c_loud = "loud-quiet".' in rendered
+
+
+def test_explicit_pool_rejects_a_bare_string() -> None:
+    # A str is a Sequence: ExplicitPool("abc") silently became ("a"; "b"; "c")
+    with pytest.raises(TypeError, match="one-string pool"):
+        ExplicitPool("abc")
+
+
+def test_string_rejects_nul() -> None:
+    # NUL breaks clingo's lexer exactly like the newline family
+    with pytest.raises(ValueError, match="NUL"):
+        String("a\x00b")

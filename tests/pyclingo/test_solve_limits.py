@@ -286,3 +286,19 @@ def test_held_iterator_is_loud_after_timeout() -> None:
         next(iterator)
     with pytest.raises(RuntimeError, match="was closed"):
         next(iterator)
+
+
+def test_scalar_knobs_reject_lookalike_types() -> None:
+    # timeout=True silently meant one second; max_iterations=True meant 1
+    program = make_choice_program(1)
+    with pytest.raises(TypeError, match="timeout is seconds"):
+        program.solve(timeout=True)
+    grounded = make_choice_program(1).ground()
+    with pytest.raises(TypeError, match="max_iterations is a count"):
+        grounded.cautious(max_iterations=True)
+    optimizing = ASPProgram()
+    B = Predicate.define("b_knob", ["x"])
+    optimizing.fact(Choice(B(x=RangePool(1, 2))).at_least(1))
+    optimizing.minimize(1, Variable("X"), condition=B(x=Variable("X")))
+    with pytest.raises(TypeError, match="max_iterations is a count"):
+        optimizing.ground().optimize(max_iterations=True)

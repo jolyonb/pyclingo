@@ -653,3 +653,13 @@ def test_optimization_directive_getters() -> None:
     d = OptimizationDirective(Optimization.MINIMIZE, 1, (Variable("X"),), Pick(x=Variable("X")), 2)
     assert d.optimization == Optimization.MINIMIZE
     assert d.priority == 2
+
+
+def test_anonymous_variable_rejected_in_optimization_tuples() -> None:
+    # Same rule as aggregate and weak-constraint tuples: gringo makes _
+    # unsafe there, and the tuple defines distinctness
+    program = ASPProgram()
+    W = Variable("W")
+    Weighted = Predicate.define("wtd_anon", ["x", "w"])
+    with pytest.raises(ValueError, match="cannot appear in an optimization tuple"):
+        program.minimize(W, ANY, condition=Weighted(x=ANY, w=W))
