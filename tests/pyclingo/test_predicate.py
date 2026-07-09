@@ -1,6 +1,11 @@
 import pytest
 
-from pyclingo import ASPProgram, DefaultNegation, Predicate
+from pyclingo import ASPProgram, Comparison, DefaultNegation, Field, Number, Predicate, Variable
+
+
+class CluePred(Predicate):
+    loc: Field[str]
+    value: Field[int]
 
 
 def test_predicate_default_negation_operator() -> None:
@@ -77,3 +82,50 @@ def test_non_ascii_names_rejected() -> None:
         Predicate.define("p", ["fëld"])
     with pytest.raises(ValueError, match="ASCII"):
         Predicate.define("p", ["x"], namespace="ünter")
+
+
+def test_field_class_access_returns_descriptor() -> None:
+    """Reading a Field off the class (not an instance) yields the descriptor itself."""
+    assert isinstance(CluePred.loc, Field)
+
+
+def test_field_missing_value_raises_attribute_error() -> None:
+    """A field never stored (instance built without __init__) reads as a missing attribute."""
+    c = object.__new__(CluePred)
+    assert getattr(c, "loc", "sentinel") == "sentinel"
+    with pytest.raises(AttributeError):
+        c.loc  # noqa: B018 (the attribute access is the act under test)
+
+
+def test_predicate_name_rejects_invalid_characters() -> None:
+    with pytest.raises(ValueError, match="letters, digits, and underscores"):
+        Predicate.define("p-bad", ["x"])
+
+
+def test_predicate_argument_rejects_unsupported_type() -> None:
+    P = Predicate.define("p", ["x"])
+    with pytest.raises(TypeError, match="must be a Value"):
+        P(x=1.5)  # type: ignore[arg-type]
+
+
+def test_getitem_unknown_field_raises_key_error() -> None:
+    P = Predicate.define("p", ["x"])
+    with pytest.raises(KeyError, match="no field named 'nope'"):
+        P(x=1)["nope"]
+
+
+def test_items_returns_field_name_term_pairs() -> None:
+    P = Predicate.define("p", ["x", "y"])
+    d = dict(P(x=1, y=2).items())
+    assert set(d) == {"x", "y"}
+    assert isinstance(d["x"], Number) and d["x"].value == 1
+    assert isinstance(d["y"], Number) and d["y"].value == 2
+
+
+def test_ne_non_predicate_returns_not_implemented() -> None:
+    P = Predicate.define("p", ["x"])
+    assert P(x=1).__ne__(5) is NotImplemented
+    # Reflection against a Variable builds an ASP inequality comparison
+    comparison = P(x=1) != Variable("X")
+    assert isinstance(comparison, Comparison)
+    assert "!=" in comparison.render()

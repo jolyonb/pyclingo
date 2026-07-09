@@ -4,7 +4,7 @@ Tests for Aggregate construction guards.
 
 import pytest
 
-from pyclingo import ASPProgram, Count, Predicate, Sum, Variable
+from pyclingo import ASPProgram, Count, Number, Predicate, Sum, Variable
 
 
 def test_aggregates_rejected_in_aggregate_conditions() -> None:
@@ -52,3 +52,43 @@ def test_expression_element_variables_are_scoped() -> None:
     program = ASPProgram()
     with pytest.raises(ValueError, match="Unsafe local"):
         program.when(S == Sum((X * Y, X), condition=P(x=X))).derive(Q(x=S))
+
+
+def test_aggregate_element_rejects_raw_python_value() -> None:
+    # A bare int is neither Value, Expression, nor Predicate
+    with pytest.raises(TypeError, match="Values, Expressions, or Predicates"):
+        Count(5)  # type: ignore[arg-type]
+
+
+def test_aggregate_tuple_element_rejects_bad_item() -> None:
+    # The tuple path checks each item; the raw int trips the guard
+    X = Variable("X")
+    with pytest.raises(TypeError, match="Values, Expressions, or Predicates"):
+        Sum((1, X))  # type: ignore[arg-type]
+
+
+def test_aggregate_is_grounded_reflects_elements() -> None:
+    assert Count(Variable("X")).is_grounded is False
+    assert Count(Number(3)).is_grounded is True
+
+
+def test_aggregate_str_delegates_to_render() -> None:
+    X = Variable("X")
+    assert str(Count(X)) == "#count{ X }"
+
+
+def test_aggregate_repr_wraps_render() -> None:
+    X = Variable("X")
+    assert repr(Count(X)) == "Count('#count{ X }')"
+
+
+def test_aggregate_validate_in_context_always_raises() -> None:
+    X = Variable("X")
+    with pytest.raises(ValueError, match="must be used in comparisons"):
+        Count(X).validate_in_context(is_in_head=True)
+
+
+def test_aggregate_collect_variables_spans_elements_and_conditions() -> None:
+    P = Predicate.define("p", ["x"])
+    X, Y = Variable("X"), Variable("Y")
+    assert Count(X, condition=P(x=Y)).collect_variables() == {"X", "Y"}

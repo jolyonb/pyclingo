@@ -36,3 +36,17 @@ def test_bare_atoms_reconstruct_as_nullary_predicates() -> None:
     program.fact(Holds(what=N()))
     model = next(iter(program.solve()))
     assert isinstance(model.atoms(Holds)[0]["what"], N)
+
+
+def test_deeply_nested_predicates_reconstruct_the_class_tree() -> None:
+    # A predicate nested two levels deep must rebuild the whole class tree on
+    # readback, not flatten or stringify: holds(pair(1, pair(2, 3)))
+    Pair = Predicate.define("pair", ["a", "b"])
+    Holds = Predicate.define("holds_nested", ["what"])
+    program = ASPProgram()
+    program.fact(Holds(what=Pair(a=1, b=Pair(a=2, b=3))))
+    what = next(iter(program.solve())).atoms(Holds)[0]["what"]
+    assert isinstance(what, Pair) and what["a"].value == 1
+    inner = what["b"]  # the second Pair, reconstructed as its own class
+    assert isinstance(inner, Pair)
+    assert (inner["a"].value, inner["b"].value) == (2, 3)

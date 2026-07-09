@@ -4,7 +4,7 @@ Tests for Choice construction guards.
 
 import pytest
 
-from pyclingo import ASPProgram, Choice, Count, Not, Number, Predicate, Variable
+from pyclingo import ASPProgram, Choice, Count, Not, Number, Predicate, String, Variable
 
 
 def test_impossible_cardinality_rejected() -> None:
@@ -98,3 +98,100 @@ def test_expression_bound_variables_must_bind() -> None:
     N, X = Variable("N"), Variable("X")
     with pytest.raises(ValueError, match="Unsafe variable"):
         program.when(Q(x=1)).derive(Choice(P(x=X), condition=Q(x=X)).exactly(N + 1))
+
+
+def test_non_predicate_element_rejected() -> None:
+    # Both the constructor and add() route the element through the same guard
+    P = Predicate.define("p", ["x"])
+    with pytest.raises(TypeError, match="must be a Predicate"):
+        Choice(5)  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match="must be a Predicate"):
+        Choice(P(x=1)).add("nope")  # type: ignore[arg-type]
+
+
+def test_cardinality_bad_type_rejected() -> None:
+    # A float is neither int, Value, nor Expression
+    P = Predicate.define("p", ["x"])
+    with pytest.raises(TypeError, match="integer, Value, or Expression"):
+        Choice(P(x=1)).exactly(2.5)  # type: ignore[arg-type]
+
+
+def test_cardinality_string_rejected() -> None:
+    # A String is a Value so it slips past the type check and is caught explicitly
+    P = Predicate.define("p", ["x"])
+    with pytest.raises(TypeError, match="cannot be a String"):
+        Choice(P(x=1)).exactly(String("three"))
+
+
+def test_exactly_after_bound_already_set_rejected() -> None:
+    P = Predicate.define("p", ["x"])
+    with pytest.raises(ValueError, match="already set"):
+        Choice(P(x=1)).at_least(1).exactly(2)
+    with pytest.raises(ValueError, match="already set"):
+        Choice(P(x=1)).exactly(1).exactly(2)
+
+
+def test_at_least_already_set_rejected() -> None:
+    P = Predicate.define("p", ["x"])
+    with pytest.raises(ValueError, match="Minimum cardinality is already set"):
+        Choice(P(x=1)).at_least(1).at_least(2)
+
+
+def test_at_most_already_set_rejected() -> None:
+    P = Predicate.define("p", ["x"])
+    with pytest.raises(ValueError, match="Maximum cardinality is already set"):
+        Choice(P(x=1)).at_most(3).at_most(4)
+
+
+def test_is_grounded_ungrounded_element() -> None:
+    P = Predicate.define("p", ["x"])
+    X = Variable("X")
+    assert Choice(P(x=X)).is_grounded is False
+    assert Choice(P(x=1)).exactly(2).is_grounded is True
+
+
+def test_is_grounded_ungrounded_min_bound() -> None:
+    P = Predicate.define("p", ["x"])
+    N = Variable("N")
+    assert Choice(P(x=1)).at_least(N).is_grounded is False
+
+
+def test_is_grounded_ungrounded_max_bound() -> None:
+    P = Predicate.define("p", ["x"])
+    M = Variable("M")
+    assert Choice(P(x=1)).at_most(M).is_grounded is False
+
+
+def test_str_and_repr() -> None:
+    P = Predicate.define("p", ["x"])
+    X = Variable("X")
+    choice = Choice(P(x=X))
+    assert str(choice) == choice.render() == "{ p(X) }"
+    assert repr(choice) == "Choice('{ p(X) }')"
+
+
+def test_collect_variables_gathers_elements_and_bounds() -> None:
+    P = Predicate.define("p", ["x"])
+    X, N, M = Variable("X"), Variable("N"), Variable("M")
+    choice = Choice(P(x=X)).at_least(N).at_most(M)
+    assert choice.collect_variables() == {"X", "N", "M"}
+
+
+def test_non_condition_type_rejected() -> None:
+    # A raw int trips the isinstance guard in ConditionedElement
+    P = Predicate.define("p", ["x"])
+    with pytest.raises(TypeError, match="must be a Predicate, DefaultNegation, or Comparison"):
+        Choice(P(x=1), condition=5)  # type: ignore[arg-type]
+
+
+def test_conditioned_element_is_grounded() -> None:
+    P = Predicate.define("p", ["x"])
+    assert Choice(P(x=1)).is_grounded is True
+    assert Choice(P(x=Variable("X"))).is_grounded is False
+
+
+def test_conditioned_element_collect_variables_targets_and_conditions() -> None:
+    P = Predicate.define("p", ["x"])
+    Q = Predicate.define("q", ["x"])
+    X, Y = Variable("X"), Variable("Y")
+    assert Choice(P(x=X), condition=Q(x=Y)).collect_variables() == {"X", "Y"}

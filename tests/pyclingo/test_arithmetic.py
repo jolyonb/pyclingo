@@ -20,7 +20,19 @@ from typing import Any
 
 import pytest
 
-from pyclingo import Abs, ASPProgram, Compl, Number, Predicate, Variable
+from pyclingo import (
+    Abs,
+    ASPProgram,
+    Compl,
+    Expression,
+    Not,
+    Number,
+    Predicate,
+    RangePool,
+    String,
+    Variable,
+)
+from pyclingo.operators import Operation
 
 
 def compl(x: Any) -> Any:
@@ -220,3 +232,83 @@ def test_precedence_with_subexpressions() -> None:
 
     expr2 = X + (Y - Z)
     assert expr2.render() == "X + Y - Z"
+
+
+# --- error paths and reflected operators (core.py) ---
+
+
+def test_invert_on_value_directs_to_compl() -> None:
+    """~ on a Value is reserved for default negation, not bitwise complement."""
+    with pytest.raises(TypeError, match="Compl"):
+        ~Variable("X")
+
+
+def test_invert_on_expression_directs_to_compl() -> None:
+    """~ on an Expression is reserved for default negation, not bitwise complement."""
+    with pytest.raises(TypeError, match="Compl"):
+        ~(Variable("X") + 1)
+
+
+def test_variable_validate_in_context_raises() -> None:
+    """A bare variable is never a valid standalone rule element."""
+    with pytest.raises(ValueError, match="arguments to predicates"):
+        Variable("X").validate_in_context(False)
+
+
+def test_constant_validate_in_context_raises() -> None:
+    """A bare constant is never a valid standalone rule element."""
+    with pytest.raises(ValueError, match="arguments to predicates"):
+        Number(5).validate_in_context(False)
+    with pytest.raises(ValueError, match="arguments to predicates"):
+        String("hi").validate_in_context(False)
+
+
+def test_pool_validate_in_context_raises() -> None:
+    """A bare pool belongs inside a predicate or on the right of a comparison."""
+    with pytest.raises(ValueError, match="Pools can only be used"):
+        RangePool(1, 5).validate_in_context(False)
+
+
+def test_expression_validate_in_context_raises() -> None:
+    """A bare expression is never a valid standalone rule element."""
+    with pytest.raises(ValueError, match="parts of comparisons"):
+        (Variable("X") + 1).validate_in_context(False)
+
+
+def test_default_negation_rejected_in_head() -> None:
+    """Default negation is body-only and raises when placed in a rule head."""
+    P = Predicate.define("p", ["a"])
+    with pytest.raises(ValueError, match="cannot be used in rule heads"):
+        Not(P(a=1)).validate_in_context(True)
+
+
+def test_expression_init_bad_first_term() -> None:
+    with pytest.raises(TypeError, match="first_term"):
+        Expression("x", Operation.ADD, 1)  # type: ignore[arg-type]
+
+
+def test_expression_init_bad_second_term() -> None:
+    with pytest.raises(TypeError, match="second_term"):
+        Expression(1, Operation.ADD, "x")  # type: ignore[arg-type]
+
+
+def test_expression_init_unary_operator_required_when_no_first_term() -> None:
+    with pytest.raises(ValueError, match="unary"):
+        Expression(None, Operation.ADD, 1)
+
+
+def test_expression_init_binary_operator_required_with_first_term() -> None:
+    with pytest.raises(ValueError, match="binary"):
+        Expression(1, Operation.UNARY_MINUS, 2)
+
+
+def test_expression_reflected_operators() -> None:
+    """int OP Expression dispatches to Expression's reflected operator methods."""
+    e = Variable("X") + Variable("Y")
+    assert (1 - e).render() == "1 - (X + Y)"
+    assert (10 // e).render() == "10 / (X + Y)"
+    assert (10 % e).render() == "10 \\ (X + Y)"
+    assert (2**e).render() == "2 ** (X + Y)"
+    assert (1 & e).render() == "1 & (X + Y)"
+    assert (1 | e).render() == "1 ? (X + Y)"
+    assert (1 ^ e).render() == "1 ^ (X + Y)"

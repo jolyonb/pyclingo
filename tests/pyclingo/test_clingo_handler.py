@@ -31,3 +31,18 @@ def test_multiline_message_payload_preserved() -> None:
         "<string>:1:1-5: info: atom does not occur in any rule head:\n  q(X)",
     )
     assert "q(X)" in handler.messages[0].message
+
+
+def test_non_located_message_without_prefix_defaults_to_info() -> None:
+    # No location span and no leading "word:" severity prefix: both regexes
+    # fail, so severity falls back to "info" and the whole text is kept
+    handler = ClingoMessageHandler("p(1).")
+    handler.on_message(None, "plain message with no prefix")  # type: ignore[arg-type]
+    assert handler.messages[0].severity == "info"
+    assert handler.messages[0].message == "plain message with no prefix"
+
+
+def test_format_all_messages_returns_none_when_empty() -> None:
+    # With nothing captured, formatting yields None rather than a header block
+    handler = ClingoMessageHandler("p(1).")
+    assert handler.format_all_messages("solving") is None

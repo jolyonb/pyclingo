@@ -7,7 +7,7 @@ segment-header rendering rules.
 import pytest
 
 from pyclingo import ASPProgram, Choice, Predicate, RangePool, Segment, Variable
-from pyclingo.program_elements import Rule
+from pyclingo.program_elements import BlankLine, Comment, Rule
 
 P = Predicate.define("p_seg", ["x"])
 
@@ -238,3 +238,108 @@ def test_segment_headers_render_the_name_verbatim() -> None:
     program["grid_stuff"].fact(P(x=1))
     program.fact(P(x=2))  # second segment so headers render
     assert "% ===== grid_stuff =====" in program.render()
+
+
+def test_validate_name_rejects_non_string() -> None:
+    with pytest.raises(TypeError, match="Segment name must be a string, got int"):
+        Segment(123)  # type: ignore[arg-type]
+
+
+def test_flat_forbid_rejects_non_term_condition() -> None:
+    program = ASPProgram()
+    with pytest.raises(TypeError, match=r"forbid\(\) conditions must be Terms, got str"):
+        program.forbid("p(X)")  # type: ignore[arg-type]
+
+
+def test_blank_line_and_section_append_elements() -> None:
+    seg = Segment("s")
+    seg.blank_line()
+    assert len(seg) == 1
+    assert isinstance(next(iter(seg)), BlankLine)
+
+    seg.section("Clues")
+    assert len(seg) == 3  # the blank line, then section's own blank + comment
+    elements = list(seg)
+    assert isinstance(elements[1], BlankLine)
+    assert isinstance(elements[2], Comment)
+    assert "% Clues" in seg.render(with_header=False)
+
+
+def test_section_on_fresh_segment_adds_blank_and_title() -> None:
+    seg = Segment("s")
+    seg.section("Clues")
+    assert len(seg) == 2
+    assert "% Clues" in seg.render(with_header=False)
+
+
+def test_render_with_header_absorbs_the_sections_leading_blank() -> None:
+    program = ASPProgram()
+    program.fact(P(x=1))
+    program.add_segment("x")
+    program["x"].section("T")
+    program["x"].fact(P(x=2))
+    rendered = program.render()
+    assert "% ===== x =====\n\n% T" in rendered
+    assert "% ===== x =====\n\n\n" not in rendered  # the section's own blank absorbed, not doubled
+
+
+def test_check_pending_raises_for_unclosed_when() -> None:
+    program = ASPProgram()
+    program.fact(P(x=1))
+    program.when(P(x=Variable("X")))  # opened, never closed
+    with pytest.raises(ValueError, match=r"incomplete when\(\) statements: when\(p_seg\(X\)\)"):
+        program.render()
+
+
+def test_when_completing_twice_raises() -> None:
+    program = ASPProgram()
+    X = Variable("X")
+    w = program.when(P(x=X))
+    w.derive(P(x=X))
+    with pytest.raises(RuntimeError, match=r"already completed with \.derive\(\)"):
+        w.derive(P(x=X))
+
+
+def test_when_derive_rejects_non_term_head() -> None:
+    program = ASPProgram()
+    with pytest.raises(TypeError, match=r"derive\(\) head must be a Term, got str"):
+        program.when(P(x=1)).derive("p(2)")  # type: ignore[arg-type]
+
+
+def test_when_forbid_rejects_empty_violation() -> None:
+    program = ASPProgram()
+    with pytest.raises(ValueError, match=r"at least one violation term"):
+        program.when(P(x=1)).forbid()
+
+
+def test_when_forbid_happy_path_and_non_term_violation() -> None:
+    program = ASPProgram()
+    A = Predicate.define("a", ["x"])
+    B = Predicate.define("b", ["x"])
+    X = Variable("X")
+    program.when(A(x=X)).forbid(B(x=X))
+    assert ":- a(X), b(X)." in program.render()
+
+    program2 = ASPProgram()
+    with pytest.raises(TypeError, match=r"forbid\(\) violation terms must be Terms, got str"):
+        program2.when(A(x=1)).forbid("b")  # type: ignore[arg-type]
+
+
+def test_when_penalize_rejects_empty_violation() -> None:
+    program = ASPProgram()
+    with pytest.raises(ValueError, match=r"at least one violation term"):
+        program.when(P(x=1)).penalize()
+
+
+def test_when_penalize_happy_path_and_non_term_violation() -> None:
+    program = ASPProgram()
+    A = Predicate.define("a", ["x"])
+    B = Predicate.define("b", ["x"])
+    X = Variable("X")
+    program.when(A(x=X)).penalize(B(x=X))
+    rendered = program.render()
+    assert ":~ a(X), b(X). [1, X]" in rendered
+
+    program2 = ASPProgram()
+    with pytest.raises(TypeError, match=r"penalize\(\) violation terms must be Terms, got str"):
+        program2.when(A(x=1)).penalize("b")  # type: ignore[arg-type]

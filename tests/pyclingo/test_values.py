@@ -4,7 +4,21 @@ Tests for the content rules of Number, String, and pools.
 
 import pytest
 
-from pyclingo import ANY, ASPProgram, DefinedConstant, Number, Predicate, RangePool, String, V, Value, Variable, pool
+from pyclingo import (
+    ANY,
+    ASPProgram,
+    DefinedConstant,
+    ExplicitPool,
+    Number,
+    Predicate,
+    RangePool,
+    String,
+    V,
+    Value,
+    Variable,
+    create_variables,
+    pool,
+)
 
 
 def test_number_range_matches_clingo() -> None:
@@ -113,3 +127,107 @@ def test_vars_in_a_real_rule() -> None:
     program.when(P(a=V.X, b=V.Y), V.X < V.Y).derive(Q(a=V.X))
     model = next(iter(program.solve()))
     assert [a["a"].value for a in model.atoms(Q)] == [1]
+
+
+def test_collect_predicates_gathers_own_and_nested_classes() -> None:
+    P = Predicate.define("p_collect", ["a"])
+    assert P(a=1).collect_predicates() == {P}
+    # A predicate nested as an argument is collected alongside its container
+    Cell = Predicate.define("cell_collect", ["x", "y"])
+    Region = Predicate.define("region_collect", ["c"])
+    assert Region(c=Cell(x=1, y=2)).collect_predicates() == {Region, Cell}
+
+
+def test_comparison_operators_reject_non_comparable_operands() -> None:
+    X = Variable("X")
+    # A float is not int/str/ComparableTerm/PredicateBase, so every operator trips its guard
+    with pytest.raises(ValueError, match="Cannot compare"):
+        _ = X < 1.5
+    with pytest.raises(ValueError, match="Cannot compare"):
+        _ = X <= 1.5
+    with pytest.raises(ValueError, match="Cannot compare"):
+        _ = X > 1.5
+    with pytest.raises(ValueError, match="Cannot compare"):
+        _ = X >= 1.5
+    with pytest.raises(ValueError, match="Cannot compare"):
+        _ = X == 1.5
+    with pytest.raises(ValueError, match="Cannot compare"):
+        _ = X != 1.5
+
+
+def test_value_construction_with_wrong_arg_count_falls_through_to_init() -> None:
+    # Zero args skips the one-arg cache branch and lets __init__ raise for the missing value
+    with pytest.raises(TypeError):
+        Number()  # type: ignore[call-arg]
+    # Two args also falls through; __init__ takes exactly one
+    with pytest.raises(TypeError):
+        Number(1, 2)  # type: ignore[call-arg]
+
+
+def test_reflected_arithmetic_operators_on_values() -> None:
+    # int OP Variable dispatches to Value's reflected operators (int.__op__ returns NotImplemented)
+    X = Variable("X")
+    assert (1 + X).render() == "1 + X"
+    assert (1 - X).render() == "1 - X"
+    assert (2 * X).render() == "2 * X"
+    assert (10 // X).render() == "10 / X"
+    assert (10 % X).render() == "10 \\ X"
+    assert (2**X).render() == "2 ** X"
+    assert (1 & X).render() == "1 & X"
+    assert (1 | X).render() == "1 ? X"
+    assert (1 ^ X).render() == "1 ^ X"
+
+
+def test_string_rejects_non_string_value() -> None:
+    with pytest.raises(TypeError, match="must be a string"):
+        String(5)  # type: ignore[arg-type]
+
+
+def test_defined_constant_name_validation() -> None:
+    with pytest.raises(ValueError, match="lowercase"):
+        DefinedConstant("Max")
+    with pytest.raises(ValueError, match="'not' is reserved"):
+        DefinedConstant("not")
+    with pytest.raises(ValueError, match="letters, digits, and underscores"):
+        DefinedConstant("a-b")
+
+
+def test_explicit_pool_rejects_bad_elements() -> None:
+    with pytest.raises(ValueError, match="empty"):
+        ExplicitPool([])
+    with pytest.raises(TypeError, match="nested"):
+        ExplicitPool([RangePool(1, 5)])
+    with pytest.raises(ValueError, match="grounded"):
+        ExplicitPool([Variable("X")])
+    with pytest.raises(TypeError, match="ints, strs, or grounded"):
+        ExplicitPool([1.5])  # type: ignore[list-item]
+
+
+def test_explicit_pool_coerces_str_and_int_elements() -> None:
+    assert ExplicitPool(["a"]).render() == '("a")'
+    assert ExplicitPool([1]).render() == "(1)"
+
+
+def test_explicit_pool_is_grounded() -> None:
+    assert ExplicitPool([1, 2]).is_grounded is True
+
+
+def test_explicit_pool_collect_defined_constants() -> None:
+    # DefinedConstant is grounded, so it is a legal pool element; its name is gathered
+    assert ExplicitPool([DefinedConstant("n"), 1]).collect_defined_constants() == {"n"}
+
+
+def test_pool_helper_rejects_bad_elements() -> None:
+    with pytest.raises(TypeError, match="nested"):
+        pool([RangePool(1, 5)])
+    with pytest.raises(ValueError, match="grounded"):
+        pool([Variable("X")])
+    with pytest.raises(TypeError, match="ints, strs, or grounded"):
+        pool([1.5])  # type: ignore[list-item]
+    with pytest.raises(TypeError, match="Expected Pool, list, tuple, or range"):
+        pool(42)  # type: ignore[arg-type]
+
+
+def test_create_variables_requires_a_name() -> None:
+    with pytest.raises(ValueError, match="At least one variable name"):
+        create_variables()

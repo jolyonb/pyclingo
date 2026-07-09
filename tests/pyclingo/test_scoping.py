@@ -231,3 +231,58 @@ def test_allow_singletons_does_not_soften_safety() -> None:
     program = ASPProgram(allow_singletons=True)
     with pytest.raises(ValueError, match="Unsafe variable"):
         program.when(Q(x=Y)).derive(P(x=X))
+
+
+# --- occurrence counting recurses into local Comparison conditions ---
+
+
+def test_negated_comparison_local_condition_counts_variables() -> None:
+    # The Not(X == Y) local condition drives _occurrences through its inner
+    # Comparison, counting X and Y on each non-aggregate side
+    ok(
+        P(x=N),
+        [Q(x=N), N == Count(X, condition=[R2(x=X, y=Y), Not(X == Y)])],
+    )
+
+
+# --- empty-left equality edge binds its unbound right side ---
+
+
+def test_assignment_aggregate_on_left_binds_right_alone() -> None:
+    # Count(...) == N puts the aggregate (all-local) on the left, leaving an
+    # empty-left edge (frozenset(), {N}) that binds N unconditionally.
+    # N is bound ONLY by this edge (mirrors clingo p(N) :- #count{X:p(X)} = N.)
+    ok(P(x=N), [Count(X, condition=P(x=X)) == N])
+
+
+# --- equality edge from a non-pool equality inside a construct element ---
+
+
+def test_local_equality_edge_binds_aggregate_target() -> None:
+    # Q(x=Y) binds Y inside the element; the X == Y local equality edge then
+    # binds the target X (line 216 records that edge)
+    ok(P(x=N), [Q(x=N), N == Count(X, condition=[Q(x=Y), X == Y])])
+
+
+# --- anonymous variable in a comparison head ---
+
+
+def test_anonymous_in_comparison_head_is_rejected() -> None:
+    bad(X == ANY, [Q(x=X)], "anonymous")
+
+
+# --- anonymous variable in a choice element target ---
+
+
+def test_anonymous_in_choice_head_is_rejected() -> None:
+    bad(Choice(P(x=ANY)), [Q(x=1)], "anonymous")
+
+
+# --- optimization singleton lint is switchable ---
+
+
+def test_optimization_singleton_lint_off_under_allow_singletons() -> None:
+    program = ASPProgram(allow_singletons=True)
+    Pair = Predicate.define("pair", ["a", "b"])
+    program.minimize(X, condition=Pair(a=X, b=Y))  # Y singleton, lint disabled
+    assert "#minimize" in program.render()

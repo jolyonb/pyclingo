@@ -20,11 +20,17 @@ This directory contains the testing strategy for the PyClingo project, using a m
 
 **Key insight**: Any new puzzle added to `puzzles/` is automatically included in the test suite.
 
-### Unit Testing (`pyclingo/`)
-**Purpose**: Tests core PyClingo functionality in isolation
+### Unit Testing (`tests/pyclingo/`)
+**Purpose**: Tests the pyclingo library in isolation from aspuzzle, at 100% line coverage
 
-- `test_expression.py`: Tests arithmetic expression rendering, operator precedence, ASP syntax generation
-- Future tests can be added for other PyClingo components (predicates, aggregates, etc.)
+Files are organized by construct (e.g. `test_choice.py`, `test_aggregates.py`,
+`test_arithmetic.py`, `test_values.py`) and by cross-cutting concern (e.g.
+`test_scoping.py`, `test_reconstruction.py`, `test_optimization.py` /
+`test_optimize_solve.py`). `test_end_to_end.py` holds the paved-path smoke
+tests: small complete programs run construct → render → solve → typed
+reconstruction. This suite carries pyclingo's coverage on its own — the puzzle
+integration test contributes almost nothing pyclingo-side — so it stays whole
+when aspuzzle splits into its own repo.
 
 ## Validation Strategy
 
@@ -79,8 +85,12 @@ The project uses pre-commit hooks to maintain high code quality. Every commit au
 2. **ruff (formatter)**: Consistent code formatting
 3. **mypy**: Static type checking for type safety
 4. **pyright**: Additional static type checking
-5. **pytest**: Runs full test suite (`tests/` directory)
-6. **config validation**: Ensures pre-commit setup stays valid
+5. **pytest (pyclingo, 100% coverage gate)**: Runs the pyclingo suite + module
+   doctests and fails under 100% line coverage (excludes `test_puzzles.py` so the
+   number reflects pyclingo standalone)
+6. **pytest (puzzle integration)**: Solves the puzzle corpus end to end; leaves
+   with the aspuzzle repo split
+7. **config validation**: Ensures pre-commit setup stays valid
 
 ### Benefits
 - **Automatic quality**: No manual intervention needed

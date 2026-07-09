@@ -1,5 +1,7 @@
 """Tests for ConditionalLiteral rendering and validation."""
 
+import pytest
+
 from pyclingo import ASPProgram, ConditionalLiteral, LogLevel, Predicate, Variable
 
 
@@ -18,3 +20,50 @@ def test_body_literal_after_conditional_literal_stays_separate() -> None:
     # r is deliberately absent, which draws a clingo info; tolerate it
     models = list(program.solve(stop_on_log_level=LogLevel.WARNING))
     assert models[0].atoms(Good) == []
+
+
+def test_non_literal_head_rejected() -> None:
+    # The head must be a predicate, comparison, or negated term; a bare
+    # Variable is none of these and is rejected at construction.
+    Q = Predicate.define("q", ["x"])
+    X = Variable("X")
+    with pytest.raises(TypeError, match="head of a conditional literal"):
+        ConditionalLiteral(X, Q(x=X))  # type: ignore[arg-type]
+
+
+def test_is_grounded_delegates_to_element() -> None:
+    P = Predicate.define("p", ["x"])
+    assert ConditionalLiteral(P(x=1), P(x=1)).is_grounded is True
+    X = Variable("X")
+    assert ConditionalLiteral(P(x=X), P(x=X)).is_grounded is False
+
+
+def test_str_matches_render() -> None:
+    Q = Predicate.define("q", ["x"])
+    X = Variable("X")
+    cl = ConditionalLiteral(Q(x=X), Q(x=X))
+    assert str(cl) == cl.render() == "q(X) : q(X)"
+
+
+def test_repr_wraps_render() -> None:
+    Q = Predicate.define("q", ["x"])
+    X = Variable("X")
+    cl = ConditionalLiteral(Q(x=X), Q(x=X))
+    assert repr(cl) == "ConditionalLiteral('q(X) : q(X)')"
+
+
+def test_conditional_literal_rejected_in_rule_head() -> None:
+    program = ASPProgram()
+    P = Predicate.define("p", ["x"])
+    R = Predicate.define("r", [])
+    X = Variable("X")
+    with pytest.raises(ValueError, match="cannot be used in rule heads"):
+        program.when(R()).derive(ConditionalLiteral(P(x=X), P(x=X)))
+
+
+def test_collect_variables_delegates_to_element() -> None:
+    P = Predicate.define("p", ["x"])
+    Q = Predicate.define("q", ["x"])
+    X = Variable("X")
+    cl = ConditionalLiteral(P(x=X), Q(x=X))
+    assert cl.collect_variables() == {"X"}

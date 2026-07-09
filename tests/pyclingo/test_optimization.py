@@ -17,12 +17,14 @@ from pyclingo import (
     Choice,
     ConditionalLiteral,
     Count,
+    Number,
     Predicate,
     SolveResult,
     String,
     Variable,
 )
 from pyclingo.clingo_handler import ClingoMessageHandler, LogLevel
+from pyclingo.optimization import Optimization, OptimizationDirective, WeakConstraint
 
 
 def optimal_cost(program: ASPProgram) -> list[int]:
@@ -516,3 +518,52 @@ def test_observer_catches_every_optimization_spelling() -> None:
             grounded.solve()
         result = grounded.optimize()
         assert result is not None and result.proven, raw
+
+
+def test_penalize_weight_rejects_bare_python_type() -> None:
+    # A python str slips past the int and String guards and reaches the
+    # final structural check: it is neither Value nor Expression
+    program = ASPProgram()
+    with pytest.raises(TypeError, match="int, Value, or Expression"):
+        program.penalize(Pick(x=ANY), weight="cheap")  # type: ignore[arg-type]
+
+
+def test_penalize_tuple_term_type_validated() -> None:
+    # The tuple-term loop rejects a raw python value: only Values,
+    # Expressions, or Predicates may sit in the weak-constraint tuple
+    program = ASPProgram()
+    with pytest.raises(TypeError, match="Values, Expressions, or Predicates"):
+        program.penalize(Pick(x=Variable("X")), terms=["bad"])  # type: ignore[list-item]
+
+
+def test_penalize_condition_must_be_term() -> None:
+    # terms=[] skips the auto-tuple branch, so a non-Term condition reaches
+    # the per-condition Term check
+    program = ASPProgram()
+    with pytest.raises(TypeError, match="conditions must be Terms"):
+        program.penalize("notaterm", terms=[])  # type: ignore[arg-type]
+
+
+def test_weak_constraint_priority_getter() -> None:
+    # Constructed directly: the library reads .targets/.conditions/.render()
+    # but never .priority
+    wc = WeakConstraint((Pick(x=Variable("X")),), 1, (Variable("X"),), 3)
+    assert wc.priority == 3
+    assert wc.targets == (Number(1), Variable("X"))  # weight Number(1), then the tuple term
+    assert wc.conditions == [Pick(x=Variable("X"))]
+
+
+def test_optimization_directive_tuple_term_type_validated() -> None:
+    # The directive's tuple-term loop mirrors the weak constraint's: a raw
+    # python value is rejected
+    program = ASPProgram()
+    with pytest.raises(TypeError, match="Values, Expressions, or Predicates"):
+        program.minimize(1, "bad", condition=Pick(x=ANY))  # type: ignore[arg-type]
+
+
+def test_optimization_directive_getters() -> None:
+    # Constructed directly: segment.py reads only .element, never
+    # .optimization or .priority
+    d = OptimizationDirective(Optimization.MINIMIZE, 1, (Variable("X"),), Pick(x=Variable("X")), 2)
+    assert d.optimization == Optimization.MINIMIZE
+    assert d.priority == 2

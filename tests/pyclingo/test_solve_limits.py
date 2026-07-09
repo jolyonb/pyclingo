@@ -249,3 +249,20 @@ def test_iterator_direct_close_is_loud_too() -> None:
     iterator.close()  # type: ignore[attr-defined]
     with pytest.raises(RuntimeError, match="was closed"):
         next(iterator)
+
+
+def test_interleaved_results_stay_independent() -> None:
+    # Two live streams advanced in lockstep must not consume or corrupt one
+    # another: each SolveResult owns its own search state. (Sequential
+    # independence is weaker — this alternates next() calls mid-stream.)
+    program = make_choice_program(2)  # 4 models each
+    ra, rb = program.solve(), program.solve()
+    a, b = iter(ra), iter(rb)
+    na = [next(a)]
+    nb = [next(b)]
+    na.append(next(a))  # advance a again while b sits mid-stream
+    na += list(a)
+    nb += list(b)  # b resumes from where it paused, unaffected by a
+    assert len(na) == 4 and len(nb) == 4
+    assert ra.exhausted and rb.exhausted
+    assert ra.solution_count == rb.solution_count == 4

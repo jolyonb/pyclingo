@@ -6,7 +6,7 @@ ship once; see AUDIT_v2 H1).
 
 import pytest
 
-from pyclingo import ASPProgram, Not, Predicate, Variable
+from pyclingo import ASPProgram, Not, Number, Predicate, Variable
 
 
 def test_invert_on_predicates() -> None:
@@ -58,3 +58,9 @@ def test_negated_pool_comparison_rejected() -> None:
         Not(X.in_([2, 3]))
     with pytest.raises(ValueError, match="disjunctively"):
         _ = ~X.in_([2, 3])
+
+
+def test_not_on_non_negatable_rejected() -> None:
+    # A bare Value (Number) is not Negatable: predicates and comparisons are.
+    with pytest.raises(TypeError, match="predicates, comparisons"):
+        Not(Number(5))  # type: ignore[arg-type]
