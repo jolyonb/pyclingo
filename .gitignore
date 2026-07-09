@@ -3,13 +3,10 @@
 *__pycache__/
 .claude/
 .venv/
+dist/
 
-# Working notes and audit/review outputs (never committed)
-TODO.md
-AUDIT*.md
-DESIGN_REVIEW*.md
-DEAD_CODE.md
-VALIDATION.md
+# Working notes, audit reports, triage docs — never committed
+temp/
 
 # Coverage
 .coverage
