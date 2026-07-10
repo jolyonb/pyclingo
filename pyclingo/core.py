@@ -882,17 +882,25 @@ class RangePool(Pool):
 
 class ExplicitPool(Pool):
     """
-    Represents an explicit pool in ASP programs, like (1;2;3) or (a;b;c).
+    Represents an explicit pool in ASP programs, like (1;2;3) or (X-1;X+1).
 
-    Explicit pools can contain grounded basic terms (constants and predicates).
+    Elements are basic terms and expressions; ints and strs coerce. An
+    UNGROUNDED pool (variables/expressions in elements) is legal only in
+    rule-HEAD arguments, where gringo expands it conjunctively —
+    adj(X, (X-1; X+1)) derives both neighbor atoms. Everywhere else
+    (bodies, choice elements, conditions, comparisons) ungrounded pools
+    are rejected at rule assembly: gringo judges each expanded copy
+    separately for safety there, which pyclingo does not model. Note the
+    per-slot shape: correlated argument-TUPLE pools like p(1,2; 3,4)
+    do not factor into slot pools and stay raw_asp territory.
     """
 
-    def __init__(self, elements: Sequence[int | str | BasicTerm]):
+    def __init__(self, elements: Sequence[int | str | BasicTerm | Expression]):
         """
         Initialize an explicit pool from a non-empty sequence of elements;
         ints and strs are coerced to Number and String.
 
-        Raises if any element is of an unsupported type or an ungrounded basic term.
+        Raises if any element is of an unsupported type.
         """
         if isinstance(elements, str):
             raise TypeError(
@@ -912,25 +920,22 @@ class ExplicitPool(Pool):
                 element = Number(element)
             elif isinstance(element, Pool):
                 raise TypeError("Pools cannot be nested inside pools")
-            elif isinstance(element, BasicTerm):
-                if not element.is_grounded:
-                    raise ValueError(f"Pool elements must be grounded: {element.render()}")
-            else:
+            elif not isinstance(element, (BasicTerm, Expression)):
                 raise TypeError(
-                    f"Pool elements must be ints, strs, or grounded basic terms, got {type(element).__name__}"
+                    f"Pool elements must be ints, strs, basic terms, or expressions, got {type(element).__name__}"
                 )
 
             self._elements.append(element)
 
     @property
-    def elements(self) -> list[BasicTerm]:
+    def elements(self) -> list[BasicTerm | Expression]:
         """The elements of the pool (a defensive copy)."""
         return self._elements.copy()
 
     @property
     def is_grounded(self) -> bool:
-        """Always True: elements are validated to be constants or grounded predicates."""
-        return True
+        """Whether every element is grounded; ungrounded pools are legal in rule-head arguments only."""
+        return all(element.is_grounded for element in self._elements)
 
     def render(self, context: RenderingContext = RenderingContext.DEFAULT) -> str:
         """Renders as e.g. "(1; 3; 5)"; parentheses are dropped as a lone predicate argument."""
@@ -961,13 +966,14 @@ class ExplicitPool(Pool):
         return occurrences
 
 
-def pool(elements: range | Sequence[int | str | BasicTerm] | Pool) -> Pool:
+def pool(elements: range | Sequence[int | str | BasicTerm | Expression] | Pool) -> Pool:
     """
     Create a Pool object from a general variety of input options.
 
     Args:
-        elements: A Pool object, range, or sequence of elements
-                 (integers, strings, or grounded basic terms: constants and predicates)
+        elements: A Pool object, range, or sequence of elements (integers,
+                 strings, basic terms, or expressions — ungrounded elements
+                 are legal in rule-head arguments only; see ExplicitPool)
 
     Returns:
         An appropriate Pool object (RangePool for continuous ranges, ExplicitPool otherwise)

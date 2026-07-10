@@ -254,9 +254,7 @@ def test_explicit_pool_rejects_bad_elements() -> None:
         ExplicitPool([])
     with pytest.raises(TypeError, match="nested"):
         ExplicitPool([RangePool(1, 5)])
-    with pytest.raises(ValueError, match="grounded"):
-        ExplicitPool([Variable("X")])
-    with pytest.raises(TypeError, match="ints, strs, or grounded"):
+    with pytest.raises(TypeError, match="basic terms, or expressions"):
         ExplicitPool([1.5])  # type: ignore[list-item]
 
 
@@ -277,12 +275,21 @@ def test_explicit_pool_collect_defined_constants() -> None:
 def test_pool_helper_rejects_bad_elements() -> None:
     with pytest.raises(TypeError, match="nested"):
         pool([RangePool(1, 5)])
-    with pytest.raises(ValueError, match="grounded"):
-        pool([Variable("X")])
-    with pytest.raises(TypeError, match="ints, strs, or grounded"):
+    with pytest.raises(TypeError, match="basic terms, or expressions"):
         pool([1.5])  # type: ignore[list-item]
     with pytest.raises(TypeError, match="Expected Pool, list, tuple, or range"):
         pool(42)  # type: ignore[arg-type]
+
+
+def test_pool_accepts_variables_and_expressions() -> None:
+    # Ungrounded pools construct freely (legal in rule-head arguments —
+    # rule assembly walls the other positions); grounded stays grounded
+    X = Variable("X")
+    neighbors = pool([X - 1, X + 1])
+    assert neighbors.render() == "(X - 1; X + 1)"
+    assert neighbors.is_grounded is False
+    assert neighbors.collect_variables() == {"X"}
+    assert pool([1, 3]).is_grounded is True
 
 
 def test_subclass_inputs_take_their_natural_form_then_validate() -> None:

@@ -11,7 +11,7 @@ import inspect
 
 import pytest
 
-from pyclingo import SUP, ASPProgram, Choice, Field, GroundingError, Optimum, Predicate, Sum, Variable
+from pyclingo import SUP, ASPProgram, Choice, Field, GroundingError, Optimum, Predicate, Sum, Variable, pool
 
 
 def test_e2e_plain_facts_typed() -> None:
@@ -253,3 +253,17 @@ def test_e2e_grounding_diagnostics_ride_in_the_error() -> None:
     program.when(Q(x=1)).derive(P(x=1))
     with pytest.raises(GroundingError, match="does not occur"):
         program.solve()
+
+
+def test_e2e_head_pool_derives_all_neighbors() -> None:
+    # The idiom that motivated ungrounded head pools: one rule derives both
+    # neighbors of every column
+    program = ASPProgram()
+    Col = Predicate.define("col_np", ["x"], show=False)
+    Adj = Predicate.define("adj_np", ["a", "b"])
+    X = Variable("X")
+    program.fact(Col(x=2), Col(x=5))
+    program.when(Col(x=X)).derive(Adj(a=X, b=pool([X - 1, X + 1])))
+    model = program.solve().first()
+    pairs = sorted((atom["a"].value, atom["b"].value) for atom in model.atoms(Adj))
+    assert pairs == [(2, 1), (2, 3), (5, 4), (5, 6)]

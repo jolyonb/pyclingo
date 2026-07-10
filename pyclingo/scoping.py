@@ -13,8 +13,11 @@ which accepts what they reject: singleton variables (gringo is silent;
 switchable via ASPProgram(allow_singletons=True)), aggregate tuples
 sharing a rule-global variable (gringo emits only an info, with collapsed
 semantics), and a conditional-literal head variable absent from its own
-condition (gringo quietly treats it as local to the literal). Negated
-PLAIN comparisons never reach this analysis at all: Not()/~ build the
+condition (gringo quietly treats it as local to the literal), and an
+ungrounded explicit pool anywhere but a plain predicate head's arguments
+(gringo multiplies the rule per element and judges each copy separately;
+some such programs are safe, but this analysis does not model the
+expansion). Negated PLAIN comparisons never reach this analysis at all: Not()/~ build the
 complementary comparison at construction — mirroring gringo's own
 normalization of "not X != Y" to the binding "X = Y" — so the negated
 branch below sees only aggregate-bearing comparisons. The ground truth is
@@ -23,7 +26,7 @@ gringo's own verdict, re-checked on each run.
 """
 
 from collections import Counter
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
@@ -98,6 +101,54 @@ class RuleScopes:
 
     def global_occurrences(self) -> Counter[str]:
         return self.head_counts + self.body_counts
+
+
+def _first_ungrounded_pool(term: Term) -> ExplicitPool | None:
+    """The first ungrounded explicit pool nested anywhere in the term, or None."""
+    if isinstance(term, ExplicitPool):
+        return term if not term.is_grounded else None
+    children: tuple[Term, ...] = ()
+    if isinstance(term, Predicate):
+        children = tuple(term.arguments)
+    elif isinstance(term, Expression):
+        children = tuple(t for t in (term.first_term, term.second_term) if t is not None)
+    elif isinstance(term, Comparison):
+        children = (term.left_term, term.right_term)
+    elif isinstance(term, DefaultNegation):
+        children = (term.term,)
+    elif isinstance(term, ConditionalLiteral):
+        children = (term.head, *term.condition)
+    elif isinstance(term, (Choice, Aggregate)):
+        children = tuple(t for element in term.elements for t in (*element.targets, *element.conditions))
+    for child in children:
+        found = _first_ungrounded_pool(child)
+        if found is not None:
+            return found
+    return None
+
+
+def _reject_ungrounded_pools(terms: Sequence[Term], place: str, rule_text: Callable[[], str]) -> None:
+    """
+    The fourth deliberate lint (see the module docstring): an ungrounded
+    explicit pool is legal only in rule-HEAD arguments, where gringo
+    expands it conjunctively. Everywhere else gringo multiplies the RULE
+    per element and judges each copy's safety separately — which this
+    analysis does not model, so the position is refused outright even
+    though gringo accepts some such programs. Range pools are unaffected:
+    their variables live in the BOUNDS, shared by every expanded copy, so
+    the ordinary one-way binding analysis already models them exactly.
+    """
+    for term in terms:
+        found = _first_ungrounded_pool(term)
+        if found is not None:
+            raise ValueError(
+                f"An explicit pool with variables is only supported in rule-HEAD "
+                f"arguments, where it expands conjunctively — adj(X, (X-1; X+1)) "
+                f"derives both atoms. In {place}, gringo would judge each expanded "
+                f"copy separately for safety, which pyclingo does not model: "
+                f"{found.render()} in {rule_text()}\n"
+                f"Write the copies as separate statements, or keep the pool grounded."
+            )
 
 
 def _variables_of(term: Term) -> set[str]:
@@ -353,6 +404,7 @@ def validate_optimization_element(element: ConditionedElement, rule_text: str, c
     no rule body to bind from), with the same local-scope treatment as an
     aggregate element.
     """
+    _reject_ungrounded_pools([*element.targets, *element.conditions], "an optimization element", lambda: rule_text)
     scope = LocalScope(description="optimization element")
     for target in element.targets:
         if "_" in target.collect_variables():
@@ -476,6 +528,7 @@ def validate_weak_constraint(
     included), the weight and tuple terms must be bound by it exactly as a
     head must be, and the aggregate-tuple/local/singleton checks all apply.
     """
+    _reject_ungrounded_pools([*targets, *conditions], "a weak constraint", lambda: rule_text)
     scopes = analyze(None, conditions)
     for target in targets:
         if "_" in target.collect_variables():
@@ -504,6 +557,13 @@ def validate_rule(head: Term | None, body: list[Term], rule: str | Rule, check_s
 
     def rule_text() -> str:
         return rule if isinstance(rule, str) else rule.render()
+
+    # Ungrounded explicit pools: legal in a plain predicate HEAD's
+    # arguments only. A Choice or Comparison head, and every body term,
+    # refuses them (see _reject_ungrounded_pools).
+    if head is not None and not isinstance(head, Predicate):
+        _reject_ungrounded_pools([head], "this head construct", rule_text)
+    _reject_ungrounded_pools(body, "a rule body", rule_text)
 
     scopes = analyze(head, body)
     _resolve_localities(scopes)

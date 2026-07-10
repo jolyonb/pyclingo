@@ -25,6 +25,7 @@ from pyclingo import (
     Sum,
     Term,
     Variable,
+    pool,
 )
 from pyclingo.program_elements import render_body_terms
 from pyclingo.scoping import validate_rule
@@ -387,3 +388,29 @@ def test_unsafe_rules_raise_at_the_statement_verb() -> None:
     X, Y = Variable("X"), Variable("Y")
     with pytest.raises(ValueError, match="Unsafe variable"):
         program.when(P(x=X)).derive(Q(x=Y))
+
+
+# --- ungrounded explicit pools (the fourth deliberate lint) ---
+
+
+def test_head_pool_with_variables_is_the_neighbor_idiom() -> None:
+    # adj(X, (X-1; X+1)) :- col(X). — head pools expand conjunctively and
+    # their variables are ordinary head variables; gringo receipt included
+    ok(R2(x=X, y=pool([X - 1, X + 1])), [Q(x=X)])
+
+
+def test_body_pool_with_variables_is_rejected_even_where_gringo_accepts() -> None:
+    # gringo multiplies the rule per element and judges each copy alone;
+    # this text is safe (Q binds X in every copy) but the analysis does not
+    # model the expansion — the fourth deliberate lint
+    bad(
+        P(x=X),
+        [P(x=pool([X, X + 1])), Q(x=X)],
+        "rule-HEAD arguments",
+        gringo_rejects=False,
+    )
+
+
+def test_choice_and_comparison_heads_refuse_ungrounded_pools() -> None:
+    with pytest.raises(ValueError, match="rule-HEAD arguments"):
+        validate_rule(Choice(P(x=pool([X, X + 1])), condition=Q(x=X)), [Q(x=X)], "<test rule>")
