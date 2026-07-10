@@ -5,13 +5,11 @@ SolveResult lifecycle.
 
 import time
 from itertools import islice
-from typing import Any, cast
 
 import clingo
 import pytest
 
-from pyclingo import ASPProgram, Choice, Predicate, RangePool, Variable
-from pyclingo.clingo_handler import ClingoMessageHandler
+from pyclingo import ASPProgram, Choice, Model, Predicate, RangePool, Variable
 
 
 def make_choice_program(n: int) -> ASPProgram:
@@ -41,7 +39,7 @@ def test_take_one_model() -> None:
     # suspends after the first model — nothing runs ahead of consumption
     result = make_choice_program(3).solve()  # 8 models exist
     model = next(iter(result))
-    assert len(model) >= 0
+    assert isinstance(model, Model)  # a genuine emission (an empty choice model is legitimate)
     assert result.models_yielded == 1
     assert result.exhausted is False
 
@@ -159,18 +157,15 @@ def test_solve_phase_messages_attach_instead_of_halting() -> None:
     # so this injects into the handler between models to test the plumbing:
     # each Model carries the batch that arrived while it was being found,
     # and the result accumulates them all
-    program = make_choice_program(2)  # 4 models
-    result = program.solve()
+    grounded = make_choice_program(2).ground()  # 4 models
+    result = grounded.solve()
     iterator = iter(result)
     first = next(iterator)
     assert first.messages == []
 
-    # Reach through the close-checking wrapper to the generator's frame;
-    # the runtime types are known
-    frame = cast(Any, result._iterator)._generator.gi_frame
-    handler = frame.f_locals["message_handler"]
-    assert isinstance(handler, ClingoMessageHandler)
-    handler.on_message(clingo.MessageCode.Other, "info: something mid-solve")
+    # The grounding's handler is the generator's handler: inject through the
+    # stable route instead of reaching into the generator frame's locals
+    grounded._message_handler.on_message(clingo.MessageCode.Other, "info: something mid-solve")
 
     second = next(iterator)
     assert len(second.messages) == 1

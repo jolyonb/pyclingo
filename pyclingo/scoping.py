@@ -227,8 +227,8 @@ def _analyze_local_condition(condition: Term, scope: LocalScope) -> None:
             scope.directed_edges.append((sides[1], sides[0]))
         elif condition.is_equality:
             scope.equality_edges.append((sides[0], sides[1]))
-    else:  # pragma: no cover - construction-time validation prevents this
-        scope.condition_counts.update(_occurrences(condition))
+    else:  # pragma: no cover — construction-time validation prevents this
+        raise TypeError(f"Unknown condition type in a local scope: {type(condition).__name__}")
 
 
 def _analyze_negated_body_term(negation: DefaultNegation, scopes: RuleScopes) -> None:

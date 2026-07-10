@@ -568,17 +568,6 @@ class RefinementSteps(Search):
     completed one by merely stopping.
     """
 
-    def __init__(
-        self,
-        control: clingo.Control,
-        predicate_types: PredicateTypes,
-        timeout: float,
-        message_handler: ClingoMessageHandler,
-        assumptions: list[tuple[clingo.Symbol, bool]],
-        mode: RefinementMode,
-    ) -> None:
-        super().__init__(control, predicate_types, timeout, message_handler, assumptions, mode)
-
     @property
     def exhausted(self) -> bool:
         """Whether the refinement PROVED it reached the true answer."""
@@ -625,7 +614,7 @@ class OptimizeSteps(Search):
         predicate_types: PredicateTypes,
         timeout: float,
         message_handler: ClingoMessageHandler,
-        assumptions: list[tuple[clingo.Symbol, bool]],
+        assumptions: list[tuple[clingo.Symbol, bool]] | None = None,
     ) -> None:
         super().__init__(control, predicate_types, timeout, message_handler, assumptions, mode=OPTIMIZE)
 

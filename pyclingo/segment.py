@@ -35,6 +35,20 @@ from pyclingo.scoping import validate_optimization_element, validate_weak_constr
 from pyclingo.source_location import SourceLocation, capture_location
 
 
+def _build_weak_constraint(
+    conditions: tuple[Term, ...],
+    weight: int | OptimizationTermType,
+    terms: Sequence[OptimizationTermType] | None,
+    priority: int,
+    check_singletons: bool,
+) -> WeakConstraint:
+    """The one assembly path both penalize() spellings share: build, validate, freeze."""
+    weak = WeakConstraint(conditions, weight, tuple(terms) if terms is not None else None, priority)
+    validate_weak_constraint(weak.targets, list(weak.conditions), weak.render(), check_singletons=check_singletons)
+    weak.freeze()
+    return weak
+
+
 def _non_term_error(kind: str, got: object) -> TypeError:
     """The must-be-Terms rejection, teaching the predicate-equality trap on a bool."""
     if isinstance(got, bool):
@@ -216,11 +230,7 @@ class Segment:
         conditions. A negative literal weight is rejected — that is a
         reward, not a penalty; spell it minimize()/maximize().
         """
-        weak = WeakConstraint(conditions, weight, tuple(terms) if terms is not None else None, priority)
-        validate_weak_constraint(
-            weak.targets, list(weak.conditions), weak.render(), check_singletons=self._check_singletons
-        )
-        weak.freeze()
+        weak = _build_weak_constraint(conditions, weight, terms, priority, self._check_singletons)
         self.append(weak)
 
     def minimize(
@@ -427,7 +437,7 @@ class When:
                 element.closed_at = closed
         self._segment.append(element)
 
-    def _guard(self, closer: str) -> None:
+    def _guard(self) -> None:
         if self._completed_by is not None:
             raise RuntimeError(
                 f"This when() was already completed with .{self._completed_by}(); "
@@ -441,7 +451,7 @@ class When:
         """
         if not isinstance(head, Term):
             raise TypeError(f"derive() head must be a Term, got {type(head).__name__}")
-        self._guard("derive")
+        self._guard()
         rule = Rule(head=head, body=list(self._conditions), check_singletons=self._segment._check_singletons)
         self._complete("derive", rule)
 
@@ -451,7 +461,7 @@ class When:
         one Comparison; sugar for forbid(*conditions, comparison.inverse()).
         """
         target = _single_required_comparison(comparison)
-        self._guard("require")
+        self._guard()
         rule = Rule(
             body=[*self._conditions, target.inverse()],
             check_singletons=self._segment._check_singletons,
@@ -473,7 +483,7 @@ class When:
         for term in violation:
             if not isinstance(term, Term):
                 raise _non_term_error("forbid() violation terms", term)
-        self._guard("forbid")
+        self._guard()
         rule = Rule(
             body=[*self._conditions, *violation],
             check_singletons=self._segment._check_singletons,
@@ -501,14 +511,10 @@ class When:
         for term in violation:
             if not isinstance(term, Term):
                 raise _non_term_error("penalize() violation terms", term)
-        self._guard("penalize")
-        weak = WeakConstraint(
-            (*self._conditions, *violation), weight, tuple(terms) if terms is not None else None, priority
+        self._guard()
+        weak = _build_weak_constraint(
+            (*self._conditions, *violation), weight, terms, priority, self._segment._check_singletons
         )
-        validate_weak_constraint(
-            weak.targets, list(weak.conditions), weak.render(), check_singletons=self._segment._check_singletons
-        )
-        weak.freeze()
         self._complete("penalize", weak)
 
 

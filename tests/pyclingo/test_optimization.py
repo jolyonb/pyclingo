@@ -84,12 +84,25 @@ def test_maximize_renders() -> None:
     assert "#maximize{ X : pick(X) }." in program.render()
 
 
+def _gringo_rejects_directive(text: str) -> bool:
+    """Whether gringo itself rejects the directive text — the live receipt for directive-scoping rejections."""
+    control = clingo.Control(logger=lambda code, message: None)
+    try:
+        control.add("base", [], text)
+        control.ground([("base", [])])
+    except RuntimeError:
+        return True
+    return False
+
+
 def test_unbound_element_variable_rejected() -> None:
     # No rule body exists to bind W: it must bind inside the element
     program = ASPProgram()
     W, X = Variable("W"), Variable("X")
     with pytest.raises(ValueError, match="Unsafe variable"):
         program.minimize(W, X, condition=Pick(x=X))
+    # gringo's own verdict on the equivalent text, as in test_scoping
+    assert _gringo_rejects_directive("pick(1). #minimize{ W, X : pick(X) }.")
 
 
 def test_singleton_element_variable_rejected() -> None:
@@ -98,6 +111,8 @@ def test_singleton_element_variable_rejected() -> None:
     Pair = Predicate.define("pair_opt", ["a", "b"])
     with pytest.raises(ValueError, match="Singleton variable"):
         program.minimize(X, condition=Pair(a=X, b=Y))
+    # The singleton lint is pyclingo-only: gringo grounds the same text
+    assert not _gringo_rejects_directive("pair_opt(1, 2). #minimize{ X : pair_opt(X, Y) }.")
 
 
 def test_weight_types_validated() -> None:

@@ -19,7 +19,6 @@ from .core import (
     ANY,
     INF,
     SUP,
-    Abs,
     Comparison,
     Compl,
     DefaultNegation,
@@ -125,7 +124,6 @@ __all__ = [  # noqa: RUF022 (categorized deliberately, not sorted)
     # Rule-building utilities
     "pool",
     "Not",
-    "Abs",
     "Compl",
     # Hierarchy types: these appear in public signatures and return types —
     # annotate with them; you rarely construct them directly

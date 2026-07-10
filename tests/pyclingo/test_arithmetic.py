@@ -21,7 +21,6 @@ from typing import Any
 import pytest
 
 from pyclingo import (
-    Abs,
     ASPProgram,
     Compl,
     Expression,
@@ -155,7 +154,7 @@ def test_basic_expression_rendering() -> None:
 
     # Unary operations
     assert (-X).render() == "-X"
-    assert Abs(X).render() == "|X|"
+    assert abs(X).render() == "|X|"
 
 
 def test_nested_expression_precedence() -> None:
@@ -359,4 +358,4 @@ def test_string_operands_rejected_at_construction() -> None:
     with pytest.raises(TypeError, match="no arithmetic in clingo"):
         X + String("a")
     with pytest.raises(TypeError, match="no arithmetic in clingo"):
-        Abs(String("a"))
+        abs(String("a"))

@@ -60,11 +60,7 @@ class Field[T]:
 
     __slots__ = ("_ground_type", "_name")
 
-    def __init__(self) -> None:
-        self._name = ""
-        self._ground_type: type = object
-
-    def _configure(self, name: str, ground_type: type) -> None:
+    def __init__(self, name: str, ground_type: type) -> None:
         self._name = name
         self._ground_type = ground_type
 
@@ -309,8 +305,7 @@ class Predicate(PredicateBase, Negatable, metaclass=_PredicateMeta):
         # treats these as required fields rather than defaulted ones. Inherited
         # descriptor fields stay registered so __post_init__ keeps skipping them.
         for field_name, ground in ground_types.items():
-            descriptor: Field[Any] = Field()
-            descriptor._configure(field_name, ground)
+            descriptor: Field[Any] = Field(field_name, ground)
             setattr(cls, field_name, descriptor)
         cls._descriptor_fields = cls._descriptor_fields | frozenset(ground_types)
 
@@ -583,11 +578,6 @@ class Predicate(PredicateBase, Negatable, metaclass=_PredicateMeta):
         if not isinstance(other, Predicate):
             return NotImplemented
         return type(self) is type(other) and self.render() == other.render()
-
-    def __ne__(self, other: object) -> bool:
-        if not isinstance(other, Predicate):
-            return NotImplemented
-        return not self.__eq__(other)
 
     def __hash__(self) -> int:
         return hash((type(self), self.render()))

@@ -548,23 +548,18 @@ class ASPProgram:
         """Whether any segment contains a RawASP block (raw text is invisible to the tree walkers)."""
         return any(isinstance(element, RawASP) for segment in self._segments.values() for element in segment)
 
-    def _validate_shown_predicates(self) -> None:
+    def _validate_shown_predicates(self, segment_occurrences: set[PredicateOccurrence], has_raw: bool) -> None:
         """
         Raise for show()/show_when() of atoms nothing derives — but only when
         the program has no raw_asp blocks: raw text is invisible to the
         walkers, so with raw blocks present an uncollected predicate may
         still be derived (that is what raw_asp's predicates= is for).
         """
-        if self._has_raw_asp():
+        if has_raw:
             return
         # Derivation evidence comes from the program's own rules: a show_when
         # condition's atoms must not vouch for themselves
-        atom_occurrences = {
-            (cls, negated)
-            for segment in self._segments.values()
-            for cls, negated, is_atom in segment.collect_predicate_occurrences()
-            if is_atom
-        }
+        atom_occurrences = {(cls, negated) for cls, negated, is_atom in segment_occurrences if is_atom}
         atom_classes = {cls for cls, _negated in atom_occurrences}
         for pred, visibility in self._show_overrides.items():
             if visibility is True and pred not in atom_classes:
@@ -581,7 +576,7 @@ class ASPProgram:
                     f"but no such atoms occur anywhere in the program — nothing derives them."
                 )
 
-    def _validate_names(self) -> None:
+    def _validate_names(self, all_classes: set[type[Predicate]]) -> None:
         """
         Raise on naming collisions that would corrupt solving:
 
@@ -592,7 +587,7 @@ class ASPProgram:
           silently unrelated symbol
         """
         by_signature: dict[tuple[str, int], type[Predicate]] = {}
-        for pred in self._collect_predicates():
+        for pred in all_classes:
             key = (pred.get_name(), pred.get_arity())
             if pred.get_arity() == 0 and key[0] in self._defined_constants:
                 raise ValueError(
@@ -644,8 +639,22 @@ class ASPProgram:
         for segment in self._segments.values():
             segment.check_pending()
         self._validate_constants()
-        self._validate_names()
-        self._validate_shown_predicates()
+        # The predicate-occurrence walk is the render's hot spot: computed
+        # once here, shared by both validators and the show block below
+        segment_occurrences = {
+            occ for segment in self._segments.values() for occ in segment.collect_predicate_occurrences()
+        }
+        show_when_occurrences = {
+            occ
+            for condition in self._show_when_overrides.values()
+            for occ in condition.collect_predicate_occurrences(as_argument=False)
+        }
+        all_classes = {cls for cls, _negated, _is_atom in segment_occurrences | show_when_occurrences} | set(
+            self._show_overrides
+        )
+        has_raw = self._has_raw_asp()
+        self._validate_names(all_classes)
+        self._validate_shown_predicates(segment_occurrences, has_raw)
 
         # Discriminate auto-tupled weak constraints program-wide, in document
         # order: two statements' coinciding ground tuples must not merge
@@ -708,19 +717,16 @@ class ASPProgram:
         # presence only where a positive atom could exist — walked, or
         # possibly hiding in raw text.
         # Presence comes from the program's own segments (raw declarations
-        # included) — the same evidence validation uses, so a show_when
+        # included) — the same evidence validation used above, so a show_when
         # condition can never vouch a dangling directive past the check
-        occurrences = {occ for segment in self._segments.values() for occ in segment.collect_predicate_occurrences()}
-        walked_positive = {cls for cls, negated, is_atom in occurrences if is_atom and not negated}
-        has_raw = self._has_raw_asp()
+        walked_positive = {cls for cls, negated, is_atom in segment_occurrences if is_atom and not negated}
         override_positive = {
             cls
             for cls, visibility in self._show_overrides.items()
             if visibility is True and (cls in walked_positive or has_raw)
         }
         positive_classes = walked_positive | override_positive
-        negated_classes = {cls for cls, negated, is_atom in occurrences if is_atom and negated}
-        all_classes = self._collect_predicates()
+        negated_classes = {cls for cls, negated, is_atom in segment_occurrences if is_atom and negated}
         for pred in all_classes:
             bool_visibility = self._show_overrides.get(pred, pred.shown_by_default())
             for negated, present_set in ((False, positive_classes), (True, negated_classes)):
@@ -1279,7 +1285,7 @@ class GroundedProgram:
                 self._predicate_types,
                 timeout,
                 self._message_handler,
-                converted or [],
+                converted,
                 mode,
             )
         return steps
@@ -1430,7 +1436,7 @@ class GroundedProgram:
             self._predicate_types,
             timeout,
             self._message_handler,
-            converted or [],
+            converted,
         )
         return steps
 

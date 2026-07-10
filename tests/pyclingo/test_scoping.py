@@ -34,19 +34,31 @@ Q = Predicate.define("q", ["x"])
 R2 = Predicate.define("r2", ["x", "y"])
 
 
+# The never-true guard atom, as a real predicate so render_body_terms places
+# it with the shared separator logic (a body ending in a conditional literal
+# needs ';' before the next literal — hand-appending ", guard" would silently
+# absorb the guard into the literal's condition)
+_ProbeGuard = Predicate.define("probe_guard_never_true", [], show=False)
+
+
 def _gringo_grounds(head: Term | None, body: Sequence[Term]) -> bool:
     """
     Whether gringo itself grounds the rule (unsafe variables are ground-time
     errors). A never-true guard atom rides in the body: gringo's safety
     verdict is static and unaffected, but a self-recursive assignment
     aggregate (p(N) :- #count{ X : p(X) } = N) would otherwise grow its
-    value set forever during grounding.
+    value set forever during grounding. A PARSE failure fails the test
+    outright — the probe's question is safety, never syntax, so a rendering
+    regression must not impersonate a safety rejection.
     """
     head_str = "" if head is None else head.render()
-    guarded_body = f"{render_body_terms(list(body))}, __probe_guard" if body else "__probe_guard"
+    guarded_body = render_body_terms([*body, _ProbeGuard()])
     control = clingo.Control(logger=lambda code, message: None)
     try:
         control.add("base", [], f"{head_str} :- {guarded_body}.")
+    except RuntimeError:
+        pytest.fail(f"probe text failed to PARSE (safety was never judged): {_rule_text(head, body)}")
+    try:
         control.ground([("base", [])])
     except RuntimeError:
         return False

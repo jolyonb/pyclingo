@@ -20,7 +20,7 @@ class Operation(Enum):
     BITXOR = "^"  # Python: ^
     UNARY_MINUS = "unary-"  # Python: unary -
     COMPLEMENT = "~"  # Python: Compl(x)  (~ itself is reserved for default negation)
-    ABS = "abs"  # Python: Abs(x)  (ASP spells absolute value |x|)
+    ABS = "abs"  # Python: abs(x)  (ASP spells absolute value |x|)
 
 
 UNARY_OPERATIONS = {Operation.UNARY_MINUS, Operation.COMPLEMENT, Operation.ABS}
@@ -45,21 +45,18 @@ NONCOMMUTATIVE_OPERATIONS = {Operation.SUBTRACT, Operation.INTEGER_DIVIDE, Opera
 EXPLICIT_PARENS_OPERATIONS = {Operation.POWER, Operation.BITAND, Operation.BITOR, Operation.BITXOR}
 
 # Operator precedence (higher number = higher precedence), established empirically
-# against gringo (tests/pyclingo/test_arithmetic.py pins these): xor is loosest,
-# then or, and, additive, multiplicative, power (right-associative), unary.
-# Note unary minus binds TIGHTER than ** in gringo, unlike Python.
+# against gringo (tests/pyclingo/test_arithmetic.py pins these): additive below
+# multiplicative, unary tightest. Note unary minus binds TIGHTER than ** in
+# gringo, unlike Python. Only operators OUTSIDE EXPLICIT_PARENS_OPERATIONS
+# appear: those always parenthesize, so their precedence is never consulted.
 PRECEDENCE = {
-    Operation.BITXOR: 0,
-    Operation.BITOR: 1,
-    Operation.BITAND: 2,
-    Operation.ADD: 3,
-    Operation.SUBTRACT: 3,
-    Operation.MULTIPLY: 4,
-    Operation.INTEGER_DIVIDE: 4,
-    Operation.MODULO: 4,
-    Operation.POWER: 5,
-    Operation.UNARY_MINUS: 6,
-    Operation.COMPLEMENT: 6,
+    Operation.ADD: 0,
+    Operation.SUBTRACT: 0,
+    Operation.MULTIPLY: 1,
+    Operation.INTEGER_DIVIDE: 1,
+    Operation.MODULO: 1,
+    Operation.UNARY_MINUS: 2,
+    Operation.COMPLEMENT: 2,
 }
 
 

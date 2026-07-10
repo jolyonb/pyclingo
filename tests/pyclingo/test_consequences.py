@@ -75,7 +75,8 @@ def test_path_keeps_the_receipts() -> None:
     assert len(result.path) >= 2  # the union is no single answer set
     assert all(type(entry) is AtomCollection for entry in result.path)
     first = {a["x"].value for a in result.path[0].atoms(Color)}
-    assert 1 <= len(first) <= 2  # a genuine answer set of this program
+    assert 1 <= len(first) <= 2  # a genuine answer set of this program...
+    assert first != {1, 2}  # ...which the forbid(c1, c2) constraint would exclude
     # brave approximations grow monotonically to the final answer
     seen: set[int] = set()
     for entry in result.path:

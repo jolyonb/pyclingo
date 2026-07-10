@@ -316,7 +316,7 @@ class ArithmeticOps:
         )
 
     def __abs__(self: Any) -> Expression:
-        """abs(x) is |x|, exactly Abs(x) — unambiguous, unlike ~."""
+        """abs(x) is |x| — unambiguous, unlike ~ (which stays reserved for negation)."""
         return Expression(None, Operation.ABS, self)
 
 
@@ -1495,11 +1495,6 @@ def Not(term: Negatable) -> DefaultNegation:
         'not person("john")'
     """
     return DefaultNegation(term)
-
-
-def Abs(term: ExpressionFieldType) -> Expression:
-    """Builds an absolute-value expression, |term|."""
-    return Expression(None, Operation.ABS, term)
 
 
 def Compl(term: ExpressionFieldType) -> Expression:

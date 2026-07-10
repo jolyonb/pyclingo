@@ -1,9 +1,6 @@
-from pyclingo.conditioned_element import ConditionedElement
+from pyclingo.conditioned_element import ConditionedElement, ConditionType
 from pyclingo.core import Comparison, DefaultNegation, PredicateOccurrence, RenderingContext, Term
 from pyclingo.predicate import Predicate
-
-# Terms that can be used in a conditional literal
-type ConditionalTermType = Predicate | Comparison | DefaultNegation
 
 
 class ConditionalLiteral(Term):
@@ -21,8 +18,8 @@ class ConditionalLiteral(Term):
 
     def __init__(
         self,
-        head: ConditionalTermType,
-        condition: ConditionalTermType | list[ConditionalTermType],
+        head: ConditionType,
+        condition: ConditionType | list[ConditionType],
     ):
         """
         Initialize a conditional literal.
@@ -44,14 +41,14 @@ class ConditionalLiteral(Term):
         self._element = ConditionedElement((head,), condition, "conditional literal")
 
     @property
-    def head(self) -> ConditionalTermType:
+    def head(self) -> ConditionType:
         """Gets the head term of the conditional literal."""
         head = self._element.targets[0]
         assert isinstance(head, (Predicate, Comparison, DefaultNegation))
         return head
 
     @property
-    def condition(self) -> list[ConditionalTermType]:
+    def condition(self) -> list[ConditionType]:
         """Gets the conditions of the conditional literal (a defensive copy)."""
         return self._element.conditions
 
