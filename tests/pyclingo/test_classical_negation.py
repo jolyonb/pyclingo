@@ -107,6 +107,6 @@ def test_scoping_counts_signed_atoms() -> None:
     # A negated atom's variables participate in safety and singleton checks
     program = ASPProgram()
     X, Y = Variable("X"), Variable("Y")
+    program.when(-P(x=X)).derive(Q(x=X))  # legal: X occurs twice, sign included
     with pytest.raises(ValueError, match="Singleton"):
-        program.when(-P(x=X)).derive(Q(x=X))
-        program.when(P(x=X), -Q(x=Y)).derive(Q(x=X))
+        program.when(P(x=X), -Q(x=Y)).derive(Q(x=X))  # Y under the negation counts, once

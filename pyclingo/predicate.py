@@ -6,7 +6,7 @@ import types
 from abc import ABCMeta
 from dataclasses import Field as DataclassField
 from dataclasses import dataclass, fields
-from typing import Any, ClassVar, Self, SupportsIndex, cast, dataclass_transform, get_args, get_origin, overload
+from typing import Any, ClassVar, Never, Self, SupportsIndex, cast, dataclass_transform, get_args, get_origin, overload
 
 from pyclingo.core import (
     DefaultNegation,
@@ -536,7 +536,7 @@ class Predicate(PredicateBase, Negatable, metaclass=_PredicateMeta):
 
     def __getitem__(self, key: str) -> Any:
         """Access field values by name, as Terms; raises KeyError for unknown fields."""
-        if key not in self.field_names():
+        if key not in type(self).__dataclass_fields__:
             raise KeyError(f"Predicate has no field named '{key}'")
         return self.read_as_term(key)
 
@@ -565,13 +565,14 @@ class Predicate(PredicateBase, Negatable, metaclass=_PredicateMeta):
 
     def render(self, context: RenderingContext = RenderingContext.DEFAULT) -> str:
         sign = "-" if self.negated else ""
-        if not self.argument_fields():
+        arguments = self.arguments
+        if not arguments:
             return f"{sign}{self.get_name()}"
 
-        if len(self.arguments) == 1:
-            args_str = self.arguments[0].render(context=RenderingContext.LONE_PREDICATE_ARGUMENT)
+        if len(arguments) == 1:
+            args_str = arguments[0].render(context=RenderingContext.LONE_PREDICATE_ARGUMENT)
         else:
-            args_str = ", ".join(arg.render() for arg in self.arguments)
+            args_str = ", ".join(arg.render() for arg in arguments)
 
         return f"{sign}{self.get_name()}({args_str})"
 
@@ -646,6 +647,13 @@ class Predicate(PredicateBase, Negatable, metaclass=_PredicateMeta):
         replaced = type(self)(**merged)
         return -replaced if self.negated else replaced
 
+    def __or__(self, other: object) -> Never:
+        """p | q is a disjunction attempt: always raises, teaching the modeled spellings."""
+        raise TypeError(
+            "pyclingo does not model disjunctive heads (p | q): "
+            "Choice(...).at_least(1) covers most uses, raw_asp() the rest"
+        )
+
     def __invert__(self) -> DefaultNegation:
         """~atom builds "not atom". (On a plain comparison, ~ builds the complement instead — see Not.)"""
         # Overridden for the precise return type: an assumptions list wants
@@ -714,11 +722,12 @@ class Predicate(PredicateBase, Negatable, metaclass=_PredicateMeta):
         repr() is Python, canonical_str() is this explicit form.
         """
         sign = "-" if self.negated else ""
-        if not self.argument_fields():
+        argument_fields = self.argument_fields()
+        if not argument_fields:
             return f"{sign}{self.get_name()}()"
         args = ", ".join(
             f"{f.name}={value.canonical_str() if isinstance(value, Predicate) else value.render()}"
-            for f in self.argument_fields()
+            for f in argument_fields
             for value in (self[f.name],)
         )
         return f"{sign}{self.get_name()}({args})"

@@ -4,6 +4,7 @@ specific schema out of clingo's stats dict; this names that dependency so a
 clingo schema change fails here, not as an opaque KeyError in user code.
 """
 
+import re
 from copy import deepcopy
 from itertools import islice
 
@@ -35,6 +36,8 @@ def test_format_statistics_renders_the_full_report() -> None:
         "Constraints",
     ):
         assert anchor in report, f"missing section: {anchor}"
+    # And at least one VALUE, not just anchors: three facts, one model
+    assert re.search(r"Models\s*:\s*1\b", report)
 
 
 def test_wall_time_present_in_raw_statistics() -> None:

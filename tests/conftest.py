@@ -28,6 +28,7 @@ from pyclingo import (
     Expression,
     Pool,
     Predicate,
+    Segment,
     Value,
 )
 
@@ -89,6 +90,22 @@ def rendered_programs_must_parse(request: pytest.FixtureRequest, monkeypatch: py
         return output
 
     monkeypatch.setattr(ASPProgram, "render", checked_program_render)
+
+    original_segment_render = Segment.render
+
+    def checked_segment_render(self: Segment, *args: Any, **kwargs: Any) -> str:
+        # A segment renders complete statements (a fragment, not a program):
+        # the parse invariant covers it exactly like a program render
+        depth[0] += 1
+        try:
+            output = original_segment_render(self, *args, **kwargs)
+        finally:
+            depth[0] -= 1
+        if depth[0] == 0:
+            assert_clingo_accepts(output)
+        return output
+
+    monkeypatch.setattr(Segment, "render", checked_segment_render)
 
     for term_class, host in _TERM_HOSTS:
         # Patch every class in the family that defines its OWN render: a

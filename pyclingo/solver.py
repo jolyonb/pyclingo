@@ -555,26 +555,6 @@ class ASPProgram:
         condition.freeze()
         self._show_when_overrides[key] = condition
 
-    def _collect_predicates(self) -> set[type[Predicate]]:
-        """
-        Every predicate class the program knows, by ANY door: segment
-        elements, show_when conditions, and show()/hide() overrides. This
-        set is the reconstruction registry and the declaration universe
-        for the raw_asp contract — naming a class to show() declares it
-        as fully as predicates= does, because the class object itself is
-        what a declaration provides.
-        """
-        return {cls for cls, _negated, _is_atom in self._collect_predicate_occurrences()} | set(self._show_overrides)
-
-    def _collect_predicate_occurrences(self) -> set[PredicateOccurrence]:
-        """(class, negated, is_atom) occurrences across the whole program."""
-        occurrences: set[PredicateOccurrence] = set()
-        for segment in self._segments.values():
-            occurrences.update(segment.collect_predicate_occurrences())
-        for condition in self._show_when_overrides.values():
-            occurrences.update(condition.collect_predicate_occurrences(as_argument=False))
-        return occurrences
-
     def _has_raw_asp(self) -> bool:
         """Whether any segment contains a RawASP block (raw text is invisible to the tree walkers)."""
         return any(isinstance(element, RawASP) for segment in self._segments.values() for element in segment)
@@ -653,20 +633,34 @@ class ASPProgram:
         output churns on unrelated edits, so keep checked-in or
         golden-compared renders unannotated.
         """
-        return "\n".join(line.text for line in self._render_lines(annotate=annotate)) + "\n"
+        lines, _all_classes, _has_raw = self._render_lines(annotate=annotate)
+        return "\n".join(line.text for line in lines) + "\n"
 
-    def _render_with_origins(self) -> tuple[str, dict[int, SourceLocation]]:
-        """The rendered program plus a 1-based line -> authoring-location map, for grounding diagnostics."""
-        lines = self._render_lines(annotate=False)
+    def _render_with_origins(self) -> tuple[str, dict[int, SourceLocation], set[type[Predicate]], bool]:
+        """
+        The rendered program, a 1-based line -> authoring-location map for
+        grounding diagnostics, and the walk products ground() reuses: the
+        program's full class universe and whether raw blocks exist.
+        """
+        lines, all_classes, has_raw = self._render_lines(annotate=False)
         origins = {
             line_number: line.element.source_location
             for line_number, line in enumerate(lines, start=1)
             if line.element is not None and line.element.source_location is not None
         }
-        return "\n".join(line.text for line in lines) + "\n", origins
+        return "\n".join(line.text for line in lines) + "\n", origins, all_classes, has_raw
 
-    def _render_lines(self, annotate: bool) -> list[RenderedLine]:
-        """Every rendered line carrying the element that produced it (program-level lines carry None)."""
+    def _render_lines(self, annotate: bool) -> tuple[list[RenderedLine], set[type[Predicate]], bool]:
+        """
+        Every rendered line carrying the element that produced it
+        (program-level lines carry None) — plus the class universe and the
+        raw-block flag, computed by the render's one occurrence walk so
+        ground() never re-walks the tree. The universe covers every door
+        (segment elements, show_when conditions, show()/hide() overrides):
+        it is the reconstruction registry and the raw_asp declaration
+        contract's world — naming a class to show() declares it as fully
+        as predicates= does.
+        """
         for segment in self._segments.values():
             segment.check_pending()
         self._validate_constants()
@@ -773,7 +767,7 @@ class ASPProgram:
         if show_statements or any_hidden:
             rendered.extend(RenderedLine(line, None) for line in ("", "#show.", *sorted(show_statements)))
 
-        return rendered
+        return rendered, all_classes, has_raw
 
     def _collect_used_defined_constants(self) -> set[str]:
         """Collect all defined constant names used anywhere in the program."""
@@ -820,7 +814,7 @@ class ASPProgram:
             GroundingError: If an error occurs during parsing or grounding,
                 or the log level threshold is exceeded
         """
-        asp_source, line_origins = self._render_with_origins()
+        asp_source, line_origins, all_classes, has_raw = self._render_with_origins()
 
         message_handler = ClingoMessageHandler(asp_source, stop_on_level=stop_on_log_level, line_origins=line_origins)
         control = clingo.Control(logger=message_handler.on_message, arguments=["--stats"])
@@ -869,7 +863,7 @@ class ASPProgram:
             assert isinstance(control.configuration.solve, clingo.Configuration)
             control.configuration.solve.project = "show"
 
-        predicate_types = {(pred.get_name(), pred.get_arity()): pred for pred in self._collect_predicates()}
+        predicate_types = {(pred.get_name(), pred.get_arity()): pred for pred in all_classes}
 
         # The FULLY hidden classes: no bool visibility and no conditional
         # show on either sign. Their atoms are never read back into models
@@ -903,7 +897,7 @@ class ASPProgram:
         # the raw_asp contract (exhaustive declaration) is enforced here,
         # against gringo's own signature table: every ground signature must
         # be a declared class.
-        if self._has_raw_asp():
+        if has_raw:
             undeclared = sorted(
                 {(name, arity) for name, arity, _positive in control.symbolic_atoms.signatures} - set(predicate_types)
             )

@@ -589,6 +589,8 @@ def test_penalize_validation_matches_forbid_exactly() -> None:
         )
     with pytest.raises(ValueError, match="anonymous variable"):
         program.penalize(Pick(x=X), weight=1, terms=[X, ANY])
+    # gringo's live verdict: _ in a weak-constraint tuple is unsafe
+    assert _gringo_rejects_directive("pick(1). :~ pick(X). [1, X, _]")
 
 
 def test_vanished_tier_bound_keys_drop_silently() -> None:
@@ -708,3 +710,5 @@ def test_anonymous_variable_rejected_in_optimization_tuples() -> None:
     Weighted = Predicate.define("wtd_anon", ["x", "w"])
     with pytest.raises(ValueError, match="cannot appear in an optimization tuple"):
         program.minimize(W, ANY, condition=Weighted(x=ANY, w=W))
+    # gringo's live verdict on the equivalent text: _ in the tuple is unsafe
+    assert _gringo_rejects_directive("wtd_anon(1, 2). #minimize{ W, _ : wtd_anon(_, W) }.")

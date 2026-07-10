@@ -11,7 +11,7 @@ import weakref
 from abc import ABC, ABCMeta, abstractmethod
 from collections.abc import Sequence
 from enum import Enum
-from typing import TYPE_CHECKING, Any, ClassVar, Never, Self, cast
+from typing import TYPE_CHECKING, Any, ClassVar, Never, Self, TypeIs, cast
 
 from pyclingo.operators import (
     BINARY_OPERATIONS,
@@ -322,12 +322,6 @@ class ArithmeticOps:
         return Expression(None, Operation.ABS, self)
 
 
-# The cache key for constructing a Value with no argument (Supremum/Infimum).
-# A sentinel rather than None, so an explicit None argument never keys like
-# the no-argument spelling.
-_NO_ARGUMENT = object()
-
-
 class _ValueMeta(ABCMeta):
     """
     Caches Value instances: constructing the same value twice returns the same
@@ -341,19 +335,19 @@ class _ValueMeta(ABCMeta):
     plain form first — str/int subclasses exactly as construction stores
     them, so what is keyed is what is stored, and equal-after-conversion
     inputs share one canonical instance. After conversion, every valid
-    Value argument is exactly a plain str, a plain int, or absent
-    (Supremum/Infimum); those shapes key as (class, value), unambiguous
-    because no two of them compare equal across types. Every other shape —
-    bool, float, an unhashable — never touches the cache (so it cannot
-    cache-hit an equal resident like Number(1) and be laundered past
-    validation) and falls through for __init__ to reject.
+    one-argument Value holds exactly a plain str or a plain int; those key
+    as (class, value), unambiguous because str and int never compare equal.
+    Every other shape — bool, float, an unhashable, no argument at all —
+    never touches the cache and falls through: __init__ rejects the wrong
+    shapes, and zero-argument Supremum/Infimum are owned by their own
+    __new__ (strongly, surviving clear_cache()).
     """
 
     def __call__[T](cls: type[T], *args: Any, **kwargs: Any) -> T:
         # Value constructors are positional-only, so any keyword call falls
         # through for __init__ to reject natively — nothing to launder
-        if not kwargs and len(args) <= 1:
-            value = args[0] if args else _NO_ARGUMENT
+        if not kwargs and len(args) == 1:
+            value = args[0]
             if isinstance(value, str):
                 # Handle subclasses
                 value = str(value)
@@ -361,7 +355,7 @@ class _ValueMeta(ABCMeta):
             elif isinstance(value, int) and not isinstance(value, bool):
                 value = int(value)
                 args = (value,)
-            if type(value) in (str, int) or value is _NO_ARGUMENT:
+            if type(value) in (str, int):
                 key = (cls, value)
                 cached = Value._cache.get(key)
                 if cached is None:
@@ -1446,6 +1440,17 @@ class Comparison(Negatable):
         return variables
 
 
+def _is_plain_comparison(term: Term) -> TypeIs[Comparison]:
+    """
+    A Comparison with no aggregate side: the one shape Not()/~ normalize to
+    its complement and DefaultNegation therefore refuses to wrap. The guard
+    and the router share this definition so they can never disagree.
+    """
+    return isinstance(term, Comparison) and not any(
+        isinstance(side, AggregateBase) for side in (term.left_term, term.right_term)
+    )
+
+
 class DefaultNegation(Negatable):
     """
     Represents default negation ('not') in ASP programs.
@@ -1464,9 +1469,7 @@ class DefaultNegation(Negatable):
         if not isinstance(term, Negatable):
             raise TypeError("Default negation can only be applied to predicates, comparisons, or already negated terms")
 
-        if isinstance(term, Comparison) and not any(
-            isinstance(side, AggregateBase) for side in (term.left_term, term.right_term)
-        ):
+        if _is_plain_comparison(term):
             raise ValueError(
                 "A plain comparison never wraps in 'not': gringo normalizes "
                 "'not X != Y' to the complementary comparison 'X = Y' before "
@@ -1557,9 +1560,7 @@ def Not(term: Negatable) -> DefaultNegation | Comparison:
         >>> Not(X != 5).render()  # a plain comparison inverts
         'X = 5'
     """
-    if isinstance(term, Comparison) and not any(
-        isinstance(side, AggregateBase) for side in (term.left_term, term.right_term)
-    ):
+    if _is_plain_comparison(term):
         if isinstance(term.right_term, Pool):
             raise ValueError(
                 "Negating a pool comparison does not mean 'not in': pools expand "

@@ -263,3 +263,10 @@ def test_dataclasses_replace_drops_the_sign_as_documented() -> None:
     P = Predicate.define("p_repl_dc", ["x", "y"])
     replaced = dataclasses.replace(-P(x=1, y=2), y=3)  # type: ignore[call-arg]  # fields unknowable for define()
     assert replaced == P(x=1, y=3)  # sign silently gone: the documented trap
+
+
+def test_disjunction_attempt_teaches_the_modeled_spellings() -> None:
+    P = Predicate.define("p_disj", ["x"])
+    Q = Predicate.define("q_disj", ["x"])
+    with pytest.raises(TypeError, match=r"disjunctive heads.*Choice\(\.\.\.\)\.at_least\(1\)"):
+        P(x=1) | Q(x=1)  # type: ignore[operator]

@@ -5,6 +5,7 @@ Tests for Aggregate construction guards.
 import inspect
 import re
 
+import clingo
 import pytest
 
 from pyclingo import ANY, SUP, ASPProgram, Count, Max, Number, Predicate, SourceLocation, String, Sum, Variable
@@ -149,6 +150,11 @@ def test_anonymous_variable_rejected_in_aggregate_tuples() -> None:
     N = Variable("N")
     with pytest.raises(ValueError, match="cannot appear in an aggregate tuple"):
         program.when(N == Count(ANY, condition=P(x=ANY))).derive(Q(n=N))
+    # gringo's live verdict on the equivalent text: _ in the tuple is unsafe
+    receipt = clingo.Control(logger=lambda code, message: None)
+    receipt.add("base", [], "p_anon(1). q_anon(N) :- N = #count{ _ : p_anon(_) }.")
+    with pytest.raises(RuntimeError):
+        receipt.ground([("base", [])])
 
 
 def test_sum_rejects_literal_string_weights() -> None:

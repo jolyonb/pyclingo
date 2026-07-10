@@ -22,6 +22,7 @@ from pyclingo import (
     Count,
     Not,
     Predicate,
+    RangePool,
     Sum,
     Term,
     Variable,
@@ -411,6 +412,14 @@ def test_unsafe_rules_raise_at_the_statement_verb() -> None:
 # --- ungrounded explicit pools (the fourth deliberate lint) ---
 
 
+def test_range_binding_receipts() -> None:
+    # The one-way range edge, with gringo's live verdicts: an unbound bound
+    # is unsafe, and ranges never invert (X bound does not bind N)
+    ok(P(x=X), [Q(x=N), X.in_(RangePool(1, N))])  # forward: bound N generates X
+    bad(P(x=X), [X.in_(RangePool(1, N))], "Unsafe", gringo_rejects=True)  # N unbound
+    bad(P(x=N), [Q(x=X), X.in_(RangePool(1, N))], "Unsafe", gringo_rejects=True)  # inversion
+
+
 def test_head_pool_with_variables_is_the_neighbor_idiom() -> None:
     # adj(X, (X-1; X+1)) :- col(X). — head pools expand conjunctively and
     # their variables are ordinary head variables; gringo receipt included
@@ -432,3 +441,5 @@ def test_body_pool_with_variables_is_rejected_even_where_gringo_accepts() -> Non
 def test_choice_and_comparison_heads_refuse_ungrounded_pools() -> None:
     with pytest.raises(ValueError, match="rule-HEAD arguments"):
         validate_rule(Choice(P(x=pool([X, X + 1])), condition=Q(x=X)), [Q(x=X)], "<test rule>")
+    with pytest.raises(ValueError, match="rule-HEAD arguments"):
+        validate_rule(X == R2(x=X, y=pool([X, X + 1])), [Q(x=X)], "<test rule>")

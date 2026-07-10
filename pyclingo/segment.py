@@ -301,6 +301,11 @@ class Segment:
         classically negated atoms, declare -P as well to emit "#show -p/n."
         (predicates=[P, -P]), or the -p atoms stay absent from output.
 
+        A #script block must open and close within ONE raw block: splitting
+        it across blocks (or segments) defeats the per-segment scan that
+        keeps render(annotate=True) notes out of embedded source, and the
+        second block's text is judged as ASP rather than script.
+
         Directives that need solver configuration ground SILENTLY INERT
         under the pyclingo verbs: #project does nothing until the solve
         projects (grounded.control.configuration.solve.project =
