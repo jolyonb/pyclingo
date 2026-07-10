@@ -51,6 +51,11 @@ class Field[T]:
     rule atom like Person(age=N) transiently holds the Variable, which a type
     checker will still call int — reads of non-ground atoms are the one place
     the static types overpromise.
+
+    Migration note: an UNTYPED field reads back as a wrapped term (atom.x is
+    a Number), a typed one as the plain Python value (atom.x is an int) — so
+    adding Field[...] to an existing schema changes every read site
+    (atom.x.value breaks). Migrate the reads together with the annotation.
     """
 
     __slots__ = ("_ground_type", "_name")

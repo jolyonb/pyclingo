@@ -86,6 +86,22 @@ def _head_classes(head: Term) -> set[type[Predicate]]:
     return set()
 
 
+def _validate_timeout(timeout: float) -> None:
+    """The timeout checks, shared by _begin_solve and the sugar verbs (cheap checks before grounding is paid for)."""
+    if isinstance(timeout, bool) or not isinstance(timeout, (int, float)):
+        raise TypeError(f"timeout is seconds (a number), got {type(timeout).__name__}")
+    if timeout < 0 or math.isnan(timeout):
+        raise ValueError(f"timeout must be non-negative, got {timeout}")
+
+
+def _validate_max_iterations(max_iterations: int) -> None:
+    """The max_iterations checks, shared by the eager folds and the sugar verbs."""
+    if isinstance(max_iterations, bool) or not isinstance(max_iterations, int):
+        raise TypeError(f"max_iterations is a count, got {type(max_iterations).__name__}")
+    if max_iterations < 0:
+        raise ValueError(f"max_iterations must be non-negative (0 means unbounded), got {max_iterations}")
+
+
 def _annotate_lines(lines: list[RenderedLine]) -> list[RenderedLine]:
     """
     Append a "  % file:line" comment to each statement line, naming the
@@ -196,7 +212,8 @@ class ASPProgram:
                     )
                 )
                 raise AttributeError(
-                    f"ASPProgram has no assignable attribute '{name}'; assignable attributes: {assignable}"
+                    f"ASPProgram has no assignable attribute '{name}'; assignable attributes: "
+                    f"{assignable}. (Underscored attributes are exempt — subclass state goes there.)"
                 )
         super().__setattr__(name, value)
 
@@ -599,7 +616,7 @@ class ASPProgram:
         1. Header comments
         2. #const definitions (every registered constant — raw_asp text may use them, so none are filtered)
         3. Program segments (rules, comments, section headers)
-        4. #show directives (program overrides, then class defaults)
+        4. #show directives (one deduplicated block, sorted)
 
         annotate=True appends a "  % file:line" comment to each statement
         line, naming the user line that authored it; statements with no
@@ -679,7 +696,7 @@ class ASPProgram:
             segment_lines = segment.render_lines(with_header=with_headers, weak_discriminators=weak_discriminators)
             rendered.extend(_annotate_lines(segment_lines) if annotate else segment_lines)
 
-        # 4. #show directives: program overrides first, class defaults second.
+        # 4. #show directives: one deduplicated block, emitted sorted.
         # The bare "#show." must be emitted whenever ANY predicate is hidden, even if
         # nothing is shown — without it, clingo defaults to showing every atom.
         show_statements: set[str] = set()
@@ -915,6 +932,7 @@ class ASPProgram:
             model enumeration is lazy. Every call returns an independent SolveResult,
             so repeated solves on one program never interfere.
         """
+        _validate_timeout(timeout)  # before grounding is paid for
         return self.ground(stop_on_log_level=stop_on_log_level).solve(timeout=timeout, assumptions=assumptions)
 
     def cautious(
@@ -925,6 +943,8 @@ class ASPProgram:
         stop_on_log_level: LogLevel = LogLevel.INFO,
     ) -> CautiousConsequences | None:
         """The atoms true in every answer set; sugar for ground().cautious(). See GroundedProgram.cautious()."""
+        _validate_timeout(timeout)  # before grounding is paid for
+        _validate_max_iterations(max_iterations)
         return self.ground(stop_on_log_level=stop_on_log_level).cautious(
             timeout=timeout, max_iterations=max_iterations, assumptions=assumptions
         )
@@ -937,6 +957,8 @@ class ASPProgram:
         stop_on_log_level: LogLevel = LogLevel.INFO,
     ) -> BraveConsequences | None:
         """The atoms true in at least one answer set; sugar for ground().brave(). See GroundedProgram.brave()."""
+        _validate_timeout(timeout)  # before grounding is paid for
+        _validate_max_iterations(max_iterations)
         return self.ground(stop_on_log_level=stop_on_log_level).brave(
             timeout=timeout, max_iterations=max_iterations, assumptions=assumptions
         )
@@ -952,6 +974,8 @@ class ASPProgram:
         stop_on_log_level: LogLevel = LogLevel.INFO,
     ) -> Optimum | None:
         """The best answer set by the objectives; sugar for ground().optimize(). See GroundedProgram.optimize()."""
+        _validate_timeout(timeout)  # before grounding is paid for
+        _validate_max_iterations(max_iterations)
         return self.ground(stop_on_log_level=stop_on_log_level).optimize(
             timeout=timeout,
             max_iterations=max_iterations,
@@ -1126,10 +1150,7 @@ class GroundedProgram:
         cap would silently truncate refinements. Returns the converted
         assumptions.
         """
-        if isinstance(timeout, bool) or not isinstance(timeout, (int, float)):
-            raise TypeError(f"timeout is seconds (a number), got {type(timeout).__name__}")
-        if timeout < 0 or math.isnan(timeout):
-            raise ValueError(f"timeout must be non-negative, got {timeout}")
+        _validate_timeout(timeout)
         if self._ground_levels and mode is None:
             raise ValueError("This program optimizes (#minimize/#maximize present). Solve it with optimize().")
         if self._ground_levels and isinstance(mode, RefinementMode):
@@ -1442,10 +1463,7 @@ class GroundedProgram:
         before any model at all (no best-so-far exists to return), and
         ValueError if the program has no objective.
         """
-        if isinstance(max_iterations, bool) or not isinstance(max_iterations, int):
-            raise TypeError(f"max_iterations is a count, got {type(max_iterations).__name__}")
-        if max_iterations < 0:
-            raise ValueError(f"max_iterations must be non-negative (0 means unbounded), got {max_iterations}")
+        _validate_max_iterations(max_iterations)
         steps = self.optimize_iter(timeout, assumptions, strategy, all_optima=all_optima, bound=bound)
         path: list[CostedModel] = []
         complete = False
@@ -1476,6 +1494,7 @@ class GroundedProgram:
             messages=steps.messages,
             optima=tuple(certified) if all_optima else None,
             complete=complete,
+            statistics=steps.statistics,
             # The cost tuple has one entry per surviving level, highest
             # first — the same order optimization_levels reports
             levels=dict(zip(self._ground_levels, best.cost, strict=True)),
@@ -1499,10 +1518,7 @@ class GroundedProgram:
         it short, including a cap landing exactly on the final step).
         Returns None for proven unsatisfiability.
         """
-        if isinstance(max_iterations, bool) or not isinstance(max_iterations, int):
-            raise TypeError(f"max_iterations is a count, got {type(max_iterations).__name__}")
-        if max_iterations < 0:
-            raise ValueError(f"max_iterations must be non-negative (0 means unbounded), got {max_iterations}")
+        _validate_max_iterations(max_iterations)
         steps = self._refine_iter(mode, timeout, assumptions)
         path: list[AtomCollection] = []
         complete = False
@@ -1532,4 +1548,5 @@ class GroundedProgram:
             complete=complete,
             messages=steps.messages,
             timed_out=steps.timed_out,
+            statistics=steps.statistics,
         )

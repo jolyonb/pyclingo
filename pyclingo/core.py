@@ -315,6 +315,10 @@ class ArithmeticOps:
             "for bitwise complement, use Compl(x)"
         )
 
+    def __abs__(self: Any) -> Expression:
+        """abs(x) is |x|, exactly Abs(x) — unambiguous, unlike ~."""
+        return Expression(None, Operation.ABS, self)
+
 
 # The cache key for constructing a Value with no argument (Supremum/Infimum).
 # A sentinel rather than None, so an explicit None argument never keys like
@@ -1242,6 +1246,18 @@ class Comparison(Negatable):
         if not isinstance(operator, ComparisonOperator):
             raise TypeError(f"Comparison operator must be a ComparisonOperator, got {type(operator).__name__}")
         self._operator = operator
+
+        # A bare ANY as a whole side matches anything and binds nothing:
+        # gringo makes every such comparison unsafe (each '_' is a fresh
+        # unbound variable). ANY inside a compound operand stays legal —
+        # C == Cell(X, ANY) destructures.
+        for side in (self._left_term, self._right_term):
+            if isinstance(side, Variable) and side.is_anonymous:
+                raise ValueError(
+                    "'_' cannot be a comparison operand: it matches anything and "
+                    "binds nothing, so gringo rejects the rule as unsafe. Compare "
+                    "against a named variable, or drop the condition."
+                )
 
         if isinstance(self._left_term, AggregateBase) and isinstance(self._right_term, AggregateBase):
             raise ValueError(

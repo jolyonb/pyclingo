@@ -107,3 +107,18 @@ def test_statistics_finalize_after_a_timeout() -> None:
     list(islice(result, 100_000))
     assert not result.exhausted
     assert result.statistics is not None and "wall_time" in result.statistics
+
+
+def test_statistics_property_returns_a_copy() -> None:
+    # Caller mutation must not corrupt the handle or format_statistics()
+    program = ASPProgram()
+    P = Predicate.define("p_stat_copy", ["x"])
+    program.fact(P(x=1))
+    result = program.solve()
+    list(result)
+    snapshot = result.statistics
+    assert snapshot is not None
+    snapshot.clear()
+    fresh = result.statistics
+    assert fresh is not None and "wall_time" in fresh
+    assert "wall_time" in result.format_statistics() or "Time" in result.format_statistics()

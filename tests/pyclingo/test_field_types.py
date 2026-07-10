@@ -132,7 +132,7 @@ def test_solution_with_unexpected_type_fails_loudly() -> None:
     # loading it must fail at the load, not corrupt downstream
     program = ASPProgram()
     program.raw_asp('raw_clue("a1", "seven").', predicates=[RawClue])
-    with pytest.raises(TypeError, match="Field 'value' expects int, got str"):
+    with pytest.raises(TypeError, match=r"raw_clue.*cannot be read back.*Field 'value' expects int, got str"):
         list(program.solve())
 
 

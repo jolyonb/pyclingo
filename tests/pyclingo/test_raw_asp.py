@@ -255,3 +255,14 @@ def test_predicates_entries_validated_at_the_call() -> None:
     with pytest.raises(TypeError, match="must be Predicate classes"):
         program.raw_asp("p_rawdecl(1).", predicates=["p_rawdecl"])  # type: ignore[list-item]
     program.raw_asp("p_rawdecl(1).", predicates=[P, -P])  # classes and negated signs still pass
+
+
+def test_unrepresentable_string_values_diagnose_the_atom() -> None:
+    # gringo handles escaped strings fine; pyclingo's String does not model
+    # them, and the read-side failure must name the atom it was reading —
+    # not just String's construction rule
+    P = Predicate.define("p_esc", ["x"])
+    program = ASPProgram()
+    program.raw_asp('p_esc("a\\"b").', predicates=[P])
+    with pytest.raises(ValueError, match=r'p_esc\("a\\"b"\) cannot be read back as p_esc.*double quotes'):
+        list(program.solve())

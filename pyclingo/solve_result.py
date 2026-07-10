@@ -37,6 +37,7 @@ abandon() is called — until then the suspended native search stays alive,
 and the next solve attempt raises the loud still-open error.
 """
 
+import copy
 import time
 from abc import ABC, abstractmethod
 from collections.abc import Generator, Iterator
@@ -229,11 +230,15 @@ class Optimum(CostedModel):
         complete: bool = False,
         levels: dict[int, int] | None = None,
         timed_out: bool = False,
+        statistics: dict[str, Any] | None = None,
     ) -> None:
         super().__init__(atoms, cost, proven, messages)
         self.path = path
         self.optima = optima
         self.complete = complete
+        # The search's statistics snapshot (see Search.statistics), carried
+        # so the eager verb loses nothing its _iter twin exposes
+        self.statistics = statistics
         # The cost keyed by its declared priorities: {priority: cost} over
         # the SURVIVING levels, so multi-tier costs read by name instead of
         # by position
@@ -269,11 +274,15 @@ class Consequences(AtomCollection):
         complete: bool,
         messages: list[ClingoMessage],
         timed_out: bool = False,
+        statistics: dict[str, Any] | None = None,
     ) -> None:
         super().__init__(atoms)
         self.path = path
         self.complete = complete
         self.messages = messages
+        # The search's statistics snapshot (see Search.statistics), carried
+        # so the eager verb loses nothing its _iter twin exposes
+        self.statistics = statistics
         # Whether a wall-clock deadline cut the refinement short (one cause
         # of complete=False; an iteration cap is the other)
         self.timed_out = timed_out
@@ -463,14 +472,15 @@ class Search(ABC):
     @property
     def statistics(self) -> dict[str, Any] | None:
         """
-        Raw clingo statistics plus 'wall_time', or None if solving never ran.
+        Raw clingo statistics plus 'wall_time' (a copy — mutate freely), or
+        None if solving never ran.
 
         wall_time spans this handle's creation to the end of iteration — it
         includes any time the caller spends between emissions, and excludes
         rendering and grounding. clingo's own solving clocks live under
         summary.times.
         """
-        return self._state.statistics
+        return None if self._state.statistics is None else copy.deepcopy(self._state.statistics)
 
     def format_statistics(self) -> str:
         """The search's statistics in clingo's native output style."""
@@ -876,5 +886,15 @@ def convert_symbol_to_predicate(symbol: clingo.Symbol, predicate_types: Predicat
             # Recursively convert nested predicates; bare atoms are nullary predicates
             kwargs[field_name] = convert_symbol_to_predicate(arg, predicate_types)
 
-    instance = pred_class(**kwargs)
+    try:
+        instance = pred_class(**kwargs)
+    except (TypeError, ValueError) as e:
+        # The solver produced a value pyclingo never validated on the way in
+        # (raw_asp text or an @-function): name the atom and its class, not
+        # just the failing field's construction rule. The original class is
+        # kept — a type mismatch stays a TypeError.
+        raise type(e)(
+            f"Model atom {symbol} cannot be read back as {pred_class.__name__} "
+            f"({pred_name}/{len(symbol.arguments)}): {e}"
+        ) from e
     return -instance if symbol.negative else instance

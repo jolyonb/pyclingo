@@ -43,6 +43,7 @@ def build() -> ASPProgram:
 def test_cautious_is_the_final_refinement_not_the_first() -> None:
     result = build().cautious()
     assert isinstance(result, CautiousConsequences)
+    assert result.statistics is not None and "wall_time" in result.statistics  # the eager verb keeps the snapshot
     assert isinstance(result, Consequences)
     assert not isinstance(result, BraveConsequences)
     assert result.complete

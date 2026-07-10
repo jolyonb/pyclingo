@@ -284,3 +284,20 @@ def test_scalar_knobs_reject_lookalike_types() -> None:
     optimizing.minimize(1, Variable("X"), condition=B(x=Variable("X")))
     with pytest.raises(TypeError, match="max_iterations is a count"):
         optimizing.ground().optimize(max_iterations=True)
+
+
+def test_scalar_knobs_fail_before_grounding_is_paid_for() -> None:
+    # The program below cannot even render (dangling when); a bad timeout
+    # or count must be reported first — cheap checks precede grounding
+    program = ASPProgram()
+    P = Predicate.define("p_cheap", ["x"])
+    program.when(P(x=1))  # deliberately left unclosed
+    with pytest.raises(TypeError, match="timeout is seconds"):
+        program.solve(timeout="5")  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match="max_iterations is a count"):
+        program.cautious(max_iterations="3")  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match="max_iterations is a count"):
+        program.optimize(max_iterations="3")  # type: ignore[arg-type]
+    program.when(P(x=1)).derive(P(x=2))  # close a fresh when; the original stays pending
+    with pytest.raises(ValueError, match="incomplete when"):
+        program.render()  # the dangling when() is still the render's complaint

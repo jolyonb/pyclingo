@@ -297,6 +297,7 @@ def test_optimum_levels_keys_cost_by_priority() -> None:
     assert result.cost == (1, 1)  # pick(1) alone: value 1, count 1
     assert result.levels == {2: 1, 1: 1}
     assert result.timed_out is False
+    assert result.statistics is not None and "wall_time" in result.statistics
 
 
 def test_optimize_timeout_with_model_in_hand_reports_timed_out() -> None:
