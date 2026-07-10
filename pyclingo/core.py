@@ -347,9 +347,7 @@ class _ValueMeta(ABCMeta):
         if len(args) + len(kwargs) <= 1:
             value = args[0] if args else next(iter(kwargs.values()), _NO_ARGUMENT)
             if isinstance(value, str):
-                # Converted once, here: key and constructor see the same
-                # plain value (a second str() of a subclass is a second
-                # call to ITS __str__, which need not agree with the first)
+                # Handle subclasses
                 value = str(value)
                 args, kwargs = (value,), {}
             elif isinstance(value, int) and not isinstance(value, bool):
