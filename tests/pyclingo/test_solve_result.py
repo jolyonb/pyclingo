@@ -206,3 +206,52 @@ def test_model_membership_rejects_what_could_never_be_present() -> None:
         "p_member_guard(1)" in model  # type: ignore[operator]  # noqa: B015
     with pytest.raises(ValueError, match="contains variables"):
         P(x=Variable("X")) in model  # noqa: B015
+
+
+def test_hidden_class_reads_teach_instead_of_silent_empty() -> None:
+    # show=False keeps helper atoms out of results BY DESIGN (never touching
+    # them is what keeps model reads fast at scale); asking for one must
+    # explain that, never return an [] that reads as "none were derived"
+    P = Predicate.define("p_vis", ["x"])
+    H = Predicate.define("h_vis", ["x"], show=False)
+    program = ASPProgram()
+    program.fact(P(x=1), H(x=2))
+    model = program.solve().first()
+    with pytest.raises(ValueError, match=r"h_vis/1 is hidden.*show\(\) the class"):
+        model.atoms(H)
+    with pytest.raises(ValueError, match="h_vis/1 is hidden"):
+        H(x=2) in model  # noqa: B015 (membership is a read too)
+    assert model.atoms(P) == [P(x=1)]  # shown classes read as before
+
+
+def test_show_override_makes_a_hidden_class_readable() -> None:
+    # show() flips the resolution: the atoms are in the result and read fine
+    H = Predicate.define("h_vis_shown", ["x"], show=False)
+    program = ASPProgram()
+    program.fact(H(x=1))
+    program.show(H)
+    model = program.solve().first()
+    assert model.atoms(H) == [H(x=1)]
+
+
+def test_hide_override_teaches_like_show_false() -> None:
+    # hide() of a default-shown class enters the same teaching wall
+    P = Predicate.define("p_vis_hidden", ["x"])
+    program = ASPProgram()
+    program.fact(P(x=1))
+    program.hide(P)
+    model = program.solve().first()
+    with pytest.raises(ValueError, match="p_vis_hidden/1 is hidden"):
+        model.atoms(P)
+
+
+def test_underived_shown_class_still_reads_empty() -> None:
+    # An empty [] remains the honest answer when the class is SHOWN but the
+    # solver derived nothing — only hiddenness is loud
+    P = Predicate.define("p_vis_used", ["x"])
+    Q = Predicate.define("q_vis_maybe", ["x"])
+    program = ASPProgram()
+    program.fact(P(x=1))
+    program.when(P(x=2)).derive(Q(x=2))  # body never true: no q atoms
+    model = program.solve().first()
+    assert model.atoms(Q) == []

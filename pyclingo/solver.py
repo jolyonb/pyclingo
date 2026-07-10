@@ -503,6 +503,10 @@ class ASPProgram:
         vacuous: argument-position data cannot be hidden, and no error is
         raised (hide states an intent; show() of an underived class errors
         because it states an expectation).
+
+        Hidden atoms are absent from every result — never touching them is
+        what keeps model reads fast at scale — and asking a result for a
+        hidden class raises with the remedy rather than returning [].
         """
         _require_predicate_class(predicate, "hide")
         self._show_overrides[predicate] = False
@@ -865,6 +869,17 @@ class ASPProgram:
 
         predicate_types = {(pred.get_name(), pred.get_arity()): pred for pred in self._collect_predicates()}
 
+        # The FULLY hidden classes: no bool visibility and no conditional
+        # show on either sign. Their atoms are never read back into models
+        # (the shown set is what keeps model reads fast at scale), so the
+        # read surfaces raise a teaching error instead of a silent [].
+        hidden_classes = frozenset(
+            pred
+            for pred in predicate_types.values()
+            if not self._show_overrides.get(pred, pred.shown_by_default())
+            and not any((pred, negated) in self._show_when_overrides for negated in (False, True))
+        )
+
         # Deriving statements by signature, for analyze_grounding(): each
         # rule head's classes and each raw block's declared classes, joined
         # to the source lines that authored them
@@ -914,6 +929,7 @@ class ASPProgram:
             defined_constants=dict(self._defined_constants),
             ground_levels=ground_levels,
             derivation_sites={signature: tuple(sites) for signature, sites in derivation_sites.items()},
+            hidden_classes=hidden_classes,
         )
 
     def solve(
@@ -1067,6 +1083,7 @@ class GroundedProgram:
         defined_constants: dict[str, int | str] | None = None,
         ground_levels: tuple[int, ...] = (),
         derivation_sites: dict[tuple[str, int], tuple[SourceLocation | None, ...]] | None = None,
+        hidden_classes: frozenset[type[Predicate]] = frozenset(),
     ) -> None:
         self._text = text
         self._control = control
@@ -1076,6 +1093,9 @@ class GroundedProgram:
         # Signature -> the authoring lines of its deriving statements, for
         # analyze_grounding()
         self._derivation_sites = derivation_sites or {}
+        # Classes whose atoms are never shown: read surfaces teach instead
+        # of returning a silent empty
+        self._hidden_classes = hidden_classes
         # Ground truth from the minimize observer: the surviving priority
         # levels, highest first — bool(levels) IS "does this program optimize?"
         self._ground_levels = ground_levels
@@ -1299,6 +1319,7 @@ class GroundedProgram:
                 timeout,
                 self._message_handler,
                 assumptions=converted,
+                hidden_classes=self._hidden_classes,
             )
         return result
 
@@ -1343,6 +1364,7 @@ class GroundedProgram:
                 self._message_handler,
                 converted,
                 mode,
+                hidden_classes=self._hidden_classes,
             )
         return steps
 
@@ -1493,6 +1515,7 @@ class GroundedProgram:
             timeout,
             self._message_handler,
             converted,
+            hidden_classes=self._hidden_classes,
         )
         return steps
 
@@ -1561,6 +1584,7 @@ class GroundedProgram:
             # first — the same order optimization_levels reports
             levels=dict(zip(self._ground_levels, best.cost, strict=True)),
             timed_out=steps.timed_out,
+            hidden_classes=self._hidden_classes,
         )
 
     def _refine_eagerly[C: Consequences](
@@ -1611,4 +1635,5 @@ class GroundedProgram:
             messages=steps.messages,
             timed_out=steps.timed_out,
             statistics=steps.statistics,
+            hidden_classes=self._hidden_classes,
         )

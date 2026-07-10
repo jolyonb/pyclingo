@@ -85,11 +85,29 @@ class AtomCollection:
     statement about every answer set — this class only provides the access.
     """
 
-    def __init__(self, atoms: list[Predicate]) -> None:
+    def __init__(self, atoms: list[Predicate], hidden_classes: frozenset[type[Predicate]] = frozenset()) -> None:
         self._atoms = atoms
+        # Classes whose atoms are never shown: asking for them teaches
+        # instead of returning a silent [] (see _reject_hidden)
+        self._hidden_classes = hidden_classes
         self._by_class: dict[type[Predicate], list[Predicate]] = {}
         for atom in atoms:
             self._by_class.setdefault(type(atom), []).append(atom)
+
+    def _reject_hidden(self, predicate: type[Predicate]) -> None:
+        """
+        A hidden class's atoms are never read back into results — the shown
+        set is what keeps model reads fast at scale (hundreds of thousands
+        of helper atoms never get touched) — so asking for one is answered
+        loudly, never with an [] that reads as "none were derived".
+        """
+        if predicate in self._hidden_classes:
+            raise ValueError(
+                f"{predicate.get_name()}/{predicate.get_arity()} is hidden "
+                f"(show=False and never shown): hidden atoms are not read back "
+                f"into results — skipping them is what keeps model reads fast. "
+                f"show() the class, or define it with show=True, to read it."
+            )
 
     @overload
     def atoms(self) -> list[Predicate]: ...
@@ -106,7 +124,9 @@ class AtomCollection:
         Lookup is by EXACT class, and in_namespace() clones are distinct
         classes: query with the clone you built the program with (atoms(Base)
         is empty if the collection holds only clone atoms). When in doubt,
-        atoms() with no argument returns everything.
+        atoms() with no argument returns everything. Asking for a HIDDEN
+        class raises with the remedy: hidden atoms are never read back into
+        results, so an empty answer would be a lie (see _reject_hidden).
         """
         if predicate is None:
             return list(self._atoms)
@@ -119,6 +139,7 @@ class AtomCollection:
         if not (isinstance(predicate, type) and issubclass(predicate, Predicate)):
             described = predicate.__name__ if isinstance(predicate, type) else type(predicate).__name__
             raise TypeError(f"atoms() takes a Predicate class, got {described}")
+        self._reject_hidden(predicate)
         return list(self._by_class.get(predicate, []))
 
     def __iter__(self) -> Iterator[Predicate]:
@@ -140,6 +161,7 @@ class AtomCollection:
             raise TypeError(f"Membership takes a grounded atom, got {type(atom).__name__}")
         if not atom.is_grounded:
             raise ValueError(f"Membership takes a grounded atom, but {atom.render()} contains variables")
+        self._reject_hidden(type(atom))
         return atom in self._by_class.get(type(atom), [])
 
     def __len__(self) -> int:
@@ -159,8 +181,13 @@ class Model(AtomCollection):
     (Clingo calls this a model; the paradigm's own name for it is an answer set.)
     """
 
-    def __init__(self, atoms: list[Predicate], messages: list[ClingoMessage] | None = None) -> None:
-        super().__init__(atoms)
+    def __init__(
+        self,
+        atoms: list[Predicate],
+        messages: list[ClingoMessage] | None = None,
+        hidden_classes: frozenset[type[Predicate]] = frozenset(),
+    ) -> None:
+        super().__init__(atoms, hidden_classes)
         # Diagnostics clingo emitted while searching for this model (usually empty)
         self.messages = messages if messages is not None else []
 
@@ -189,8 +216,9 @@ class CostedModel(Model):
         cost: tuple[int, ...],
         proven: bool = False,
         messages: list[ClingoMessage] | None = None,
+        hidden_classes: frozenset[type[Predicate]] = frozenset(),
     ) -> None:
-        super().__init__(atoms, messages)
+        super().__init__(atoms, messages, hidden_classes)
         self.cost = cost
         self.proven = proven
 
@@ -231,8 +259,9 @@ class Optimum(CostedModel):
         levels: dict[int, int] | None = None,
         timed_out: bool = False,
         statistics: dict[str, Any] | None = None,
+        hidden_classes: frozenset[type[Predicate]] = frozenset(),
     ) -> None:
-        super().__init__(atoms, cost, proven, messages)
+        super().__init__(atoms, cost, proven, messages, hidden_classes)
         self.path = path
         self.optima = optima
         self.complete = complete
@@ -275,8 +304,9 @@ class Consequences(AtomCollection):
         messages: list[ClingoMessage],
         timed_out: bool = False,
         statistics: dict[str, Any] | None = None,
+        hidden_classes: frozenset[type[Predicate]] = frozenset(),
     ) -> None:
-        super().__init__(atoms)
+        super().__init__(atoms, hidden_classes)
         self.path = path
         self.complete = complete
         self.messages = messages
@@ -389,6 +419,7 @@ class Search(ABC):
         message_handler: ClingoMessageHandler,
         assumptions: list[tuple[clingo.Symbol, bool]] | None,
         mode: SearchMode,
+        hidden_classes: frozenset[type[Predicate]] = frozenset(),
     ) -> None:
         """
         One constructor for every handle: builds the shared state and the
@@ -407,6 +438,7 @@ class Search(ABC):
                 message_handler,
                 assumptions or [],
                 mode=mode,
+                hidden_classes=hidden_classes,
             ),
             state,
         )
@@ -526,8 +558,11 @@ class SolveResult(Search):
         timeout: float,
         message_handler: ClingoMessageHandler,
         assumptions: list[tuple[clingo.Symbol, bool]] | None = None,
+        hidden_classes: frozenset[type[Predicate]] = frozenset(),
     ) -> None:
-        super().__init__(control, predicate_types, timeout, message_handler, assumptions, mode=None)
+        super().__init__(
+            control, predicate_types, timeout, message_handler, assumptions, mode=None, hidden_classes=hidden_classes
+        )
 
     @property
     def exhausted(self) -> bool:
@@ -636,8 +671,17 @@ class OptimizeSteps(Search):
         timeout: float,
         message_handler: ClingoMessageHandler,
         assumptions: list[tuple[clingo.Symbol, bool]] | None = None,
+        hidden_classes: frozenset[type[Predicate]] = frozenset(),
     ) -> None:
-        super().__init__(control, predicate_types, timeout, message_handler, assumptions, mode=OPTIMIZE)
+        super().__init__(
+            control,
+            predicate_types,
+            timeout,
+            message_handler,
+            assumptions,
+            mode=OPTIMIZE,
+            hidden_classes=hidden_classes,
+        )
 
     @property
     def exhausted(self) -> bool:
@@ -663,6 +707,7 @@ def _search_generator(
     message_handler: ClingoMessageHandler,
     assumptions: list[tuple[clingo.Symbol, bool]],
     mode: SearchMode,
+    hidden_classes: frozenset[type[Predicate]] = frozenset(),
 ) -> Generator[AtomCollection]:
     """
     One loop for every search mode, finalizing bookkeeping on every exit
@@ -741,13 +786,17 @@ def _search_generator(
                     # set, a refinement emission a claim-free approximation,
                     # a descent emission an answer set carrying its cost
                     if refining:
-                        yield AtomCollection(atoms)
+                        yield AtomCollection(atoms, hidden_classes)
                     elif optimizing:
                         yield CostedModel(
-                            atoms, cost=tuple(model.cost), proven=model.optimality_proven, messages=new_messages
+                            atoms,
+                            cost=tuple(model.cost),
+                            proven=model.optimality_proven,
+                            messages=new_messages,
+                            hidden_classes=hidden_classes,
                         )
                     else:
-                        yield Model(atoms, messages=new_messages)
+                        yield Model(atoms, messages=new_messages, hidden_classes=hidden_classes)
             finally:
                 # Also reached when the caller close()s mid-iteration and when
                 # an abandoned handle is torn down by refcount. Cancelling a

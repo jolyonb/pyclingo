@@ -125,10 +125,13 @@ def test_unsat_returns_none() -> None:
 
 
 def test_consequences_respect_show_config() -> None:
-    # Dom is hidden: trivially in every answer set but must not appear
+    # Dom is hidden: trivially in every answer set, absent from the result —
+    # and asking for it teaches instead of returning a silent []
     result = build().brave()
     assert result is not None
-    assert result.atoms(Dom) == []
+    assert all(type(atom) is not Dom for atom in result.atoms())
+    with pytest.raises(ValueError, match=r"dom/1 is hidden.*show\(\) the class"):
+        result.atoms(Dom)
 
 
 def test_grounding_answers_many_questions() -> None:
