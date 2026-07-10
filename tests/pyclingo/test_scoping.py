@@ -281,6 +281,24 @@ def test_negated_inequality_normalizes_to_binding_equality() -> None:
     ok(P(x=X), [Q(x=Y), Not(X != Y)])
 
 
+def test_comparison_headed_conditional_literal_is_analyzed() -> None:
+    # "X > 3 : q(X)" — every q is greater than 3 — is a valid gringo body
+    # literal whose HEAD is a comparison; its variables must count (the
+    # regression: X was invisible, falsely flagged as a singleton)
+    ok(None, [ConditionalLiteral(X > 3, Q(x=X)), Not(P(x=1))])
+
+
+def test_unbound_comparison_head_variable_gets_the_cl_teaching() -> None:
+    # An unbound variable before the ':' of a comparison-headed literal
+    # reaches the same dedicated teaching as predicate heads
+    bad(
+        None,
+        [ConditionalLiteral(Y > 3, Q(x=X)), R2(x=X, y=X)],
+        "(?s)conditional literal.*nothing gives them a value",
+        gringo_rejects=True,
+    )
+
+
 def test_double_negated_atom_is_preserved_and_analyzed() -> None:
     # Over ATOMS the double negation survives (stable-model semantics) and
     # binds nothing; X must be bound elsewhere — with gringo's receipt

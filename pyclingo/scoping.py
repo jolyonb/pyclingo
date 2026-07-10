@@ -35,6 +35,7 @@ from pyclingo.choice import Choice
 from pyclingo.conditional_literal import ConditionalLiteral
 from pyclingo.conditioned_element import ConditionedElement
 from pyclingo.core import (
+    AggregateBase,
     Comparison,
     DefaultNegation,
     ExplicitPool,
@@ -173,11 +174,18 @@ def _occurrences(term: Term) -> Counter[str]:
         if term.first_term is not None:
             counts.update(_occurrences(term.first_term))
         counts.update(_occurrences(term.second_term))
+    elif isinstance(term, Comparison):
+        # Reached through a CONDITIONAL LITERAL'S HEAD ("X > 3 : q(X)" —
+        # every q is greater than 3), which _analyze walks through here.
+        # No other route survives: plain comparisons cannot be wrapped in
+        # a negation (Not/~ build their complements at construction), and
+        # aggregate-bearing ones are walled out of condition positions.
+        for side in (term.left_term, term.right_term):
+            if not isinstance(side, AggregateBase):
+                counts.update(_occurrences(side))
     elif isinstance(term, DefaultNegation):
         # The negated term is an atom or another negation, never a
-        # comparison: plain comparisons cannot be wrapped (Not/~ build
-        # their complements at construction), and aggregate-bearing ones
-        # are walled out of every condition position this walker serves
+        # comparison (see above)
         counts.update(_occurrences(term.term))
     elif isinstance(term, ExplicitPool):
         for element in term.elements:
