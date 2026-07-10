@@ -223,13 +223,15 @@ class AggregateBase(ComparableTerm, ABC):
 class Negatable(Term, ABC):
     """
     Mixin for terms that can be default-negated: Predicate, Comparison, and
-    DefaultNegation itself. Provides ~, which builds "not term". (On Values
-    and Expressions, ~ is bitwise complement instead — integers negate
-    bitwise, literals negate logically.)
+    DefaultNegation itself. Provides ~, which builds "not term" — except on
+    plain comparisons, where ~ and Not() build the COMPLEMENTARY comparison
+    instead (see Not). (On Values and Expressions, ~ raises a teaching
+    error: bitwise complement is spelled Compl(x).)
     """
 
-    def __invert__(self) -> DefaultNegation:
-        return DefaultNegation(self)
+    @abstractmethod
+    def __invert__(self) -> DefaultNegation | Comparison:
+        """~term: "not term" for atoms and negations; the COMPLEMENT for plain comparisons (see Not)."""
 
 
 class ArithmeticOps:
@@ -1404,6 +1406,10 @@ class Comparison(Negatable):
             )
         return Comparison(self._left_term, self.operator.inverse, self._right_term)
 
+    def __invert__(self) -> Comparison | DefaultNegation:
+        """~comparison builds the complement (X < 5 becomes X >= 5); an aggregate comparison wraps in "not" instead."""
+        return Not(self)
+
     def collect_defined_constants(self) -> set[str]:
         constants = set()
 
@@ -1439,11 +1445,16 @@ class DefaultNegation(Negatable):
         if not isinstance(term, Negatable):
             raise TypeError("Default negation can only be applied to predicates, comparisons, or already negated terms")
 
-        if isinstance(term, Comparison) and isinstance(term.right_term, Pool):
+        if isinstance(term, Comparison) and not any(
+            isinstance(side, AggregateBase) for side in (term.left_term, term.right_term)
+        ):
             raise ValueError(
-                "Negating a pool comparison does not mean 'not in': pools expand "
-                "disjunctively, so 'not X = (2;3)' is true for every X. Write "
-                "separate conditions instead, e.g. X != 2, X != 3"
+                "A plain comparison never wraps in 'not': gringo normalizes "
+                "'not X != Y' to the complementary comparison 'X = Y' before "
+                "evaluating, and pyclingo builds that complement directly — "
+                "Not(comparison) and ~comparison return it. (Comparisons over "
+                "aggregates DO wrap: negated aggregate literals are not "
+                "complement-flippable.)"
             )
 
         # Negating a double negation collapses it: not(not not X) becomes not X,
@@ -1488,22 +1499,33 @@ class DefaultNegation(Negatable):
         if is_in_head:
             raise ValueError("Default negation (not) cannot be used in rule heads")
 
+    def __invert__(self) -> DefaultNegation:
+        """~ on a negation negates again: a double survives, a triple collapses to a single (see DefaultNegation)."""
+        return DefaultNegation(self)
 
-def Not(term: Negatable) -> DefaultNegation:
+
+def Not(term: Negatable) -> DefaultNegation | Comparison:
     """
-    Helper function to create default negation.
+    Default negation — with plain comparisons normalized to their complement.
 
-    This function applies default negation to the term, with automatic
-    simplification of nested negations when appropriate.
+    On predicates (and negations of them), builds "not term", preserving a
+    double negation and collapsing a triple: "not not p" is NOT equivalent
+    to p under stable-model semantics (p may support itself through it),
+    while "not not not p" is strongly equivalent to "not p".
+
+    On a PLAIN comparison, returns the complementary comparison instead of
+    wrapping: gringo itself normalizes "not X != Y" to the binding equality
+    "X = Y" before evaluating, so pyclingo performs the same normalization at
+    construction, where the result is visible, safe to bind through, and
+    analyzable. Doubles compose: Not(Not(cmp)) is cmp. A comparison CARRYING
+    AN AGGREGATE keeps the "not" wrapper — a negated aggregate literal is not
+    complement-flippable under stable-model semantics.
 
     Args:
         term: The term to negate with default negation.
 
-    Returns:
-        Term: A default negation of the given term, simplified if needed.
-
     Example:
-        >>> from pyclingo import Predicate
+        >>> from pyclingo import Predicate, Variable
         >>> Person = Predicate.define("person", ["name"])
         >>> person = Person(name="john")
         >>> Not(person).render()
@@ -1512,7 +1534,20 @@ def Not(term: Negatable) -> DefaultNegation:
         'not not person("john")'
         >>> Not(Not(Not(person))).render()  # triple negation simplifies
         'not person("john")'
+        >>> X = Variable("X")
+        >>> Not(X != 5).render()  # a plain comparison inverts
+        'X = 5'
     """
+    if isinstance(term, Comparison) and not any(
+        isinstance(side, AggregateBase) for side in (term.left_term, term.right_term)
+    ):
+        if isinstance(term.right_term, Pool):
+            raise ValueError(
+                "Negating a pool comparison does not mean 'not in': pools expand "
+                "disjunctively, so 'not X = (2;3)' is true for every X. Write "
+                "separate conditions instead, e.g. X != 2, X != 3"
+            )
+        return term.inverse()
     return DefaultNegation(term)
 
 

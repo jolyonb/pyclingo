@@ -24,7 +24,7 @@ The library is built around a rich hierarchy of term types that represent differ
     - `Pool` (abstract)
       - `RangePool` (e.g., `1..5`)
       - `ExplicitPool` (e.g., `(1;3;5)`)
-  - `Negatable` (abstract mixin: provides `~` for default negation; Predicate, Comparison, DefaultNegation)
+  - `Negatable` (abstract mixin: `~` builds `not term` on atoms; on plain comparisons it builds the complement — see `Not`)
     - `Comparison` (comparisons, e.g., `X < Y`)
     - `DefaultNegation` (default negation, e.g., `not p(X)`)
   - `ConditionalLiteral` (e.g., `p(X) : q(X)`)

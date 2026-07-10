@@ -40,7 +40,8 @@ def test_top_level_term_renders_are_wrapped_and_checked() -> None:
     # The patched render parse-checks direct term assertions; valid terms pass
     X = Variable("X")
     P = Predicate.define("p", ["x"])
-    assert (~(X < 5)).render() == "not X < 5"
+    assert (~P(x=1)).render() == "not p(1)"
+    assert (~(X < 5)).render() == "X >= 5"  # comparisons normalize (see Not)
     assert Count(X, condition=P(x=X)).render() == "#count{ X : p(X) }"
 
 

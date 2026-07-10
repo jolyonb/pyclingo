@@ -26,7 +26,7 @@ Term (abstract base class)
 │   └── Pool (abstract)
 │       ├── RangePool (e.g., 1..5)
 │       └── ExplicitPool (e.g., (1;3;5))
-├── Negatable (abstract mixin: provides ~ for default negation; Predicate, Comparison, DefaultNegation)
+├── Negatable (abstract mixin: ~ builds "not term" on atoms/negations; on plain comparisons it builds the COMPLEMENT)
 │   ├── Comparison (comparisons, e.g., X < Y)
 │   └── DefaultNegation (default negation, e.g., not p(X))
 ├── ConditionalLiteral (e.g., p(X) : q(X))
@@ -84,7 +84,7 @@ Arithmetic and comparison operations:
 - Type conversion for Python literals
 
 Operators supported (Python operator -> rendered ASP):
-- Arithmetic: `+`, `-`, `*`, `//` (renders `/`), `%` (renders `\`), `**`, `-` (unary), `|x|` via Abs()
+- Arithmetic: `+`, `-`, `*`, `//` (renders `/`), `%` (renders `\`), `**`, `-` (unary), `|x|` via abs()
 - Bitwise: `&`, `|` (renders `?`), `^`, `Compl(x)` (renders `~`; the `~` operator itself is reserved for default negation)
 - Comparison: `==`, `!=`, `<`, `<=`, `>`, `>=`
 - Power and bitwise renderings are deliberately over-parenthesized; classic
@@ -112,9 +112,14 @@ Aggregate functions for ASP:
 All support multiple elements and conditions via `add()` method.
 
 #### Negation (`core.py`)
-- **DefaultNegation**: `not p(X)` (negation as failure), via `Not()` or `~` on
-  any Negatable (predicates and comparisons alike)
-- Automatic simplification of nested negations
+- **DefaultNegation**: `not p(X)` (negation as failure), via `Not()` or `~`
+- On atoms, a double negation is PRESERVED (not not p is not p's equivalent
+  under stable-model semantics) and a triple collapses to a single
+- On a PLAIN comparison, Not()/~ return the complementary comparison
+  instead of wrapping — gringo's own normalization ("not X != Y" is the
+  binding "X = Y"), performed at construction where it is visible;
+  comparisons over aggregates keep the "not" wrapper (not
+  complement-flippable), and DefaultNegation refuses plain comparisons
 - Classical negation (`-p`): unary minus on a Predicate instance flips its
   sign — the sign is part of the atom, as in clingo's own symbol model. A
   negated predicate is just a predicate (same class, both signs in atoms());

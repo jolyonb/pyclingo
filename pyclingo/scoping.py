@@ -13,9 +13,13 @@ which accepts what they reject: singleton variables (gringo is silent;
 switchable via ASPProgram(allow_singletons=True)), aggregate tuples
 sharing a rule-global variable (gringo emits only an info, with collapsed
 semantics), and a conditional-literal head variable absent from its own
-condition (gringo quietly treats it as local to the literal). The ground
-truth is pinned LIVE in tests/pyclingo/test_scoping.py: every case there
-carries gringo's own verdict, re-checked on each run.
+condition (gringo quietly treats it as local to the literal). Negated
+PLAIN comparisons never reach this analysis at all: Not()/~ build the
+complementary comparison at construction — mirroring gringo's own
+normalization of "not X != Y" to the binding "X = Y" — so the negated
+branch below sees only aggregate-bearing comparisons. The ground truth is
+pinned LIVE in tests/pyclingo/test_scoping.py: every case there carries
+gringo's own verdict, re-checked on each run.
 """
 
 from collections import Counter
@@ -28,7 +32,6 @@ from pyclingo.choice import Choice
 from pyclingo.conditional_literal import ConditionalLiteral
 from pyclingo.conditioned_element import ConditionedElement
 from pyclingo.core import (
-    AggregateBase,
     Comparison,
     DefaultNegation,
     ExplicitPool,
@@ -119,11 +122,11 @@ def _occurrences(term: Term) -> Counter[str]:
         if term.first_term is not None:
             counts.update(_occurrences(term.first_term))
         counts.update(_occurrences(term.second_term))
-    elif isinstance(term, Comparison):
-        for side in (term.left_term, term.right_term):
-            if not isinstance(side, AggregateBase):
-                counts.update(_occurrences(side))
     elif isinstance(term, DefaultNegation):
+        # The negated term is an atom or another negation, never a
+        # comparison: plain comparisons cannot be wrapped (Not/~ build
+        # their complements at construction), and aggregate-bearing ones
+        # are walled out of every condition position this walker serves
         counts.update(_occurrences(term.term))
     elif isinstance(term, ExplicitPool):
         for element in term.elements:
@@ -235,8 +238,10 @@ def _analyze_negated_body_term(negation: DefaultNegation, scopes: RuleScopes) ->
     """
     A negated body literal: its variables count globally and bind nothing;
     an aggregate inside a negated comparison keeps its own local scopes
-    (its element variables are not the rule's problem). No equality edges:
-    a negated equality does not bind.
+    (its element variables are not the rule's problem). No equality edges —
+    and no plain comparisons arrive here at all: Not()/~ normalize them to
+    their complements at construction, so a Comparison under this negation
+    always carries an aggregate.
     """
     inner = negation.term
     if isinstance(inner, DefaultNegation):  # not not X

@@ -9,6 +9,7 @@ from dataclasses import dataclass, fields
 from typing import Any, ClassVar, Self, SupportsIndex, cast, dataclass_transform, get_args, get_origin, overload
 
 from pyclingo.core import (
+    DefaultNegation,
     DefinedConstant,
     Expression,
     Negatable,
@@ -627,6 +628,12 @@ class Predicate(PredicateBase, Negatable, metaclass=_PredicateMeta):
             object.__setattr__(negation, key, value)
         object.__setattr__(negation, "_negated", not self.negated)
         return negation
+
+    def __invert__(self) -> DefaultNegation:
+        """~atom builds "not atom". (On a plain comparison, ~ builds the complement instead — see Not.)"""
+        # Overridden for the precise return type: an assumptions list wants
+        # Predicate | DefaultNegation, and ~atom is always the latter
+        return DefaultNegation(self)
 
     def __copy__(self) -> Self:
         """Predicates are immutable data: the copy IS the original (as for Values)."""

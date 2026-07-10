@@ -21,7 +21,7 @@ actual evaluation.
 | `x ^ y` | `x ^ y` | bitwise xor |
 | `-x` | `-x` | |
 | `Compl(x)` | `~x` | bitwise complement — `~` itself is reserved for default negation |
-| `Abs(x)` | `\|x\|` | |
+| `abs(x)` | `\|x\|` | |
 
 ## Precedence
 

@@ -269,7 +269,29 @@ def test_negated_aggregate_comparison_is_valid() -> None:
 
 
 def test_negated_equality_does_not_bind() -> None:
+    # Not(X == Y + 1) normalizes to the NON-binding X != Y + 1
     bad(P(x=X), [Q(x=Y), P(x=Y), Not(X == Y + 1)], "Unsafe variable", gringo_rejects=True)
+
+
+def test_negated_inequality_normalizes_to_binding_equality() -> None:
+    # Not(X != Y) IS the equality X = Y (built at construction, exactly
+    # gringo's own normalization of "not X != Y") — so it binds, with
+    # gringo's live receipt through the ok() probe
+    ok(P(x=X), [Q(x=Y), Not(X != Y)])
+
+
+def test_double_negated_atom_is_preserved_and_analyzed() -> None:
+    # Over ATOMS the double negation survives (stable-model semantics) and
+    # binds nothing; X must be bound elsewhere — with gringo's receipt
+    ok(None, [Q(x=X), Not(Not(P(x=X)))])
+    bad(None, [Q(x=Y), Not(Not(P(x=X))), R2(x=Y, y=Y)], "Unsafe", gringo_rejects=True)
+
+
+def test_double_negated_equality_normalizes_to_binding_equality() -> None:
+    # Not(Not(X == Y)) composes back to X = Y — binding, receipt included.
+    # (Over ATOMS a double negation is preserved, not composed: comparisons
+    # have no foundedness to protect.)
+    ok(P(x=X), [Q(x=Y), Not(Not(X == Y))])
 
 
 # --- occurrence counting within one literal ---

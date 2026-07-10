@@ -11,7 +11,17 @@ from itertools import islice
 import clingo
 import pytest
 
-from pyclingo import ASPProgram, Choice, Number, Predicate, RangePool, SignatureGrounding, SourceLocation, Variable
+from pyclingo import (
+    ASPProgram,
+    Choice,
+    Count,
+    Number,
+    Predicate,
+    RangePool,
+    SignatureGrounding,
+    SourceLocation,
+    Variable,
+)
 from pyclingo.solver import GroundedProgram
 
 A = Predicate.define("a", ["value"])
@@ -185,8 +195,14 @@ def test_expression_assumptions_rejected_with_teaching() -> None:
 def test_assumption_rejection_names_the_inner_term() -> None:
     grounded = make_program().ground()
     X = Variable("X")
+    # ~(plain comparison) IS the complementary comparison, so the rejection
+    # names it bare...
+    with pytest.raises(TypeError, match="got Comparison"):
+        grounded.solve(assumptions=[~(X == 3)])  # type: ignore[list-item]
+    # ...while a genuinely wrapped negation (aggregate comparisons keep the
+    # wrapper) is named through its ~
     with pytest.raises(TypeError, match="got ~Comparison"):
-        grounded.solve(assumptions=[~(X == 3)])
+        grounded.solve(assumptions=[~(Count(X, condition=A(value=X)) > 1)])  # type: ignore[list-item]
 
 
 def test_project_shown_collapses_helper_variants() -> None:
