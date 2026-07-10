@@ -717,9 +717,10 @@ class ASPProgram:
 
         rendered: list[RenderedLine] = [RenderedLine(line, None) for line in lines]
 
-        # 3. Program segments: headers only when more than one segment exists,
-        # with a blank line between rendered segments (none before the first)
-        with_headers = len(self._segments) > 1
+        # 3. Program segments: headers only when more than one segment actually
+        # renders (empty segments don't count), with a blank line between
+        # rendered segments (none before the first)
+        with_headers = sum(1 for segment in self._segments.values() if len(segment) > 0) > 1
         first_segment = True
         for segment in self._segments.values():
             if len(segment) == 0:
@@ -933,6 +934,7 @@ class ASPProgram:
         timeout: float = 0,
         assumptions: Sequence[Predicate | DefaultNegation] | None = None,
         stop_on_log_level: LogLevel = LogLevel.INFO,
+        ignore_optimization: bool = False,
     ) -> SolveResult:
         """
         Solve the ASP program, returning a SolveResult that yields Models lazily.
@@ -958,6 +960,9 @@ class ASPProgram:
             stop_on_log_level: Log level at which to abort — applies to parsing
                 and grounding. Solve-phase messages never halt; they are
                 captured on each Model (.messages) and the SolveResult
+            ignore_optimization: Enumerate answer sets as if the program had
+                no #minimize/#maximize (clasp's opt_mode=ignore); see
+                GroundedProgram.solve(). Requires an objective to ignore.
 
         Returns:
             A SolveResult: iterate it for Models (each with typed atoms() access);
@@ -976,7 +981,9 @@ class ASPProgram:
             so repeated solves on one program never interfere.
         """
         _validate_timeout(timeout)  # before grounding is paid for
-        return self.ground(stop_on_log_level=stop_on_log_level).solve(timeout=timeout, assumptions=assumptions)
+        return self.ground(stop_on_log_level=stop_on_log_level).solve(
+            timeout=timeout, assumptions=assumptions, ignore_optimization=ignore_optimization
+        )
 
     def cautious(
         self,
@@ -1215,6 +1222,7 @@ class GroundedProgram:
         mode: SearchMode,
         timeout: float,
         assumptions: Sequence[Predicate | DefaultNegation] | None,
+        ignore_optimization: bool = False,
     ) -> list[tuple[clingo.Symbol, bool]] | None:
         """
         The whole pre-solve sequence, shared by every solve-flavored call:
@@ -1229,8 +1237,14 @@ class GroundedProgram:
         assumptions.
         """
         _validate_timeout(timeout)
-        if self._ground_levels and mode is None:
-            raise ValueError("This program optimizes (#minimize/#maximize present). Solve it with optimize().")
+        if ignore_optimization and not self._ground_levels:
+            raise ValueError("Nothing to ignore: this program has no #minimize/#maximize. Call solve() plainly.")
+        if self._ground_levels and mode is None and not ignore_optimization:
+            raise ValueError(
+                "This program optimizes (#minimize/#maximize present). Solve it "
+                "with optimize(), or pass ignore_optimization=True to enumerate "
+                "answer sets as if there were no objective."
+            )
         if self._ground_levels and isinstance(mode, RefinementMode):
             raise ValueError(
                 f"{mode.value} consequences over an optimizing program are computed "
@@ -1256,6 +1270,10 @@ class GroundedProgram:
         assert isinstance(solve_config, clingo.Configuration)
         solve_config.models = 0
         solve_config.enum_mode = mode.value if isinstance(mode, RefinementMode) else "auto"
+        if ignore_optimization:
+            # Stated here; optimize_iter states its own opt_mode on every
+            # entry, so an ignore never leaks into a later optimize
+            solve_config.opt_mode = "ignore"
         return converted
 
     def abandon(self) -> None:
@@ -1270,22 +1288,16 @@ class GroundedProgram:
         """
         with self._solve_lock:
             if self._active is not None:
-                try:
-                    self._active.close()
-                except ValueError as e:
-                    # generator.close() on an executing generator
-                    raise RuntimeError(
-                        "abandon() can only close a suspended search, but this "
-                        "grounding's active solve is executing right now (in "
-                        "another thread). Interrupt it with .control.interrupt(), "
-                        "or give that solve a timeout."
-                    ) from e
+                # An executing search raises close()'s teaching RuntimeError
+                # (interrupt or timeout), leaving it active
+                self._active.close()
                 self._active = None
 
     def solve(
         self,
         timeout: float = 0,
         assumptions: Sequence[Predicate | DefaultNegation] | None = None,
+        ignore_optimization: bool = False,
     ) -> SolveResult:
         """
         Solve this grounding, returning a SolveResult that yields Models lazily.
@@ -1306,9 +1318,15 @@ class GroundedProgram:
                 must occur in this grounding: assuming an absent atom would
                 silently make every model vanish (or be vacuous), so an
                 unknown atom raises instead.
+            ignore_optimization: Enumerate answer sets as if the program had
+                no #minimize/#maximize (clasp's opt_mode=ignore): every
+                answer set streams, no cost is computed. For THIS solve
+                only; a later optimize() on this grounding still optimizes.
+                Requires an objective to ignore — on a program without one,
+                this flag raises instead of passing vacuously.
         """
         with self._solve_lock:
-            converted = self._begin_solve(None, timeout, assumptions)
+            converted = self._begin_solve(None, timeout, assumptions, ignore_optimization)
             self._active = result = SolveResult(
                 self._control,
                 self._predicate_types,
@@ -1373,7 +1391,9 @@ class GroundedProgram:
         """
         The atoms true in EVERY answer set (the intersection) — "which cells
         are forced" is this question. Eager sugar over cautious_iter().
-        Returns None if the program is unsatisfiable.
+        Returns None if the program is unsatisfiable. To learn WHICH
+        assumptions conflicted, use the iterator twin: exhaust
+        cautious_iter(assumptions=...) and read unsat_core off the handle.
 
         timeout (seconds) and max_iterations (refinement steps) each bound
         the work, 0 meaning unbounded; a bounded run returns an INCOMPLETE
@@ -1394,7 +1414,9 @@ class GroundedProgram:
         """
         The atoms true in AT LEAST ONE answer set (the union) — "which cells
         are possible" is this question. Eager sugar over brave_iter().
-        Returns None if the program is unsatisfiable.
+        Returns None if the program is unsatisfiable. To learn WHICH
+        assumptions conflicted, use the iterator twin: exhaust
+        brave_iter(assumptions=...) and read unsat_core off the handle.
 
         timeout (seconds) and max_iterations (refinement steps) each bound
         the work, 0 meaning unbounded; a bounded run returns an INCOMPLETE
@@ -1530,7 +1552,10 @@ class GroundedProgram:
         The best answer set by the program's objectives. Eager sugar over
         optimize_iter(). Returns None if the program is unsatisfiable —
         or, with bound=, if no model exists within the bound (clasp
-        reports the two identically). strategy selects clasp's algorithm
+        reports the two identically). To learn WHICH assumptions
+        conflicted, use the iterator twin: exhaust
+        optimize_iter(assumptions=...) and read unsat_core off the
+        handle. strategy selects clasp's algorithm
         (see OptStrategy: USC can be night-and-day faster when branch and
         bound stalls).
 

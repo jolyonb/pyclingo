@@ -463,8 +463,23 @@ class Search(ABC):
             raise RuntimeError(f"This {type(self).__name__} is already consumed (exhausted or closed); {remedy}")
 
     def close(self) -> None:
-        """Stop the search early; flags and statistics are finalized."""
-        self._iterator.close()
+        """
+        Stop the search early; flags and statistics are finalized.
+
+        Only a SUSPENDED search can be closed: if this handle is being
+        iterated right now (in another thread), this raises with the
+        remedies instead of leaking the raw generator error.
+        """
+        try:
+            self._iterator.close()
+        except ValueError as e:
+            # generator.close() on an executing generator
+            raise RuntimeError(
+                f"Only a suspended search can be stopped, but this "
+                f"{type(self).__name__} is executing right now (in another "
+                f"thread). Interrupt it with .control.interrupt(), or give "
+                f"the solve a timeout."
+            ) from e
         # Closing a never-started generator skips its finally, so mark
         # finished here as well
         self._state.finished = True

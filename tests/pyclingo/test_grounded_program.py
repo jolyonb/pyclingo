@@ -400,10 +400,11 @@ def test_comparison_head_rules_ground_and_analyze() -> None:
     assert "p_cmp/1: 2 atoms" in report  # body signatures still reported; no head row
 
 
-def test_abandon_cannot_close_an_executing_solve_and_teaches() -> None:
+def test_executing_solve_refuses_abandon_and_close_and_teaches() -> None:
     # A solve blocked inside clasp on another thread cannot be injected
-    # into: abandon() must name the remedies rather than leak generator
-    # internals — and must still free the grounding once the search ends
+    # into: abandon() and close() must both name the remedies rather than
+    # leak generator internals — and abandon() must still free the
+    # grounding once the search ends
     Pigeon = Predicate.define("pigeon_ab", ["p"], show=False)
     Assign = Predicate.define("assign_ab", ["p", "h"])
     program = ASPProgram()
@@ -419,6 +420,8 @@ def test_abandon_cannot_close_an_executing_solve_and_teaches() -> None:
     try:
         with pytest.raises(RuntimeError, match=r"executing right now.*control\.interrupt"):
             grounded.abandon()
+        with pytest.raises(RuntimeError, match=r"Only a suspended search can be stopped.*control\.interrupt"):
+            result.close()
     finally:
         grounded.control.interrupt()
         worker.join(timeout=30)
@@ -456,6 +459,23 @@ def test_unsat_core_keeps_the_negated_shape() -> None:
     core = result.unsat_core
     assert core is not None and len(core) == 1
     assert core[0].render() == "not q_core_neg(1)"
+
+
+def test_unsat_core_reachable_through_the_iterator_twins() -> None:
+    # The eager verbs return bare None on UNSAT; the documented route to
+    # the core is their _iter twin's handle. Pin it on a refinement twin
+    # (the core-mapping terminal is shared by every mode)
+    program = ASPProgram()
+    P = Predicate.define("p_core_iter", ["x"])
+    program.choose(Choice(P(x=RangePool(1, 3))))
+    program.forbid(P(x=1), P(x=2))
+    grounded = program.ground()
+    assert grounded.cautious(assumptions=[P(x=1), P(x=2)]) is None  # the eager verb: None, no core
+    steps = grounded.cautious_iter(assumptions=[P(x=1), P(x=2)])
+    assert list(steps) == []  # zero approximations: UNSAT
+    core = steps.unsat_core
+    assert core is not None
+    assert {atom.render() for atom in core} == {"p_core_iter(1)", "p_core_iter(2)"}
 
 
 def test_unsat_core_is_empty_when_no_assumptions_conflict() -> None:

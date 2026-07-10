@@ -327,11 +327,14 @@ def test_finished_publishes_only_after_finalization(monkeypatch: pytest.MonkeyPa
             proceed.wait(10)
         return real_counter()
 
+    # Patch after construction (the tic call already happened) and BEFORE the
+    # worker starts: the only other perf_counter call is finalization's
+    # wall_time, so the first patched call is that one however fast the
+    # worker exhausts the stream
+    monkeypatch.setattr(solve_result_module.time, "perf_counter", held_counter)
     worker = threading.Thread(target=lambda: list(result))
     worker.start()
     try:
-        # Patch after construction (the tic call already happened), before exhaustion
-        monkeypatch.setattr(solve_result_module.time, "perf_counter", held_counter)
         assert in_finalization.wait(10)
         # Mid-finalization: not yet finished, and the guard still refuses
         assert result.finished is False

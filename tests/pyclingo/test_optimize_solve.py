@@ -54,6 +54,31 @@ def test_optimize_nothing_to_optimize_rejected() -> None:
         program.optimize()
 
 
+def test_ignore_optimization_enumerates_every_answer_set() -> None:
+    # The knapsack has 15 answer sets (any non-empty pick set); optimize()
+    # collapses them to the optimum, ignore_optimization streams them all,
+    # cost-free — and a later optimize() on the SAME grounding still
+    # optimizes (opt_mode never leaks between searches)
+    grounded = build_knapsack().ground()
+    with pytest.raises(ValueError, match="ignore_optimization=True"):
+        grounded.solve()  # the wall names the flag
+    models = list(grounded.solve(ignore_optimization=True))
+    assert len(models) == 15
+    best = grounded.optimize()
+    assert best is not None and best.cost == (1,)
+    # The program-level sugar takes the flag too
+    assert len(list(build_knapsack().solve(ignore_optimization=True))) == 15
+
+
+def test_ignore_optimization_requires_an_objective() -> None:
+    program = ASPProgram()
+    program.fact(Pick(x=1))
+    with pytest.raises(ValueError, match="Nothing to ignore"):
+        program.solve(ignore_optimization=True)
+    with pytest.raises(ValueError, match="Nothing to ignore"):
+        program.ground().solve(ignore_optimization=True)
+
+
 def test_optimize_unsat_returns_none() -> None:
     program = build_knapsack()
     program.forbid(Pick(x=ANY))  # picking is mandatory and forbidden

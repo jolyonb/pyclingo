@@ -194,6 +194,18 @@ def test_headers_render_only_with_multiple_segments() -> None:
     assert "\n\n\n% ===== Rules" not in rendered
 
 
+def test_empty_segment_does_not_flip_headers_on() -> None:
+    # Headers count segments that render, not segments that exist: a
+    # pre-declared shell left empty keeps the single-segment shape
+    program = ASPProgram()
+    program.fact(P(x=1))
+    program.add_segment("declared_but_empty")
+    assert "=====" not in program.render()
+
+    program["declared_but_empty"].fact(P(x=2))  # filling it flips headers on
+    assert "% ===== Rules =====" in program.render()
+
+
 def test_rejected_rules_append_nothing() -> None:
     # The statement validates before its segment records it, so a rejected
     # closer leaves the segment untouched (and header rendering unflipped)
