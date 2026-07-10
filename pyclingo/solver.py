@@ -71,16 +71,19 @@ def _describe_class(pred: type[Predicate]) -> str:
 
 
 def _head_classes(head: Term) -> set[type[Predicate]]:
-    """The classes a rule head derives: the atom's own, or a choice's element targets (conditions derive nothing)."""
+    """The classes a rule head derives: an atom's own, or a choice's element targets (conditions derive nothing)."""
     if isinstance(head, Predicate):
         return {type(head)}
-    assert isinstance(head, Choice)  # validate_in_context admits no other head
-    classes: set[type[Predicate]] = set()
-    for element in head.elements:
-        for target in element.targets:
-            assert isinstance(target, Predicate)  # Choice.add admits nothing else
-            classes.add(type(target))
-    return classes
+    if isinstance(head, Choice):
+        classes: set[type[Predicate]] = set()
+        for element in head.elements:
+            for target in element.targets:
+                assert isinstance(target, Predicate)  # Choice.add admits nothing else
+                classes.add(type(target))
+        return classes
+    # The remaining legal head is a Comparison, which acts as a requirement
+    # on its body and derives no atoms
+    return set()
 
 
 def _annotate_lines(lines: list[RenderedLine]) -> list[RenderedLine]:

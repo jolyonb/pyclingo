@@ -362,3 +362,18 @@ def test_analyze_grounding_fallbacks_stay_honest() -> None:
     report = program.ground().analyze_grounding()
     assert "  p_an_off/1: 1 atoms — derived at unknown (source locations off)" in report
     assert "  ghost_an/1: 2 atoms — derived at no pyclingo statement (declared but underived?)" in report
+
+
+def test_comparison_head_rules_ground_and_analyze() -> None:
+    # derive(X == Y) is a requirement on its body: it derives no atoms, and
+    # grounding it must not trip analyze_grounding's head walk
+    program = ASPProgram()
+    P = Predicate.define("p_cmp", ["x"])
+    Q = Predicate.define("q_cmp", ["x"])
+    X, Y = Variable("X"), Variable("Y")
+    program.fact(P(x=1), P(x=2), Q(x=2))
+    program.when(P(x=X), Q(x=Y)).derive(X == Y)
+    grounded = program.ground()  # the B-v regression died here with AssertionError
+    assert list(grounded.solve()) == []  # p(1)/q(2) violates the required equality
+    report = grounded.analyze_grounding()
+    assert "p_cmp/1: 2 atoms" in report  # body signatures still reported; no head row
