@@ -258,6 +258,15 @@ cache), and Values hash by identity — so "equal live values are the same
 object" is what makes sets and dicts of Values work at all, given that
 `==` builds Comparison terms instead of comparing.
 
+**Replace.** `copy.replace(atom, field=...)` preserves the classical-
+negation sign: `Predicate.__replace__` re-applies it (the sign is not a
+dataclass field, and dataclass() generates a shadowing fields-based
+`__replace__` on every subclass, which `__init_subclass__` overwrites
+back). `dataclasses.replace()` CANNOT be hooked — its reconstruction is
+fields-based with no stdlib hook — and silently drops the sign: never
+use it on atoms. Both behaviors are pinned, the wrong one as a canary
+for a future stdlib change.
+
 **Copy.** `__copy__`/`__deepcopy__` on Value AND Predicate return `self`:
 both are immutable data, and a distinct copy would be equal-but-not-
 identical to the cache resident, silently breaking set membership.

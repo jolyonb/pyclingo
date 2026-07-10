@@ -102,6 +102,12 @@ class Aggregate(FreezableBuilder, AggregateBase, ABC):
                     f"{self.AGGREGATE_TYPE.value} weights are integer-valued, got "
                     f"{element_tuple[0].render()} as the first tuple term."
                 )
+            if isinstance(element_tuple[0], Predicate):
+                raise TypeError(
+                    f"{self.AGGREGATE_TYPE.value} weights are integer-valued; the first tuple "
+                    f"term {element_tuple[0].render()} is a predicate, which gringo silently "
+                    f"ignores (tuple ignored). Lead the tuple with the weight."
+                )
         self._elements.append(ConditionedElement(element_tuple, condition, "aggregate"))
 
         return self

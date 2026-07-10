@@ -843,6 +843,12 @@ class RangePool(Pool):
                     f"Range {label} must be an int, Number, DefinedConstant, Variable, "
                     f"or Expression, got {type(bound).__name__}"
                 )
+            if "_" in bound.collect_variables():
+                raise ValueError(
+                    f"'_' cannot appear in a range {label}: it matches anything and "
+                    f"binds nothing, so gringo rejects the rule as unsafe. Use a "
+                    f"named variable bound by a positive condition."
+                )
 
         if isinstance(start, Number) and isinstance(end, Number) and start.value > end.value:
             raise ValueError(f"Range {start.value}..{end.value} is empty (start exceeds end)")
@@ -926,6 +932,11 @@ class ExplicitPool(Pool):
                 )
 
             self._elements.append(element)
+
+        # Depth rides through pools so Predicate's nesting cap sees the
+        # Predicate <-> pool alternation (pool(p(pool(...))) chains would
+        # otherwise evade MAX_DEPTH and die as a raw RecursionError mid-walk)
+        self._depth = 1 + max((getattr(element, "_depth", 0) for element in self._elements), default=0)
 
     @property
     def elements(self) -> list[BasicTerm | Expression]:

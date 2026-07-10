@@ -3,12 +3,14 @@ Tests for consumer-side stream limits, wall-clock timeouts, and the
 SolveResult lifecycle.
 """
 
+import threading
 import time
 from itertools import islice
 
 import clingo
 import pytest
 
+import pyclingo.solve_result as solve_result_module
 from pyclingo import ASPProgram, Choice, Model, Predicate, RangePool, Variable
 
 
@@ -296,3 +298,41 @@ def test_scalar_knobs_fail_before_grounding_is_paid_for() -> None:
     program.when(P(x=1)).derive(P(x=2))  # close a fresh when; the original stays pending
     with pytest.raises(ValueError, match="incomplete when"):
         program.render()  # the dangling when() is still the render's complaint
+
+
+def test_finished_publishes_only_after_finalization(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The sequential guard reads finished as "fully finalized": it must not
+    # flip until the message tail and statistics snapshot are done, or a
+    # racing second solve is admitted mid-finalization. The window is held
+    # open deterministically at the wall_time perf_counter call.
+    grounded = make_choice_program(1).ground()
+    result = grounded.solve()
+    in_finalization = threading.Event()
+    proceed = threading.Event()
+    real_counter = time.perf_counter
+    calls = {"n": 0}
+
+    def held_counter() -> float:
+        calls["n"] += 1
+        if calls["n"] == 1:  # the wall_time call, inside the generator's finalization
+            in_finalization.set()
+            proceed.wait(10)
+        return real_counter()
+
+    worker = threading.Thread(target=lambda: list(result))
+    worker.start()
+    try:
+        # Patch after construction (the tic call already happened), before exhaustion
+        monkeypatch.setattr(solve_result_module.time, "perf_counter", held_counter)
+        assert in_finalization.wait(10)
+        # Mid-finalization: not yet finished, and the guard still refuses
+        assert result.finished is False
+        with pytest.raises(RuntimeError, match="still open"):
+            grounded.solve()
+    finally:
+        proceed.set()
+        worker.join(timeout=10)
+    assert not worker.is_alive()
+    assert result.finished is True
+    assert result.statistics is not None  # finalization completed before publication
+    grounded.solve().close()  # and the grounding is free again

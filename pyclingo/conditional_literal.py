@@ -1,5 +1,5 @@
 from pyclingo.conditioned_element import ConditionedElement, ConditionType
-from pyclingo.core import Comparison, DefaultNegation, PredicateOccurrence, RenderingContext, Term
+from pyclingo.core import AggregateBase, Comparison, DefaultNegation, PredicateOccurrence, RenderingContext, Term
 from pyclingo.predicate import Predicate
 
 
@@ -30,6 +30,17 @@ class ConditionalLiteral(Term):
         """
         if not isinstance(head, (Predicate, Comparison, DefaultNegation)):
             raise TypeError("The head of a conditional literal must be a predicate, comparison, or negated term")
+        innermost: Term = head
+        while isinstance(innermost, DefaultNegation):
+            innermost = innermost.term
+        if isinstance(innermost, Comparison) and any(
+            isinstance(side, AggregateBase) for side in (innermost.left_term, innermost.right_term)
+        ):
+            # The same wall ConditionedElement raises for conditions
+            raise ValueError(
+                "Aggregates cannot appear inside conditional literal heads (clingo "
+                "syntax error); compute the aggregate in a separate rule"
+            )
         if condition is None or (isinstance(condition, list) and not condition):
             # A conditionless conditional literal renders as a plain positive
             # literal with entirely different (binding) semantics — reject the

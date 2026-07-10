@@ -160,6 +160,8 @@ def test_sum_rejects_literal_string_weights() -> None:
         Sum((String("a"), X), condition=P(x=X))
     with pytest.raises(TypeError, match="weights are integer-valued, got #sup"):
         Sum((SUP, X), condition=P(x=X))
+    with pytest.raises(TypeError, match=r"is a predicate.*Lead the tuple with the weight"):
+        Sum((P(x=1), X), condition=P(x=X))  # gringo would silently ignore the tuple
     # Min/Max order terms: strings and the ordering's end markers are legal there
     Max((String("a"), X), condition=P(x=X))
     Max((SUP, X), condition=P(x=X))

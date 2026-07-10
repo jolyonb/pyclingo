@@ -11,6 +11,7 @@ from typing import Any, ClassVar, Self, SupportsIndex, cast, dataclass_transform
 from pyclingo.core import (
     DefaultNegation,
     DefinedConstant,
+    ExplicitPool,
     Expression,
     Negatable,
     Number,
@@ -323,6 +324,9 @@ class Predicate(PredicateBase, Negatable, metaclass=_PredicateMeta):
         # no reassignment is needed. repr=False: the generated __repr__ would
         # shadow Predicate's sign-aware one on every subclass
         dataclass(frozen=True, eq=False, repr=False)(cls)
+        # dataclass() generates a fields-based __replace__ on every subclass,
+        # which would shadow the sign-preserving hook below: restore ours
+        cls.__replace__ = Predicate.__replace__  # type: ignore[method-assign]
         # Install the Field descriptors only after dataclass() has run, so it
         # treats these as required fields rather than defaulted ones. Inherited
         # descriptor fields stay registered so __post_init__ keeps skipping them.
@@ -486,7 +490,7 @@ class Predicate(PredicateBase, Negatable, metaclass=_PredicateMeta):
             (
                 argument._depth
                 for field_info in self.argument_fields()
-                if isinstance(argument := getattr(self, field_info.name), Predicate)
+                if isinstance(argument := getattr(self, field_info.name), (Predicate, ExplicitPool))
             ),
             default=0,
         )
@@ -628,6 +632,19 @@ class Predicate(PredicateBase, Negatable, metaclass=_PredicateMeta):
             object.__setattr__(negation, key, value)
         object.__setattr__(negation, "_negated", not self.negated)
         return negation
+
+    def __replace__(self, /, **changes: Any) -> Self:
+        """
+        copy.replace(atom, field=...): field changes with the SIGN
+        preserved — the sign is not a dataclass field, so the default
+        reconstruction would silently return the positive atom. NOTE:
+        dataclasses.replace() bypasses this hook entirely (its
+        reconstruction is fields-based, no stdlib hook exists) and DOES
+        drop the sign — use copy.replace. Both behaviors are pinned.
+        """
+        merged = {f.name: getattr(self, f.name) for f in self.argument_fields()} | changes
+        replaced = type(self)(**merged)
+        return -replaced if self.negated else replaced
 
     def __invert__(self) -> DefaultNegation:
         """~atom builds "not atom". (On a plain comparison, ~ builds the complement instead — see Not.)"""

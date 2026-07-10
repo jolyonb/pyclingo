@@ -1,9 +1,10 @@
 import copy
+import dataclasses
 import pickle
 
 import pytest
 
-from pyclingo import ASPProgram, Comparison, DefaultNegation, Field, Number, Predicate, PredicateField, Variable
+from pyclingo import ASPProgram, Comparison, DefaultNegation, Field, Number, Predicate, PredicateField, Variable, pool
 
 
 class CluePred(Predicate):
@@ -218,6 +219,16 @@ def test_define_show_must_be_a_bool() -> None:
         Predicate.define("p_shownone", ["x"], show=None)  # type: ignore[arg-type]
 
 
+def test_pool_alternation_cannot_evade_the_nesting_cap() -> None:
+    # Depth rides through explicit pools: a Predicate <-> pool chain hits
+    # the teaching cap instead of a raw RecursionError mid-walk
+    Wrap = Predicate.define("wrap_pool_deep", ["x"])
+    chain: object = Predicate.define("nil_pool_deep", [], show=False)()
+    with pytest.raises(ValueError, match="indexed facts"):
+        for _ in range(Predicate.MAX_DEPTH):
+            chain = Wrap(x=pool([chain, 0]))  # type: ignore[list-item]
+
+
 def test_deep_predicate_nesting_rejected_at_construction() -> None:
     # Mirrors Expression.MAX_DEPTH: a linked-list encoding built in a loop
     # would die mid-walk with a raw RecursionError
@@ -228,3 +239,27 @@ def test_deep_predicate_nesting_rejected_at_construction() -> None:
     chain.render()  # at the cap: walkers still fine
     with pytest.raises(ValueError, match="indexed facts"):
         Wrap(inner=chain)
+
+
+def test_copy_replace_preserves_the_sign() -> None:
+    # copy.replace routes through __replace__, which re-applies the sign
+    # the fields-based reconstruction would silently drop
+    P = Predicate.define("p_repl", ["x", "y"])
+    negated = -P(x=1, y=2)
+    replaced = copy.replace(negated, y=3)
+    assert replaced == -P(x=1, y=3)
+    assert replaced.negated is True
+    positive = copy.replace(P(x=1, y=2), y=3)
+    assert positive == P(x=1, y=3) and positive.negated is False
+
+
+def test_dataclasses_replace_drops_the_sign_as_documented() -> None:
+    # dataclasses.replace bypasses __replace__ entirely (its reconstruction
+    # is fields-based; no stdlib hook exists), so it DOES drop the sign —
+    # documented on __replace__ and in CLAUDE.md; use copy.replace. This
+    # pin records the known-wrong behavior: if a future stdlib routes
+    # dataclasses.replace through __replace__, it fails and we get to
+    # delete the caveat.
+    P = Predicate.define("p_repl_dc", ["x", "y"])
+    replaced = dataclasses.replace(-P(x=1, y=2), y=3)  # type: ignore[call-arg]  # fields unknowable for define()
+    assert replaced == P(x=1, y=3)  # sign silently gone: the documented trap

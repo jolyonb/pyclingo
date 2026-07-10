@@ -2,7 +2,7 @@
 
 import pytest
 
-from pyclingo import ASPProgram, ConditionalLiteral, LogLevel, Predicate, Variable
+from pyclingo import ASPProgram, ConditionalLiteral, Count, LogLevel, Not, Predicate, Variable
 
 
 def test_body_literal_after_conditional_literal_stays_separate() -> None:
@@ -78,3 +78,17 @@ def test_head_rejection_signposts_disjunction() -> None:
     X = Variable("X")
     with pytest.raises(ValueError, match=r"Choice\(...\)\.at_least\(1\)"):
         program.when(Q(x=X)).derive(ConditionalLiteral(P(x=X), Q(x=X)))
+
+
+def test_aggregate_bearing_comparison_heads_rejected() -> None:
+    # The same category error the condition slot already walls: gringo
+    # answers "#count{...} > 2 : q(Y)" with a bare "unexpected :" parse
+    # error, so the head refuses at construction — Not-wrapped included
+    P = Predicate.define("p_aggh", ["x"])
+    Q = Predicate.define("q_aggh", ["x"])
+    X, Y = Variable("X"), Variable("Y")
+    aggregate_comparison = Count(X, condition=P(x=X)) > 2
+    with pytest.raises(ValueError, match="conditional literal heads"):
+        ConditionalLiteral(aggregate_comparison, Q(x=Y))
+    with pytest.raises(ValueError, match="conditional literal heads"):
+        ConditionalLiteral(Not(aggregate_comparison), Q(x=Y))

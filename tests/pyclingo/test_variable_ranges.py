@@ -7,7 +7,7 @@ binding as a one-way edge (bounds -> left variable).
 
 import pytest
 
-from pyclingo import ASPProgram, Count, Predicate, RangePool, String, Variable
+from pyclingo import ANY, ASPProgram, Count, Predicate, RangePool, String, Variable
 
 Size = Predicate.define("size", ["n"], show=False)
 Q = Predicate.define("q", ["x"])
@@ -117,3 +117,16 @@ def test_ungrounded_range_facts_rejected() -> None:
     N = Variable("N")
     with pytest.raises(ValueError, match="grounded"):
         program.fact(Q(x=RangePool(1, N)))
+
+
+def test_anonymous_variable_rejected_in_range_bounds() -> None:
+    # '_' in a bound matches anything and binds nothing: gringo rejects the
+    # rule as unsafe (each _ is a fresh unbound variable), and the empty
+    # variable set would otherwise fool the binding analysis into marking
+    # the compared side bound
+    with pytest.raises(ValueError, match="cannot appear in a range end"):
+        RangePool(1, ANY)
+    with pytest.raises(ValueError, match="cannot appear in a range start"):
+        RangePool(ANY, 5)
+    with pytest.raises(ValueError, match="cannot appear in a range end"):
+        RangePool(1, ANY + 1)  # nested in an expression, same rejection

@@ -834,16 +834,25 @@ def _search_generator(
         state.closed = True
         raise
     finally:
-        state.finished = True
-        # Messages after the last emission (exhaustion proof, cancellation)
-        state.messages.extend(message_handler.messages[messages_seen:])
-        if final is not None:
-            # Skipped if the handle was closed before solving began. clingo
-            # raises if statistics are not ready; none is better than raising.
-            with suppress(RuntimeError):
-                statistics = dict(control.statistics)
-                statistics["wall_time"] = time.perf_counter() - tic
-                state.statistics = statistics
+        # Finalize FIRST, publish LAST: the sequential guard reads
+        # `finished` as "fully finalized", so flipping it before the
+        # message tail and the statistics snapshot would admit a racing
+        # second solve mid-finalization — concurrent native statistics
+        # access, and the tail messages lost to (or stolen from) the new
+        # solve's message-window reset. The inner finally guarantees the
+        # flag still publishes if the snapshot itself raises.
+        try:
+            # Messages after the last emission (exhaustion proof, cancellation)
+            state.messages.extend(message_handler.messages[messages_seen:])
+            if final is not None:
+                # Skipped if the handle was closed before solving began. clingo
+                # raises if statistics are not ready; none is better than raising.
+                with suppress(RuntimeError):
+                    statistics = dict(control.statistics)
+                    statistics["wall_time"] = time.perf_counter() - tic
+                    state.statistics = statistics
+        finally:
+            state.finished = True
     if timed_out and refining:
         # Variation point: a timed-out enumeration flags and stops (each
         # yielded model was already a true answer), but a timed-out
