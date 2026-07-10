@@ -18,7 +18,7 @@ from pyclingo import (
     GroundingError,
     Number,
     Predicate,
-    PyClingoBaseException,
+    PyClingoError,
     RangePool,
     SourceLocation,
     Variable,
@@ -119,6 +119,45 @@ def test_const_nullary_predicate_collision_rejected() -> None:
     North = Predicate.define("north", [], show=False)
     Dir = Predicate.define("dir", ["d"])
     program.fact(Dir(d=North()))
+    with pytest.raises(ValueError, match="both a #const and a nullary predicate"):
+        program.render()
+
+
+def test_atom_valued_const_renders_bare_and_reads_back_typed() -> None:
+    # A quoted string and a bare symbol are different values; a grounded
+    # atom as the value is the symbolic-constant spelling
+    program = ASPProgram()
+    N = Predicate.define("n_sym", [], show=False)
+    Facing = Predicate.define("facing", ["d"])
+    dir_const = program.define_constant("dir", N())
+    program.fact(Facing(d=dir_const))
+    assert "#const dir = n_sym." in program.render()
+    model = next(iter(program.solve()))
+    (facing,) = model.atoms(Facing)
+    assert facing["d"] == N()  # the symbol reconstructs typed, not as a string
+
+
+def test_atom_valued_const_values_must_be_ground_and_plain() -> None:
+    program = ASPProgram()
+    P = Predicate.define("p_symc", ["x"])
+    with pytest.raises(ValueError, match="must be a ground term"):
+        program.define_constant("dir", P(x=Variable("X")))
+    other = program.define_constant("k", 3)
+    with pytest.raises(ValueError, match="cannot reference other defined constants"):
+        program.define_constant("dir", P(x=other))
+    with pytest.raises(TypeError, match="integer, a string, or a grounded predicate atom"):
+        program.define_constant("dir", 1.5)  # type: ignore[arg-type]
+
+
+def test_atom_valued_const_value_hits_the_collision_wall() -> None:
+    # The value atom's class joins the walk, so a value whose name is
+    # itself a #const name trips the substitution wall at render
+    program = ASPProgram()
+    program.define_constant("n_wall", 5)
+    NWall = Predicate.define("n_wall", [], show=False)
+    program.define_constant("dir", NWall())
+    Q = Predicate.define("q_symc", ["x"])
+    program.fact(Q(x=1))
     with pytest.raises(ValueError, match="both a #const and a nullary predicate"):
         program.render()
 
@@ -273,11 +312,11 @@ def test_grounding_error_roots_at_the_family_base() -> None:
     # GroundingError is pyclingo's own class, rooted at the family base —
     # deliberately NOT a RuntimeError (pre-publication, there is no old
     # handler to keep working)
-    assert issubclass(GroundingError, PyClingoBaseException)
+    assert issubclass(GroundingError, PyClingoError)
     assert not issubclass(GroundingError, RuntimeError)
     program = ASPProgram()
     program.raw_asp("p_ge(1")  # unterminated: a parse error
-    with pytest.raises(PyClingoBaseException):
+    with pytest.raises(PyClingoError):
         program.ground()
 
 

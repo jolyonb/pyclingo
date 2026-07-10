@@ -12,7 +12,7 @@ from pyclingo import (
     Number,
     OptimizeSteps,
     Predicate,
-    PyClingoBaseException,
+    PyClingoError,
     RefinementSteps,
     UnsatisfiableError,
     Variable,
@@ -182,7 +182,7 @@ def test_first_on_unsatisfiable_raises_teaching() -> None:
     # An outcome, not a mistake: NOT a ValueError (a validation except
     # clause must never absorb UNSAT), rooted at pyclingo's own base
     assert not issubclass(UnsatisfiableError, ValueError)
-    assert issubclass(UnsatisfiableError, PyClingoBaseException)
+    assert issubclass(UnsatisfiableError, PyClingoError)
 
 
 def test_model_iterates_and_answers_membership() -> None:

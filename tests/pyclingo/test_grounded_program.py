@@ -186,6 +186,32 @@ def test_assumptions_resolve_defined_constants() -> None:
     assert len(models) == 8  # 2^3 for the other slots
 
 
+def test_assumptions_resolve_atom_valued_constants() -> None:
+    # An atom-valued #const resolves through the same snapshot, recursively:
+    # the assumption f(dir) reaches clasp as f(n)
+    program = ASPProgram()
+    N = Predicate.define("n_av", [], show=False)
+    F = Predicate.define("f_av", ["x"])
+    dir_const = program.define_constant("dir_av", N())
+    program.choose(Choice(F(x=N())).add(F(x=1)))
+    grounded = program.ground()
+    models = list(grounded.solve(assumptions=[F(x=dir_const)]))
+    assert all(F(x=N()) in set(m.atoms(F)) for m in models)
+    assert len(models) == 2  # the other slot stays free
+
+
+def test_assumptions_resolve_string_valued_constants() -> None:
+    # The third value shape: a string const resolves to the quoted string
+    program = ASPProgram()
+    F = Predicate.define("f_sv", ["x"])
+    s = program.define_constant("s_av", "hello")
+    program.choose(Choice(F(x=s)))
+    grounded = program.ground()
+    models = list(grounded.solve(assumptions=[F(x=s)]))
+    assert len(models) == 1
+    assert models[0].atoms(F) == [F(x="hello")]
+
+
 def test_expression_assumptions_rejected_with_teaching() -> None:
     grounded = make_program().ground()
     with pytest.raises(ValueError, match="pass the computed value"):

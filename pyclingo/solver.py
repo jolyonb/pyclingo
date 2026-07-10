@@ -57,6 +57,15 @@ class _MinimizeLevelObserver(clingo.Observer):
 def _require_predicate_class(candidate: object, verb: str) -> None:
     """Visibility is per CLASS; failing here beats an AttributeError three stages later at render."""
     if isinstance(candidate, Predicate):
+        if candidate.negated:
+            # The class governs BOTH signs, so "pass the class" would
+            # silently discard the sign this caller singled out
+            raise TypeError(
+                f"{verb}() takes a predicate class, got the negated atom {candidate.render()} — "
+                f"pass the class {type(candidate).__name__} to govern both signs, or register a "
+                f"show_when whose head is -{type(candidate).get_name()}(...) to govern the "
+                f"negated sign alone"
+            )
         raise TypeError(
             f"{verb}() takes a predicate class, got the atom {candidate.render()} — "
             f"pass the class {type(candidate).__name__} (visibility is per class, not per atom)"
@@ -199,7 +208,7 @@ class ASPProgram:
         self._check_singletons = not allow_singletons
         self._source_locations = source_locations
         self._segments: dict[str, Segment] = {}
-        self._defined_constants: dict[str, int | str] = {}
+        self._defined_constants: dict[str, int | str | Predicate] = {}
         self._show_overrides: dict[type[Predicate], bool] = {}
         self._project_shown = False
         # Conditional shows are per SIGN: (class, negated) -> the directive's
@@ -448,9 +457,14 @@ class ASPProgram:
         """Add a blank line and title comment to the default segment."""
         self._default_segment().section(title)
 
-    def define_constant(self, name: str, value: int | str) -> DefinedConstant:
+    def define_constant(self, name: str, value: int | str | Predicate) -> DefinedConstant:
         """
         Define a #const constant, rendered as "#const name = value.".
+
+        A str value is a STRING: it renders quoted, and a quoted string is a
+        different value from a bare symbol ("n" never equals n). To define a
+        symbolic constant, pass a grounded atom — define_constant("dir", N())
+        with N = Predicate.define("n", []) renders "#const dir = n.".
 
         Raises:
             ValueError: If the name is invalid or already defined.
@@ -467,21 +481,39 @@ class ASPProgram:
         if name in self._defined_constants:
             raise ValueError(f"Defined constant '{name}' is already registered")
 
-        if isinstance(value, bool) or not isinstance(value, (int, str)):
+        if isinstance(value, bool) or not isinstance(value, (int, str, Predicate)):
             # bool subclasses int, and a boolean is never a valid ASP term
-            raise TypeError(f"Constant value must be an integer or string, got {type(value).__name__}")
-        # A subclass converts to its natural plain form first, so the check
-        # below sees exactly the value that will render
-        value = int(value) if isinstance(value, int) else str(value)
-        if isinstance(value, str) and any(c in value for c in ('"', "\\", "\n", "\r", "\x00")):
-            raise ValueError(f"Constant string value cannot contain quotes, backslashes, newlines, or NUL: {value!r}")
+            raise TypeError(
+                f"Constant value must be an integer, a string, or a grounded predicate "
+                f"atom (a bare atom names clingo's symbolic constant), got {type(value).__name__}"
+            )
+        if isinstance(value, Predicate):
+            if not value.is_grounded:
+                variables = ", ".join(sorted(value.collect_variables()))
+                raise ValueError(
+                    f"A #const value must be a ground term, but {value.render()} contains variable(s) {variables}"
+                )
+            if referenced := value.collect_defined_constants():
+                raise ValueError(
+                    f"A #const value cannot reference other defined constants "
+                    f"({', '.join(sorted(referenced))} in {value.render()}): register the "
+                    f"plain value directly"
+                )
+        else:
+            # A subclass converts to its natural plain form first, so the check
+            # below sees exactly the value that will render
+            value = int(value) if isinstance(value, int) else str(value)
+            if isinstance(value, str) and any(c in value for c in ('"', "\\", "\n", "\r", "\x00")):
+                raise ValueError(
+                    f"Constant string value cannot contain quotes, backslashes, newlines, or NUL: {value!r}"
+                )
 
         self._defined_constants[name] = value
 
         return constant
 
     @property
-    def defined_constants(self) -> dict[str, int | str]:
+    def defined_constants(self) -> dict[str, int | str | Predicate]:
         """The #const definitions registered so far, name to value (a copy — register through define_constant())."""
         return dict(self._defined_constants)
 
@@ -674,8 +706,18 @@ class ASPProgram:
             for condition in self._show_when_overrides.values()
             for occ in condition.collect_predicate_occurrences(as_argument=False)
         }
-        all_classes = {cls for cls, _negated, _is_atom in segment_occurrences | show_when_occurrences} | set(
-            self._show_overrides
+        all_classes = (
+            {cls for cls, _negated, _is_atom in segment_occurrences | show_when_occurrences}
+            | set(self._show_overrides)
+            # Atom-valued #const definitions: their classes join the walk so
+            # solution atoms carrying the symbol reconstruct typed, and the
+            # name-collision walls see them
+            | {
+                cls
+                for value in self._defined_constants.values()
+                if isinstance(value, Predicate)
+                for cls in value.collect_predicates()
+            }
         )
         has_raw = self._has_raw_asp()
         self._validate_names(all_classes)
@@ -712,6 +754,8 @@ class ASPProgram:
         for name, value in self._defined_constants.items():
             if isinstance(value, str):
                 lines.append(f'#const {name} = "{value}".')  # String values are quoted
+            elif isinstance(value, Predicate):
+                lines.append(f"#const {name} = {value.render()}.")  # a bare atom: a symbolic constant
             else:
                 lines.append(f"#const {name} = {value}.")  # Integer values are not
 
@@ -831,7 +875,7 @@ class ASPProgram:
             error_msg = str(e)
             if formatted_messages := message_handler.format_all_messages(verb="parsing"):
                 error_msg += "\n\n" + formatted_messages
-            raise GroundingError(error_msg) from e
+            raise GroundingError(error_msg, messages=message_handler.messages) from e
 
         try:
             control.ground([("base", [])], context=context)
@@ -839,7 +883,7 @@ class ASPProgram:
             error_msg = f"Grounding failed: {e}\n\n"
             if formatted_messages := message_handler.format_all_messages(verb="grounding"):
                 error_msg += formatted_messages
-            raise GroundingError(error_msg) from e
+            raise GroundingError(error_msg, messages=message_handler.messages) from e
 
         # Messages below the stop threshold are tolerated silently; at or above
         # it, the full formatted diagnostics ride along in the raised error
@@ -848,7 +892,8 @@ class ASPProgram:
             raise GroundingError(
                 f"Grounding produced {message_handler.highest_level.name} level messages "
                 f"(stop threshold: {stop_on_log_level.name}).\n\n"
-                f"{message_handler.format_all_messages(verb='grounding')}"
+                f"{message_handler.format_all_messages(verb='grounding')}",
+                messages=message_handler.messages,
             )
 
         # Cost-tuple and bound positions follow these levels, highest first
@@ -1083,7 +1128,7 @@ class GroundedProgram:
         control: clingo.Control,
         predicate_types: dict[tuple[str, int], type[Predicate]],
         message_handler: ClingoMessageHandler,
-        defined_constants: dict[str, int | str],
+        defined_constants: dict[str, int | str | Predicate],
         ground_levels: tuple[int, ...],
         derivation_sites: dict[tuple[str, int], tuple[SourceLocation | None, ...]],
         hidden_classes: frozenset[type[Predicate]],

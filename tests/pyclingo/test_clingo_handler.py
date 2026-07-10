@@ -116,8 +116,10 @@ def test_message_carries_code_and_raw_text_for_user_dispatch() -> None:
     P = Predicate.define("p_code", ["x"])
     Q = Predicate.define("q_code", ["x"], show=False)
     program.when(Q(x=1)).derive(P(x=1))
-    with pytest.raises(GroundingError):
+    with pytest.raises(GroundingError) as excinfo:
         program.ground()  # q never in a head: INFO halts at the default threshold
+    (carried,) = excinfo.value.messages  # the raising diagnostic rides along, structured
+    assert carried.code == clingo.MessageCode.AtomUndefined
     program2 = ASPProgram()
     program2.when(Q(x=1)).derive(P(x=1))
     grounded = program2.ground(stop_on_log_level=LogLevel.ERROR)

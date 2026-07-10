@@ -115,7 +115,7 @@ def test_setitem_replaces_in_place_and_never_creates() -> None:
     assert [segment.name for segment in program.segments] == ["Rules", "extra", "tail"]
 
     variant = Segment("extra")
-    variant.append(Rule(head=P(x=9)))
+    variant._append(Rule(head=P(x=9)))
     program["extra"] = variant
     assert [segment.name for segment in program.segments] == ["Rules", "extra", "tail"]  # position kept
     assert program["extra"] is variant
@@ -485,7 +485,7 @@ def test_append_keeps_an_already_set_source_location() -> None:
     rule = Rule(head=P(x=1))
     preset = SourceLocation("elsewhere.py", 7)
     rule.source_location = preset
-    segment.append(rule)
+    segment._append(rule)
     assert rule.source_location is preset
 
 
@@ -493,7 +493,7 @@ def test_append_rejects_non_elements_with_teaching() -> None:
     # A bare string died three stages later with a raw AttributeError
     segment = Segment("Guard")
     with pytest.raises(TypeError, match=r"for verbatim ASP text use raw_asp\(\)"):
-        segment.append("q(2).")  # type: ignore[arg-type]
+        segment._append("q(2).")  # type: ignore[arg-type]
 
 
 def test_bool_conditions_teach_the_predicate_equality_trap() -> None:

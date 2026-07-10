@@ -904,7 +904,7 @@ def _search_generator(
 
 
 def convert_predicate_to_symbol(
-    predicate: Predicate, defined_constants: dict[str, int | str] | None = None
+    predicate: Predicate, defined_constants: dict[str, int | str | Predicate] | None = None
 ) -> clingo.Symbol:
     """
     Convert a grounded Predicate instance into a clingo Symbol, recursively —
@@ -923,7 +923,12 @@ def convert_predicate_to_symbol(
                     f"Cannot convert {predicate.render()} to a symbol: '{value.value}' is a "
                     f"#const reference and no value for it is available here"
                 )
-            arguments.append(clingo.Number(resolved) if isinstance(resolved, int) else clingo.String(resolved))
+            if isinstance(resolved, Predicate):  # an atom-valued #const: recurse
+                arguments.append(convert_predicate_to_symbol(resolved, defined_constants))
+            elif isinstance(resolved, int):
+                arguments.append(clingo.Number(resolved))
+            else:
+                arguments.append(clingo.String(resolved))
         elif isinstance(value, Number):
             arguments.append(clingo.Number(value.value))
         elif isinstance(value, String):

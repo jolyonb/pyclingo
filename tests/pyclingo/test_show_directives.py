@@ -234,3 +234,7 @@ def test_show_and_hide_reject_instances_and_garbage_with_teaching() -> None:
         program.show(P(x=1))  # type: ignore[arg-type]
     with pytest.raises(TypeError, match=r"hide\(\) takes a Predicate class, got int"):
         program.hide(42)  # type: ignore[arg-type]
+    # A NEGATED atom gets sign-aware teaching: "pass the class" alone would
+    # silently discard the sign intent (the class governs both signs)
+    with pytest.raises(TypeError, match=r"negated atom -p_showcls\(1\).*both signs.*show_when.*negated sign alone"):
+        program.show(-P(x=1))  # type: ignore[arg-type]

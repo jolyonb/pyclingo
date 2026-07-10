@@ -1,7 +1,7 @@
 [project]
 name = "pyclingo"
 version = "0.2.0"
-description = "A python wrapper for clingo with ASP puzzle solving capabilities"
+description = "TODO: Fix this before publication"
 license = { text = "MIT" }
 readme = "pyclingo/README.md"
 requires-python = ">=3.14"

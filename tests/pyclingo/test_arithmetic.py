@@ -26,12 +26,12 @@ from pyclingo import (
     Expression,
     Not,
     Number,
+    Operation,
     Predicate,
     RangePool,
     String,
     Variable,
 )
-from pyclingo.operators import Operation
 
 
 def compl(x: Any) -> Any:

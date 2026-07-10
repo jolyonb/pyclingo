@@ -105,25 +105,34 @@ class Segment:
         """The segment's name."""
         return self._name
 
-    def append(self, element: ProgramElement) -> None:
+    def _append(self, element: ProgramElement) -> None:
         """
         Add an element to the end of the segment. Every statement verb ends
         here, so this is also where the element is stamped with the user
         line that authored it (unless the When machinery already did).
         Formatting elements (locatable=False) are never stamped.
+
+        Private: elements are internal records — the statement verbs are
+        the writing surface, raw_asp() the escape hatch.
         """
         if not isinstance(element, ProgramElement):
             raise TypeError(
-                f"append() takes a ProgramElement, got {type(element).__name__}; for verbatim ASP text use raw_asp()"
+                f"_append() takes a ProgramElement, got {type(element).__name__}; for verbatim ASP text use raw_asp()"
             )
         if self._capture_locations and element.locatable and element.source_location is None:
             element.source_location = capture_location()
         self._elements.append(element)
 
     def __len__(self) -> int:
+        """The number of statements recorded in this segment."""
         return len(self._elements)
 
     def __iter__(self) -> Iterator[ProgramElement]:
+        """
+        Iterate the segment's statements as OPAQUE ProgramElements: read
+        render() and source_location off them. The concrete classes are
+        internal — the statement verbs are the writing surface.
+        """
         return iter(self._elements)
 
     # ---- statement verbs ----
@@ -148,7 +157,7 @@ class Segment:
                 )
         for statement in facts:
             rule = Rule(head=statement, check_singletons=self._check_singletons)
-            self.append(rule)
+            self._append(rule)
 
     def choose(self, choice: Choice) -> None:
         """
@@ -165,7 +174,7 @@ class Segment:
         if not isinstance(choice, Choice):
             raise TypeError(f"choose() takes a Choice, got {type(choice).__name__}")
         rule = Rule(head=choice, check_singletons=self._check_singletons)
-        self.append(rule)
+        self._append(rule)
 
     def when(self, *conditions: Term) -> When:
         """
@@ -190,7 +199,7 @@ class Segment:
             if not isinstance(condition, Term):
                 raise _non_term_error("forbid() conditions", condition)
         rule = Rule(body=list(conditions), check_singletons=self._check_singletons)
-        self.append(rule)
+        self._append(rule)
 
     def require(self, comparison: Comparison) -> None:
         """
@@ -201,7 +210,7 @@ class Segment:
         """
         target = _required_comparison(comparison)
         rule = Rule(body=[target.inverse()], check_singletons=self._check_singletons)
-        self.append(rule)
+        self._append(rule)
 
     def penalize(
         self,
@@ -231,7 +240,7 @@ class Segment:
         reward, not a penalty; spell it minimize()/maximize().
         """
         weak = _build_weak_constraint(conditions, weight, terms, priority, self._check_singletons)
-        self.append(weak)
+        self._append(weak)
 
     def minimize(
         self,
@@ -287,7 +296,7 @@ class Segment:
         directive = OptimizationDirective(sense, weight, tuple_terms, condition, priority)
         validate_optimization_element(directive.element, directive.render(), check_singletons=self._check_singletons)
         directive.element.freeze()
-        self.append(directive)
+        self._append(directive)
 
     def raw_asp(self, text: str, predicates: Sequence[PredicateClassType | NegatedSignature] = ()) -> None:
         """
@@ -316,15 +325,15 @@ class Segment:
         """
         if not isinstance(text, str):
             raise TypeError(f"raw_asp() text must be a string, got {type(text).__name__}")
-        self.append(RawASP(text, predicates))
+        self._append(RawASP(text, predicates))
 
     def comment(self, text: str) -> None:
         """Add a comment."""
-        self.append(Comment(text))
+        self._append(Comment(text))
 
     def blank_line(self) -> None:
         """Add a blank line for formatting."""
-        self.append(BlankLine())
+        self._append(BlankLine())
 
     def section(self, title: str) -> None:
         """Add a blank line and title comment as a section header."""
@@ -340,6 +349,9 @@ class Segment:
         comment, and one blank line — any blank the content already opens
         with is absorbed, so the gap after the header is always exactly one.
         Raises if any when() in this segment was never completed.
+
+        This is a FRAGMENT: weak constraints render with bare tuples here,
+        where the program-level render adds weak-constraint discriminators.
         """
         return "\n".join(line.text for line in self.render_lines(with_header))
 
@@ -448,7 +460,7 @@ class When:
             closed = capture_location()
             if closed is not None and closed != self._location:
                 element.closed_at = closed
-        self._segment.append(element)
+        self._segment._append(element)
 
     def _guard(self) -> None:
         if self._completed_by is not None:
