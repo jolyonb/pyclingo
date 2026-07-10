@@ -30,7 +30,7 @@ class LogLevel(IntEnum):
         return mapping.get(level_str.lower(), cls.INFO)
 
 
-@dataclass
+@dataclass(frozen=True)
 class ClingoMessage:
     """Represents a parsed Clingo warning/error message."""
 
@@ -39,7 +39,7 @@ class ClingoMessage:
     code: clingo.MessageCode
     column_start: int
     column_end: int
-    severity: str  # 'info', 'warning', 'error'
+    severity: LogLevel
     message: str
     raw_message: str
 
@@ -69,24 +69,24 @@ class ClingoMessageHandler:
         # DOTALL: the message payload itself may span lines (e.g. "no atoms
         # over signature occur in program:\n  -p/1")
         if location_match := re.match(r"<(.+?)>:(\d+):(\d+)-(?:\d+:)?(\d+):\s*(.+?):\s*(.+)", message, re.DOTALL):
-            level = location_match[5]
+            severity = LogLevel.from_string(location_match[5])
             parsed_msg = ClingoMessage(
                 filename=location_match[1],
                 line=int(location_match[2]),
                 code=code,
                 column_start=int(location_match[3]),
                 column_end=int(location_match[4]),
-                severity=level,
+                severity=severity,
                 message=location_match[6],
                 raw_message=message,
             )
             self.messages.append(parsed_msg)
         else:
             if level_match := re.match(r"^(\w+):\s*(.+)", message):
-                level = level_match[1]
+                severity = LogLevel.from_string(level_match[1])
                 message_text = level_match[2]
             else:
-                level = "info"
+                severity = LogLevel.INFO
                 message_text = message
 
             self.messages.append(
@@ -96,16 +96,15 @@ class ClingoMessageHandler:
                     code=code,
                     column_start=0,
                     column_end=0,
-                    severity=level,
+                    severity=severity,
                     message=message_text,
                     raw_message=message,
                 )
             )
 
         # Update highest log level
-        current_level = LogLevel.from_string(level)
-        if self._highest_level is None or current_level > self._highest_level:
-            self._highest_level = current_level
+        if self._highest_level is None or severity > self._highest_level:
+            self._highest_level = severity
 
     @property
     def highest_level(self) -> LogLevel | None:
@@ -122,7 +121,7 @@ class ClingoMessageHandler:
     def format_message(self, msg: ClingoMessage) -> str:
         """Format a single message with context."""
         output = [
-            f"{msg.severity.upper()}: {msg.message}",
+            f"{msg.severity.name}: {msg.message}",
             f"  at line {msg.line}, columns {msg.column_start}-{msg.column_end}",
             "",
             f"  in {msg.filename}",

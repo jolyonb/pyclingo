@@ -16,6 +16,8 @@ module top, of any module, not just intra-package ones.
 import ast
 from pathlib import Path
 
+import pyclingo
+
 PACKAGE_DIR = Path(__file__).resolve().parents[2] / "pyclingo"
 TESTS_DIR = Path(__file__).resolve().parent
 
@@ -105,3 +107,10 @@ def test_no_function_level_imports_in_tests() -> None:
 
         scan(ast.parse(path.read_text(), filename=str(path)), in_function=False)
     assert not offenders, "Function-level imports are banned in tests:\n" + "\n".join(offenders)
+
+
+def test_every_export_resolves() -> None:
+    # __all__ is hand-maintained beside hand-maintained imports: a typo in
+    # either direction only surfaces on `from pyclingo import *` otherwise
+    for name in pyclingo.__all__:
+        assert hasattr(pyclingo, name), f"__all__ names {name}, but pyclingo does not provide it"

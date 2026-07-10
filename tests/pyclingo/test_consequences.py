@@ -193,10 +193,36 @@ def test_optimizing_grounding_refuses_every_non_optimize_verb() -> None:
         grounded.cautious()
     with pytest.raises(ValueError, match="cost-descent"):
         grounded.brave()
-    with pytest.raises(ValueError, match="cost-descent"):
-        grounded.brave_iter()
+    with pytest.raises(ValueError, match=r"cost-descent.*ignore_optimization=True"):
+        grounded.brave_iter()  # the wall names the flag that lifts it
     with pytest.raises(ValueError, match=r"optimize\(\)"):
         grounded.solve()
+
+
+def test_ignore_optimization_refines_over_all_answer_sets() -> None:
+    # The optimizing twin of build(): with the objective ignored, both
+    # refinements answer over ALL answer sets — the plain program's known
+    # union {1,2,3} and empty intersection
+    program = build()
+    program.raw_asp("#minimize{ 1,X : color(X) }.", predicates=[Color])
+    grounded = program.ground()
+    union = grounded.brave(ignore_optimization=True)
+    assert union is not None and union.complete
+    assert sorted(atom["x"].value for atom in union.atoms(Color)) == [1, 2, 3]
+    forced = grounded.cautious(ignore_optimization=True)
+    assert forced is not None and forced.complete
+    assert forced.atoms(Color) == []
+    # The iterator twins take the flag too, and nothing leaks: a later
+    # optimize() on the SAME grounding still optimizes
+    steps = grounded.cautious_iter(ignore_optimization=True)
+    assert list(steps)[-1].atoms(Color) == []
+    best = grounded.optimize()
+    assert best is not None and best.cost == (1,)  # at_least(1) forces one color
+    # And the flag still requires an objective to ignore
+    with pytest.raises(ValueError, match="Nothing to ignore"):
+        build().cautious(ignore_optimization=True)
+    with pytest.raises(ValueError, match="Nothing to ignore"):
+        build().ground().brave_iter(ignore_optimization=True)
 
 
 def test_steps_primitive_adaptive_early_exit() -> None:

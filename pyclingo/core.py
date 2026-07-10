@@ -27,7 +27,7 @@ if TYPE_CHECKING:
     # Annotation-only upward reference (scoping.py holds another):
     # collect_predicates returns predicate classes, but core cannot import
     # predicate at runtime
-    from pyclingo.predicate import PredicateClassType
+    from pyclingo.predicate import Predicate, PredicateClassType
 
 
 # One occurrence of a predicate class: (class, classically negated, is_atom).
@@ -1336,8 +1336,11 @@ class Comparison(Negatable):
         return self._operator
 
     @property
-    def right_term(self) -> ComparableTerm | Pool | PredicateBase:
-        return self._right_term
+    def right_term(self) -> ComparableTerm | Pool | Predicate:
+        # The public annotation says Predicate: PredicateBase is the
+        # internal import-DAG marker, and the constructor admits nothing
+        # else under it
+        return cast("ComparableTerm | Pool | Predicate", self._right_term)
 
     def freeze(self) -> None:
         self.left_term.freeze()

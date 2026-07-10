@@ -327,6 +327,25 @@ def test_render_with_header_absorbs_the_sections_leading_blank() -> None:
     assert "% ===== x =====\n\n\n" not in rendered  # the section's own blank absorbed, not doubled
 
 
+def test_rejected_fluent_closer_unregisters_its_when() -> None:
+    # The fluent spelling holds no reference to the When: when its closer
+    # raises, the When unregisters itself (the error already reported the
+    # problem loudly) instead of failing every future render
+    program = ASPProgram()
+    program.fact(P(x=1))
+    with pytest.raises(ValueError, match="Singleton"):
+        program.when(P(x=Variable("Y"))).derive(P(x=2))  # validation rejects the rule
+    with pytest.raises(TypeError, match="must be a Term"):
+        program.when(P(x=1)).derive("q(2).")  # type: ignore[arg-type]  # type-check rejects too
+    rendered = program.render()  # no poisoned pending entry: renders fine
+    assert "p_seg(1)." in rendered
+    # An opened-but-never-closed when() still fails the render (the
+    # dangling-when contract is about closers that never RAN)
+    program.when(P(x=Variable("X")))
+    with pytest.raises(ValueError, match="incomplete when"):
+        program.render()
+
+
 def test_check_pending_raises_for_unclosed_when() -> None:
     program = ASPProgram()
     program.fact(P(x=1))

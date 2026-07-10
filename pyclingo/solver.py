@@ -1040,6 +1040,7 @@ class ASPProgram:
         max_iterations: int = 0,
         assumptions: Sequence[Predicate | DefaultNegation] | None = None,
         stop_on_log_level: LogLevel = LogLevel.INFO,
+        ignore_optimization: bool = False,
     ) -> CautiousConsequences | None:
         """
         The atoms true in every answer set; sugar for ground().cautious().
@@ -1050,7 +1051,10 @@ class ASPProgram:
         _validate_timeout(timeout)  # before grounding is paid for
         _validate_max_iterations(max_iterations)
         return self.ground(stop_on_log_level=stop_on_log_level).cautious(
-            timeout=timeout, max_iterations=max_iterations, assumptions=assumptions
+            timeout=timeout,
+            max_iterations=max_iterations,
+            assumptions=assumptions,
+            ignore_optimization=ignore_optimization,
         )
 
     def brave(
@@ -1059,6 +1063,7 @@ class ASPProgram:
         max_iterations: int = 0,
         assumptions: Sequence[Predicate | DefaultNegation] | None = None,
         stop_on_log_level: LogLevel = LogLevel.INFO,
+        ignore_optimization: bool = False,
     ) -> BraveConsequences | None:
         """
         The atoms true in at least one answer set; sugar for
@@ -1069,7 +1074,10 @@ class ASPProgram:
         _validate_timeout(timeout)  # before grounding is paid for
         _validate_max_iterations(max_iterations)
         return self.ground(stop_on_log_level=stop_on_log_level).brave(
-            timeout=timeout, max_iterations=max_iterations, assumptions=assumptions
+            timeout=timeout,
+            max_iterations=max_iterations,
+            assumptions=assumptions,
+            ignore_optimization=ignore_optimization,
         )
 
     def optimize(
@@ -1287,19 +1295,20 @@ class GroundedProgram:
         """
         _validate_timeout(timeout)
         if ignore_optimization and not self._ground_levels:
-            raise ValueError("Nothing to ignore: this program has no #minimize/#maximize. Call solve() plainly.")
+            raise ValueError("Nothing to ignore: this program has no #minimize/#maximize. Call the function plainly.")
         if self._ground_levels and mode is None and not ignore_optimization:
             raise ValueError(
                 "This program optimizes (#minimize/#maximize present). Solve it "
                 "with optimize(), or pass ignore_optimization=True to enumerate "
                 "answer sets as if there were no objective."
             )
-        if self._ground_levels and isinstance(mode, RefinementMode):
+        if self._ground_levels and isinstance(mode, RefinementMode) and not ignore_optimization:
             raise ValueError(
                 f"{mode.value} consequences over an optimizing program are computed "
-                f"against the solver's cost-descent path, not the set of optimal "
-                f"models — the result would be wrong. Remove the optimization "
-                f"directive to ask about all answer sets."
+                f"against the solver's cost-descent path, not the set of answer "
+                f"sets. Pass ignore_optimization=True to refine over ALL answer "
+                f"sets as if there were no objective, or remove the optimization "
+                f"directive."
             )
         if mode == OPTIMIZE and not self._ground_levels:
             raise ValueError(
@@ -1387,7 +1396,10 @@ class GroundedProgram:
         return result
 
     def cautious_iter(
-        self, timeout: float = 0, assumptions: Sequence[Predicate | DefaultNegation] | None = None
+        self,
+        timeout: float = 0,
+        assumptions: Sequence[Predicate | DefaultNegation] | None = None,
+        ignore_optimization: bool = False,
     ) -> RefinementSteps:
         """
         The iterator form of cautious() — findall/finditer, eager/lazy.
@@ -1396,30 +1408,36 @@ class GroundedProgram:
         is answered, e.g. the atom you care about has dropped out
         (certified not-forced). Each step is a full solver search, so
         control between steps is control over real work. See
-        RefinementSteps for the full contract.
+        RefinementSteps for the full contract; ignore_optimization as on
+        cautious().
         """
-        return self._refine_iter(RefinementMode.CAUTIOUS, timeout, assumptions)
+        return self._refine_iter(RefinementMode.CAUTIOUS, timeout, assumptions, ignore_optimization)
 
     def brave_iter(
-        self, timeout: float = 0, assumptions: Sequence[Predicate | DefaultNegation] | None = None
+        self,
+        timeout: float = 0,
+        assumptions: Sequence[Predicate | DefaultNegation] | None = None,
+        ignore_optimization: bool = False,
     ) -> RefinementSteps:
         """
         The iterator form of brave() — findall/finditer, eager/lazy.
         Iterate for successive approximations (claim-free AtomCollections)
         growing toward the union, every atom certified possible as it
         arrives; stop whenever your question is answered. See
-        RefinementSteps for the full contract.
+        RefinementSteps for the full contract; ignore_optimization as on
+        brave().
         """
-        return self._refine_iter(RefinementMode.BRAVE, timeout, assumptions)
+        return self._refine_iter(RefinementMode.BRAVE, timeout, assumptions, ignore_optimization)
 
     def _refine_iter(
         self,
         mode: RefinementMode,
         timeout: float = 0,
         assumptions: Sequence[Predicate | DefaultNegation] | None = None,
+        ignore_optimization: bool = False,
     ) -> RefinementSteps:
         with self._solve_lock:
-            converted = self._begin_solve(mode, timeout, assumptions)
+            converted = self._begin_solve(mode, timeout, assumptions, ignore_optimization)
             self._active = steps = RefinementSteps(
                 self._control,
                 self._predicate_types,
@@ -1436,6 +1454,7 @@ class GroundedProgram:
         timeout: float = 0,
         max_iterations: int = 0,
         assumptions: Sequence[Predicate | DefaultNegation] | None = None,
+        ignore_optimization: bool = False,
     ) -> CautiousConsequences | None:
         """
         The atoms true in EVERY answer set (the intersection) — "which cells
@@ -1450,15 +1469,21 @@ class GroundedProgram:
         see CautiousConsequences. A timeout before the first approximation
         raises TimeoutError (nothing representable yet). Raises ValueError
         if the program optimizes: the refinement would aggregate the
-        cost-descent path, not the optima.
+        cost-descent path, not the optima — pass ignore_optimization=True
+        to refine over ALL answer sets as if there were no objective
+        (clasp's opt_mode=ignore, for THIS search only). The flag requires
+        an objective to ignore, like solve()'s.
         """
-        return self._refine_eagerly(RefinementMode.CAUTIOUS, CautiousConsequences, timeout, max_iterations, assumptions)
+        return self._refine_eagerly(
+            RefinementMode.CAUTIOUS, CautiousConsequences, timeout, max_iterations, assumptions, ignore_optimization
+        )
 
     def brave(
         self,
         timeout: float = 0,
         max_iterations: int = 0,
         assumptions: Sequence[Predicate | DefaultNegation] | None = None,
+        ignore_optimization: bool = False,
     ) -> BraveConsequences | None:
         """
         The atoms true in AT LEAST ONE answer set (the union) — "which cells
@@ -1471,9 +1496,11 @@ class GroundedProgram:
         the work, 0 meaning unbounded; a bounded run returns an INCOMPLETE
         result (complete=False) whose every atom is still certified
         possible — see BraveConsequences. Raises ValueError if the program
-        optimizes (see cautious()).
+        optimizes, unless ignore_optimization=True (see cautious()).
         """
-        return self._refine_eagerly(RefinementMode.BRAVE, BraveConsequences, timeout, max_iterations, assumptions)
+        return self._refine_eagerly(
+            RefinementMode.BRAVE, BraveConsequences, timeout, max_iterations, assumptions, ignore_optimization
+        )
 
     def optimize_iter(
         self,
@@ -1666,6 +1693,7 @@ class GroundedProgram:
         timeout: float,
         max_iterations: int,
         assumptions: Sequence[Predicate | DefaultNegation] | None,
+        ignore_optimization: bool = False,
     ) -> C | None:
         """
         The shared fold under cautious()/brave(): consume the steps
@@ -1677,7 +1705,7 @@ class GroundedProgram:
         Returns None for proven unsatisfiability.
         """
         _validate_max_iterations(max_iterations)
-        steps = self._refine_iter(mode, timeout, assumptions)
+        steps = self._refine_iter(mode, timeout, assumptions, ignore_optimization)
         path: list[AtomCollection] = []
         complete = False
         try:

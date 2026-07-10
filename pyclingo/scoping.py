@@ -256,7 +256,7 @@ def _analyze_aggregate(aggregate: Aggregate, scopes: RuleScopes) -> set[str]:
     later; structurally, aggregates expose nothing globally themselves).
     """
     for element in aggregate.elements:
-        scope = LocalScope(description=f"{aggregate.AGGREGATE_TYPE.value} element", is_aggregate_element=True)
+        scope = LocalScope(description=f"{aggregate._AGGREGATE_TYPE.value} element", is_aggregate_element=True)
         for target in element.targets:
             if "_" in target.collect_variables():
                 raise ValueError(

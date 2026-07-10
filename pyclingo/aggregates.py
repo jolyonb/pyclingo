@@ -42,7 +42,7 @@ class Aggregate(FreezableBuilder, AggregateBase, ABC):
     """
 
     # Set by subclasses to specify which aggregate function to use
-    AGGREGATE_TYPE: ClassVar[AggregateType]
+    _AGGREGATE_TYPE: ClassVar[AggregateType]
 
     _RECEIPT_NOUN = "aggregate"
 
@@ -90,21 +90,21 @@ class Aggregate(FreezableBuilder, AggregateBase, ABC):
         # (or #sup/#inf) there draws gringo's "tuple ignored" info at ground —
         # weights are integer-valued. Min/Max/Count order terms and take
         # strings (and the ordering's end markers) legally.
-        if self.AGGREGATE_TYPE in (AggregateType.SUM, AggregateType.SUM_PLUS):
+        if self._AGGREGATE_TYPE in (AggregateType.SUM, AggregateType.SUM_PLUS):
             if isinstance(element_tuple[0], String):
                 raise TypeError(
-                    f"{self.AGGREGATE_TYPE.value} weights are integer-valued; the first tuple term "
+                    f"{self._AGGREGATE_TYPE.value} weights are integer-valued; the first tuple term "
                     f"{element_tuple[0].render()} is a String, which gringo silently ignores. For "
                     f"term-ordered aggregation over strings use Min/Max, or Count for cardinality."
                 )
             if isinstance(element_tuple[0], ExtremeConstant):
                 raise TypeError(
-                    f"{self.AGGREGATE_TYPE.value} weights are integer-valued, got "
+                    f"{self._AGGREGATE_TYPE.value} weights are integer-valued, got "
                     f"{element_tuple[0].render()} as the first tuple term."
                 )
             if isinstance(element_tuple[0], Predicate):
                 raise TypeError(
-                    f"{self.AGGREGATE_TYPE.value} weights are integer-valued; the first tuple "
+                    f"{self._AGGREGATE_TYPE.value} weights are integer-valued; the first tuple "
                     f"term {element_tuple[0].render()} is a predicate, which gringo silently "
                     f"ignores (tuple ignored). Lead the tuple with the weight."
                 )
@@ -134,7 +134,7 @@ class Aggregate(FreezableBuilder, AggregateBase, ABC):
     def render(self, context: RenderingContext = RenderingContext.DEFAULT) -> str:
         elements_str = "; ".join(element.render() for element in self._elements)
 
-        return f"{self.AGGREGATE_TYPE.value}{{ {elements_str} }}"
+        return f"{self._AGGREGATE_TYPE.value}{{ {elements_str} }}"
 
     def __str__(self) -> str:
         return self.render()
@@ -180,7 +180,7 @@ class Aggregate(FreezableBuilder, AggregateBase, ABC):
 class Count(Aggregate):
     """#count: the number of distinct matching tuples, e.g. #count{ X : p(X) } = 3."""
 
-    AGGREGATE_TYPE = AggregateType.COUNT
+    _AGGREGATE_TYPE = AggregateType.COUNT
 
 
 class Sum(Aggregate):
@@ -190,7 +190,7 @@ class Sum(Aggregate):
     The first element in each tuple is the weight.
     """
 
-    AGGREGATE_TYPE = AggregateType.SUM
+    _AGGREGATE_TYPE = AggregateType.SUM
 
 
 class SumPlus(Aggregate):
@@ -200,7 +200,7 @@ class SumPlus(Aggregate):
     The first element in each tuple is the weight.
     """
 
-    AGGREGATE_TYPE = AggregateType.SUM_PLUS
+    _AGGREGATE_TYPE = AggregateType.SUM_PLUS
 
 
 class Min(Aggregate):
@@ -210,7 +210,7 @@ class Min(Aggregate):
     The first element in each tuple is the value.
     """
 
-    AGGREGATE_TYPE = AggregateType.MIN
+    _AGGREGATE_TYPE = AggregateType.MIN
 
 
 class Max(Aggregate):
@@ -220,4 +220,4 @@ class Max(Aggregate):
     The first element in each tuple is the value.
     """
 
-    AGGREGATE_TYPE = AggregateType.MAX
+    _AGGREGATE_TYPE = AggregateType.MAX

@@ -2,6 +2,8 @@
 Tests for clingo message parsing and severity handling.
 """
 
+import dataclasses
+
 import clingo
 import pytest
 
@@ -39,7 +41,7 @@ def test_non_located_message_without_prefix_defaults_to_info() -> None:
     # fail, so severity falls back to "info" and the whole text is kept
     handler = ClingoMessageHandler("p(1).")
     handler.on_message(None, "plain message with no prefix")  # type: ignore[arg-type]
-    assert handler.messages[0].severity == "info"
+    assert handler.messages[0].severity is LogLevel.INFO
     assert handler.messages[0].message == "plain message with no prefix"
 
 
@@ -126,3 +128,16 @@ def test_message_carries_code_and_raw_text_for_user_dispatch() -> None:
     (message,) = grounded._message_handler.messages
     assert message.code == clingo.MessageCode.AtomUndefined
     assert "does not occur" in message.raw_message
+
+
+def test_message_record_is_frozen_and_enum_typed() -> None:
+    # ClingoMessage is a public record (GroundingError/Search/Model
+    # .messages): frozen like every other record, severity threshold-
+    # comparable as a LogLevel rather than a string to compare against
+    handler = ClingoMessageHandler("p(1).")
+    handler.on_message(clingo.MessageCode.Other, "warning: something odd")
+    (message,) = handler.messages
+    assert message.severity is LogLevel.WARNING
+    assert message.severity >= LogLevel.INFO  # threshold comparison, the point of the enum
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        message.severity = LogLevel.ERROR  # type: ignore[misc]

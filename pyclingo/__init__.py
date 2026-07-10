@@ -19,9 +19,11 @@ from .core import (
     ANY,
     INF,
     SUP,
+    BasicTerm,
     ComparableTerm,
     Comparison,
     Compl,
+    ConstantBase,
     DefaultNegation,
     DefinedConstant,
     ExplicitPool,
@@ -31,6 +33,7 @@ from .core import (
     Not,
     Number,
     Pool,
+    PredicateOccurrence,
     RangePool,
     String,
     Supremum,
@@ -44,7 +47,7 @@ from .core import (
 from .exceptions import GroundingError, PyClingoError, UnsatisfiableError
 from .operators import ComparisonOperator, Operation
 from .optimization import OptimizationTermType, OptStrategy
-from .predicate import Field, NegatedSignature, Predicate, PredicateField
+from .predicate import Field, FieldAsTermType, NegatedSignature, Predicate, PredicateField
 from .program_elements import ProgramElement, RenderedLine
 from .segment import Segment, When
 from .solve_result import (
@@ -133,8 +136,12 @@ __all__ = [  # noqa: RUF022 (categorized deliberately, not sorted)
     # annotate with them; you rarely construct them directly
     "ConditionType",
     "OptimizationTermType",
+    "FieldAsTermType",
+    "PredicateOccurrence",
     "Term",
+    "BasicTerm",
     "Value",
+    "ConstantBase",
     "ComparableTerm",
     "Negatable",
     "ProgramElement",

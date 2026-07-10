@@ -19,6 +19,7 @@ part is the situation and which is the violation.
 """
 
 from collections.abc import Iterator, Mapping, Sequence
+from contextlib import contextmanager
 
 from pyclingo.choice import Choice
 from pyclingo.conditioned_element import ConditionType
@@ -427,7 +428,13 @@ class When:
     The pending context returned by when(): conditions awaiting a closer.
     Exactly one of derive, require, forbid, or penalize completes it, using
     the conditions as the rule body; completing it twice raises, and a When
-    left incomplete fails the render.
+    left incomplete (no closer ever ran) fails the render.
+
+    A closer that RAISES unregisters the When instead: its error already
+    reported the problem loudly at the author's line, so the fluent
+    spelling (when(...).derive(bad)), which holds no reference, does not
+    leave a poisoned pending entry behind. A held reference may still
+    complete it with a corrected closer.
     """
 
     def __init__(self, segment: Segment, conditions: tuple[Term, ...]) -> None:
@@ -456,7 +463,8 @@ class When:
         # closer must fail before Rule() freezes shared builders), so no
         # completed When can reach here.
         self._completed_by = closer
-        self._segment._pending.remove(self)
+        if self in self._segment._pending:
+            self._segment._pending.remove(self)
         # The element anchors at the when() line; a closer on a different
         # line is recorded too — a fluent chain's halves can sit far apart
         if self._location is not None:
@@ -473,29 +481,43 @@ class When:
                 f"it takes exactly one statement — call when() again for another"
             )
 
+    @contextmanager
+    def _unregister_on_error(self) -> Iterator[None]:
+        # A raising closer already reported its problem loudly; keeping the
+        # When pending would poison every future render for the fluent
+        # caller, who holds no reference to complete or discard it
+        try:
+            yield
+        except BaseException:
+            if self in self._segment._pending:
+                self._segment._pending.remove(self)
+            raise
+
     def derive(self, head: Term) -> None:
         """
         Add head with the conditions as its body: "head :- conditions.". The
         head is any rule head — an atom or a Choice.
         """
-        if not isinstance(head, Term):
-            raise TypeError(f"derive() head must be a Term, got {type(head).__name__}")
-        self._guard()
-        rule = Rule(head=head, body=list(self._conditions), check_singletons=self._segment._check_singletons)
-        self._complete("derive", rule)
+        with self._unregister_on_error():
+            if not isinstance(head, Term):
+                raise TypeError(f"derive() head must be a Term, got {type(head).__name__}")
+            self._guard()
+            rule = Rule(head=head, body=list(self._conditions), check_singletons=self._segment._check_singletons)
+            self._complete("derive", rule)
 
     def require(self, comparison: Comparison) -> None:
         """
         Require the comparison to hold under the conditions. Takes exactly
         one Comparison; sugar for forbid(*conditions, comparison.inverse()).
         """
-        target = _required_comparison(comparison)
-        self._guard()
-        rule = Rule(
-            body=[*self._conditions, target.inverse()],
-            check_singletons=self._segment._check_singletons,
-        )
-        self._complete("require", rule)
+        with self._unregister_on_error():
+            target = _required_comparison(comparison)
+            self._guard()
+            rule = Rule(
+                body=[*self._conditions, target.inverse()],
+                check_singletons=self._segment._check_singletons,
+            )
+            self._complete("require", rule)
 
     def forbid(self, *violation: Term) -> None:
         """
@@ -504,20 +526,21 @@ class When:
         sugar — it names which literals are the situation and which are the
         violation. Takes at least one violation term.
         """
-        if not violation:
-            raise ValueError(
-                "when(...).forbid() takes at least one violation term; to forbid the "
-                "conditions themselves, use the flat forbid(*conditions)"
+        with self._unregister_on_error():
+            if not violation:
+                raise ValueError(
+                    "when(...).forbid() takes at least one violation term; to forbid the "
+                    "conditions themselves, use the flat forbid(*conditions)"
+                )
+            for term in violation:
+                if not isinstance(term, Term):
+                    raise _non_term_error("forbid() violation terms", term)
+            self._guard()
+            rule = Rule(
+                body=[*self._conditions, *violation],
+                check_singletons=self._segment._check_singletons,
             )
-        for term in violation:
-            if not isinstance(term, Term):
-                raise _non_term_error("forbid() violation terms", term)
-        self._guard()
-        rule = Rule(
-            body=[*self._conditions, *violation],
-            check_singletons=self._segment._check_singletons,
-        )
-        self._complete("forbid", rule)
+            self._complete("forbid", rule)
 
     def penalize(
         self,
@@ -532,19 +555,20 @@ class When:
         reject. Takes at least one violation term; weight/terms/priority as
         in the flat penalize().
         """
-        if not violation:
-            raise ValueError(
-                "when(...).penalize() takes at least one violation term; to charge for the "
-                "conditions themselves, use the flat penalize(*conditions)"
+        with self._unregister_on_error():
+            if not violation:
+                raise ValueError(
+                    "when(...).penalize() takes at least one violation term; to charge for the "
+                    "conditions themselves, use the flat penalize(*conditions)"
+                )
+            for term in violation:
+                if not isinstance(term, Term):
+                    raise _non_term_error("penalize() violation terms", term)
+            self._guard()
+            weak = _build_weak_constraint(
+                (*self._conditions, *violation), weight, terms, priority, self._segment._check_singletons
             )
-        for term in violation:
-            if not isinstance(term, Term):
-                raise _non_term_error("penalize() violation terms", term)
-        self._guard()
-        weak = _build_weak_constraint(
-            (*self._conditions, *violation), weight, terms, priority, self._segment._check_singletons
-        )
-        self._complete("penalize", weak)
+            self._complete("penalize", weak)
 
 
 def _required_comparison(target: Comparison) -> Comparison:
