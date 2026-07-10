@@ -9,6 +9,7 @@ from pyclingo.clingo_handler import ClingoMessageHandler, LogLevel
 from pyclingo.conditional_literal import ConditionalLiteral
 from pyclingo.conditioned_element import ConditionType
 from pyclingo.core import DefaultNegation, DefinedConstant, PredicateOccurrence, Term
+from pyclingo.exceptions import GroundingError
 from pyclingo.optimization import OptimizationTermType, OptStrategy, WeakConstraint
 from pyclingo.predicate import NegatedSignature, Predicate
 from pyclingo.program_elements import RawASP, RenderedLine, Rule
@@ -748,8 +749,8 @@ class ASPProgram:
         Raises:
             ValueError: For render-time validation failures (undeclared
                 constants, name collisions, shows of underived predicates)
-            RuntimeError: If an error occurs during parsing or grounding, or
-                the log level threshold is exceeded
+            GroundingError: If an error occurs during parsing or grounding,
+                or the log level threshold is exceeded
         """
         asp_source, line_origins = self._render_with_origins()
 
@@ -767,7 +768,7 @@ class ASPProgram:
             error_msg = str(e)
             if formatted_messages := message_handler.format_all_messages(verb="parsing"):
                 error_msg += "\n\n" + formatted_messages
-            raise RuntimeError(error_msg) from e
+            raise GroundingError(error_msg) from e
 
         try:
             control.ground([("base", [])], context=context)
@@ -775,13 +776,13 @@ class ASPProgram:
             error_msg = f"Grounding failed: {e}\n\n"
             if formatted_messages := message_handler.format_all_messages(verb="grounding"):
                 error_msg += formatted_messages
-            raise RuntimeError(error_msg) from e
+            raise GroundingError(error_msg) from e
 
         # Messages below the stop threshold are tolerated silently; at or above
         # it, the full formatted diagnostics ride along in the raised error
         if message_handler.should_halt:
             assert message_handler.highest_level is not None
-            raise RuntimeError(
+            raise GroundingError(
                 f"Grounding produced {message_handler.highest_level.name} level messages "
                 f"(stop threshold: {stop_on_log_level.name}).\n\n"
                 f"{message_handler.format_all_messages(verb='grounding')}"
@@ -892,8 +893,8 @@ class ASPProgram:
         Raises:
             ValueError: For render-time validation failures (undeclared
                 constants, name collisions, shows of underived predicates)
-            RuntimeError: If an error occurs during parsing or grounding, or the
-                log level threshold is exceeded
+            GroundingError: If an error occurs during parsing or grounding, or
+                the log level threshold is exceeded
 
         Notes:
             Rendering, grounding, and their error checks run eagerly at this call; only

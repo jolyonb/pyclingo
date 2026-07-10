@@ -4,7 +4,7 @@ Tests for #show directive emission and visibility overrides.
 
 import pytest
 
-from pyclingo import ASPProgram, ConditionalLiteral, Count, Not, Predicate, Variable
+from pyclingo import ASPProgram, ConditionalLiteral, Count, GroundingError, Not, Predicate, Variable
 
 
 def test_hiding_everything_emits_bare_show() -> None:
@@ -189,7 +189,7 @@ def test_show_when_condition_cannot_self_vouch_a_directive() -> None:
     program.fact(P(x=1))
     program.show_when(ConditionalLiteral(P(x=X), [P(x=X), Ghost(x=X)]))
     assert "#show ghost_sv/1." not in program.render()  # no self-vouched directive
-    with pytest.raises(RuntimeError, match="ghost_sv"):
+    with pytest.raises(GroundingError, match="ghost_sv"):
         program.solve()  # the underived condition atom halts at ground, loudly
 
 

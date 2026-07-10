@@ -15,6 +15,7 @@ from pyclingo import (
     ConditionalLiteral,
     Count,
     DefinedConstant,
+    GroundingError,
     Number,
     Predicate,
     RangePool,
@@ -251,14 +252,24 @@ def test_render_rejects_an_undeclared_defined_constant() -> None:
 def test_ground_wraps_a_clingo_parse_error() -> None:
     program = ASPProgram()
     program.raw_asp("p(1) :-")  # incomplete rule: gringo fails to parse it
-    with pytest.raises(RuntimeError, match="parsing"):
+    with pytest.raises(GroundingError, match="parsing"):
+        program.ground()
+
+
+def test_grounding_error_is_a_runtime_error() -> None:
+    # The builtin base is frozen contract: pre-GroundingError handlers
+    # catching RuntimeError keep working
+    assert issubclass(GroundingError, RuntimeError)
+    program = ASPProgram()
+    program.raw_asp("p_ge(1")  # unterminated: a parse error
+    with pytest.raises(RuntimeError):
         program.ground()
 
 
 def test_ground_wraps_a_grounding_error() -> None:
     program = ASPProgram()
     program.raw_asp("p(X) :- q(Y).")  # X unbound in the head — unsafe at ground time
-    with pytest.raises(RuntimeError, match="Grounding failed"):
+    with pytest.raises(GroundingError, match="Grounding failed"):
         program.ground()
 
 

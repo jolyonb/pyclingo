@@ -13,6 +13,7 @@ from pyclingo import (
     OptimizeSteps,
     Predicate,
     RefinementSteps,
+    UnsatisfiableError,
     Variable,
 )
 from pyclingo.clingo_handler import ClingoMessageHandler, LogLevel
@@ -163,8 +164,9 @@ def test_first_on_unsatisfiable_raises_teaching() -> None:
     P = Predicate.define("p_first_unsat", ["x"])
     program.fact(P(x=1))
     program.forbid(P(x=1))
-    with pytest.raises(ValueError, match=r"unsatisfiable.*next\(iter\(result\), None\)"):
+    with pytest.raises(UnsatisfiableError, match=r"unsatisfiable.*next\(iter\(result\), None\)"):
         program.solve().first()
+    assert issubclass(UnsatisfiableError, ValueError)  # the builtin base is frozen contract
 
 
 def test_model_iterates_and_answers_membership() -> None:

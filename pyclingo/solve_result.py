@@ -49,6 +49,7 @@ import clingo
 
 from pyclingo.clingo_handler import ClingoMessage, ClingoMessageHandler
 from pyclingo.core import INF, SUP, DefinedConstant, ExtremeConstant, Infimum, Number, String, Supremum
+from pyclingo.exceptions import UnsatisfiableError
 from pyclingo.predicate import Predicate
 from pyclingo.statistics import format_statistics_clingo_style
 
@@ -524,17 +525,18 @@ class SolveResult(Search):
     def first(self) -> Model:
         """
         The first model, closing the search: the one-answer sugar for
-        programs expected to be satisfiable. Raises ValueError on an
-        unsatisfiable program — to handle UNSAT as a value instead,
-        iterate: next(iter(result), None).
+        programs expected to be satisfiable. Raises UnsatisfiableError
+        when there is no model; if UNSAT is an expected outcome for your
+        program, use next(iter(result), None), which gives None instead
+        of raising.
         """
         for model in self:
             self.close()
             return model
-        raise ValueError(
-            "first() found no model: the program is unsatisfiable. To handle "
-            "UNSAT as a value rather than an exception, iterate instead: "
-            "next(iter(result), None)."
+        raise UnsatisfiableError(
+            "first() found no model: the program is unsatisfiable. If UNSAT is "
+            "an expected outcome here, use next(iter(result), None), which "
+            "returns None when there is no model instead of raising."
         )
 
 

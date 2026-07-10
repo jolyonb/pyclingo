@@ -40,6 +40,7 @@ from .core import (
     Vars,
     pool,
 )
+from .exceptions import GroundingError, UnsatisfiableError
 from .operators import ComparisonOperator
 from .optimization import OptStrategy
 from .predicate import Field, NegatedSignature, Predicate, PredicateField
@@ -90,6 +91,8 @@ __all__ = [  # noqa: RUF022 (categorized deliberately, not sorted)
     "Search",
     "LogLevel",
     "ClingoMessage",
+    "GroundingError",
+    "UnsatisfiableError",
     "RenderedLine",
     # Source locations (diagnostics point at the authoring Python line)
     "SourceLocation",
