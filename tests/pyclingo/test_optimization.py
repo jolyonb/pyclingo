@@ -405,6 +405,26 @@ def test_discriminator_is_a_program_render_concern() -> None:
     assert ":~ pick(X). [1, X]" in segment.render(with_header=False)
 
 
+def test_shared_segment_renders_are_pure_and_stable() -> None:
+    # Discriminators live in a render-local map, never on the element: two
+    # programs sharing one segment each compute their own ordinals, and
+    # re-rendering either program is byte-identical
+    shared = Segment("Soft")
+    X = Variable("X")
+    shared.penalize(Pick(x=X))
+    first_program, second_program = ASPProgram(), ASPProgram()
+    first_program.fact(Pick(x=1))
+    first_program.penalize(Pick(x=2))  # ordinal 0 in this program
+    first_program.add_segment(shared)  # the shared statement is ordinal 1 here
+    second_program.add_segment(shared)  # ...and ordinal 0 here
+    first_render = first_program.render()
+    second_render = second_program.render()
+    assert '[1, "weak-constraint-1", X]' in first_render
+    assert '[1, "weak-constraint-0", X]' in second_render
+    assert first_program.render() == first_render  # re-render unchanged by the other program
+    assert "weak-constraint" not in shared.render(with_header=False)  # standalone stays bare
+
+
 def test_penalize_empty_terms_collapse_deliberately() -> None:
     # terms=[] is the explicit opt-in to gringo's single-charge semantics;
     # the singleton lint pushes the condition variable to ANY, which reads

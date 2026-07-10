@@ -79,17 +79,21 @@ class Comment(ProgramElement):
         return f"%*\n{self.text}\n*%" if "\n" in self.text else f"% {self.text}"
 
 
-def _find_unsupported_directive(text: str) -> str | None:
+def _scan_asp_text(text: str) -> tuple[str | None, list[tuple[int, int]]]:
     """
-    The first #program/#include/#external directive in the text — outside
-    string literals, comments, and #script blocks — or None. The first two
-    restructure the program itself (parts, files), which a single-base-part
-    grounding cannot honor; #external declares atoms whose truth is set
-    through an API no pyclingo verb speaks. Block comments NEST in gringo
-    (see Comment), so only depth 0 is code; a character scan is required
-    because a line can close a comment and resume code, and % may sit
-    inside a string.
+    One character-level scan of ASP text, two products: the first
+    #program/#include/#external directive (or None), and the [start, end)
+    span of every #script block — both judged outside string literals and
+    comments. The first two directives restructure the program itself
+    (parts, files), which a single-base-part grounding cannot honor;
+    #external declares atoms whose truth is set through an API no pyclingo
+    verb speaks. Script spans let the annotator keep its notes out of
+    embedded source. Block comments NEST in gringo (see Comment), so only
+    depth 0 is code; a character scan is required because a line can close
+    a comment and resume code, and % may sit inside a string.
     """
+    directive: str | None = None
+    spans: list[tuple[int, int]] = []
     i, n = 0, len(text)
     depth = 0
     while i < n:
@@ -120,17 +124,34 @@ def _find_unsupported_directive(text: str) -> str | None:
         elif text.startswith("#script", i):
             end = text.find("#end.", i)
             if end == -1:
-                break  # unterminated script: gringo rejects the block itself
+                # Unterminated script: gringo rejects the block itself, and
+                # it swallows the rest of the scan either way
+                spans.append((i, n))
+                break
+            spans.append((i, end + len("#end.")))
             i = end + len("#end.")
-        elif text.startswith("#program", i):
-            return "#program"
-        elif text.startswith("#include", i):
-            return "#include"
-        elif text.startswith("#external", i):
-            return "#external"
+        elif directive is None and text.startswith("#program", i):
+            directive = "#program"
+            i += len("#program")
+        elif directive is None and text.startswith("#include", i):
+            directive = "#include"
+            i += len("#include")
+        elif directive is None and text.startswith("#external", i):
+            directive = "#external"
+            i += len("#external")
         else:
             i += 1
-    return None
+    return directive, spans
+
+
+def _find_unsupported_directive(text: str) -> str | None:
+    """The first #program/#include/#external directive outside strings, comments, and #script blocks — or None."""
+    return _scan_asp_text(text)[0]
+
+
+def script_spans(text: str) -> list[tuple[int, int]]:
+    """The [start, end) character span of every #script block, judged outside strings and comments."""
+    return _scan_asp_text(text)[1]
 
 
 class RawASP(ProgramElement):

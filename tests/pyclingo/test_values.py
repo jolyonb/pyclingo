@@ -101,13 +101,6 @@ def test_copy_and_deepcopy_return_the_interned_object() -> None:
     assert nested["nested"] is n
 
 
-def test_keyword_construction_hits_the_cache_too() -> None:
-    # The one-arg cache branch covers kwargs: a mutant restricting it to
-    # positional args survived all 625 tests at the time it was probed
-    assert Variable(name="KwProbe") is Variable("KwProbe")
-    assert Number(value=41) is Number(41)
-
-
 def test_concurrent_construction_agrees_on_one_object() -> None:
     # Racing constructors must all hold the canonical object — identity
     # hashing rests on every live equal value being that one object
@@ -418,3 +411,22 @@ def test_conversion_keying_never_launders_invalid_inputs() -> None:
     # the plain spelling of THAT form, not with its base string
     assert String(LoudCacheStr("safe")) is String("loud-safe")
     assert String(LoudCacheStr("safe")) is not String("safe")
+
+
+def test_values_are_positional_only() -> None:
+    # Value constructors take their one argument positionally: every keyword
+    # spelling — mistyped or not — reaches __init__'s native TypeError
+    # instead of the cache, so nothing can launder through
+    with pytest.raises(TypeError, match="banana"):
+        Number(banana=5)  # type: ignore[call-arg]
+    with pytest.raises(TypeError, match="positional"):
+        Number(value=5)  # type: ignore[call-arg]
+    with pytest.raises(TypeError, match="positional"):
+        Variable(name="X")  # type: ignore[call-arg]
+
+
+def test_non_string_names_get_teaching_type_errors() -> None:
+    with pytest.raises(TypeError, match="Variable name must be a string, got int"):
+        Variable(5)  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match="Defined constant name must be a string, got int"):
+        DefinedConstant(5)  # type: ignore[arg-type]

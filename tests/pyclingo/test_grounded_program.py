@@ -5,6 +5,7 @@ the sequential-solve and staleness contracts enforced loudly.
 
 import inspect
 import threading
+import time
 from itertools import islice
 
 import clingo
@@ -377,3 +378,30 @@ def test_comparison_head_rules_ground_and_analyze() -> None:
     assert list(grounded.solve()) == []  # p(1)/q(2) violates the required equality
     report = grounded.analyze_grounding()
     assert "p_cmp/1: 2 atoms" in report  # body signatures still reported; no head row
+
+
+def test_abandon_cannot_close_an_executing_solve_and_teaches() -> None:
+    # A solve blocked inside clasp on another thread cannot be injected
+    # into: abandon() must name the remedies rather than leak generator
+    # internals — and must still free the grounding once the search ends
+    Pigeon = Predicate.define("pigeon_ab", ["p"], show=False)
+    Assign = Predicate.define("assign_ab", ["p", "h"])
+    program = ASPProgram()
+    P, P2, H = Variable("P"), Variable("P2"), Variable("H")
+    program.fact(*[Pigeon(p=i) for i in range(1, 15)])
+    program.when(Pigeon(p=P)).derive(Choice(Assign(p=P, h=RangePool(1, 13))).exactly(1))
+    program.forbid(Assign(p=P, h=H), Assign(p=P2, h=H), P < P2)  # 14/13: a long UNSAT proof
+    grounded = program.ground()
+    result = grounded.solve()
+    worker = threading.Thread(target=lambda: next(iter(result), None))
+    worker.start()
+    time.sleep(0.3)  # let the worker get blocked inside clasp's search
+    try:
+        with pytest.raises(RuntimeError, match=r"executing right now.*control\.interrupt"):
+            grounded.abandon()
+    finally:
+        grounded.control.interrupt()
+        worker.join(timeout=30)
+    assert not worker.is_alive()
+    grounded.abandon()  # the search is suspended now: freeing works quietly
+    grounded.solve().close()  # and the grounding accepts the next solve

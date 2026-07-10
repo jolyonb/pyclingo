@@ -18,7 +18,7 @@ identically to flat forbid(*conds, *extra) — the split just names which
 part is the situation and which is the violation.
 """
 
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 
 from pyclingo.choice import Choice
 from pyclingo.conditioned_element import ConditionType
@@ -320,21 +320,30 @@ class Segment:
         """
         return "\n".join(line.text for line in self.render_lines(with_header))
 
-    def render_lines(self, with_header: bool) -> list[RenderedLine]:
+    def render_lines(
+        self, with_header: bool, weak_discriminators: Mapping[int, int] | None = None
+    ) -> list[RenderedLine]:
         """
         The segment's rendered lines, each carrying the element that
         produced it (framing lines carry None) — a multi-line element
         claims every one of its lines. render() joins the text column; the
         program builds its line-provenance map from the element column.
-        Raises if any when() in this segment was never completed.
+        weak_discriminators (id(element) -> ordinal) is the program
+        render's per-statement tags for auto-tupled weak constraints;
+        standalone renders pass none and render bare tuples. Raises if any
+        when() in this segment was never completed.
         """
         self.check_pending()
         lines: list[RenderedLine] = []
         for element in self._elements:
+            if isinstance(element, WeakConstraint) and weak_discriminators is not None:
+                rendered = element.render(discriminator=weak_discriminators.get(id(element)))
+            else:
+                rendered = element.render()
             # split("\n"), not splitlines(): a trailing newline in raw text
             # must keep contributing its empty line, exactly as when whole
             # rendered elements were joined
-            lines.extend(RenderedLine(text, element) for text in element.render().split("\n"))
+            lines.extend(RenderedLine(text, element) for text in rendered.split("\n"))
         if with_header:
             while lines and lines[0].text == "":
                 lines.pop(0)

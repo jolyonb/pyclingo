@@ -344,15 +344,17 @@ class _ValueMeta(ABCMeta):
     """
 
     def __call__[T](cls: type[T], *args: Any, **kwargs: Any) -> T:
-        if len(args) + len(kwargs) <= 1:
-            value = args[0] if args else next(iter(kwargs.values()), _NO_ARGUMENT)
+        # Value constructors are positional-only, so any keyword call falls
+        # through for __init__ to reject natively — nothing to launder
+        if not kwargs and len(args) <= 1:
+            value = args[0] if args else _NO_ARGUMENT
             if isinstance(value, str):
                 # Handle subclasses
                 value = str(value)
-                args, kwargs = (value,), {}
+                args = (value,)
             elif isinstance(value, int) and not isinstance(value, bool):
                 value = int(value)
-                args, kwargs = (value,), {}
+                args = (value,)
             if type(value) in (str, int) or value is _NO_ARGUMENT:
                 key = (cls, value)
                 cached = Value._cache.get(key)
@@ -446,7 +448,9 @@ class Variable(Value):
     pool: X.in_((Cell(1, 2), Cell(3, 4))).
     """
 
-    def __init__(self, name: str):
+    def __init__(self, name: str, /):
+        if not isinstance(name, str):
+            raise TypeError(f"Variable name must be a string, got {type(name).__name__}")
         if not name.isascii():
             raise ValueError(f"Variable name must be ASCII (gringo's lexer is ASCII-only): {name!r}")
         if not name or (name != "_" and not name[0].isupper()):
@@ -578,7 +582,7 @@ class Number(ConstantBase):
     or as arguments to predicates.
     """
 
-    def __init__(self, value: int):
+    def __init__(self, value: int, /):
         # bool subclasses int, and a boolean is never a valid ASP term
         if isinstance(value, bool) or not isinstance(value, int):
             raise TypeError(f"Number value must be an integer, got {type(value).__name__}")
@@ -618,7 +622,7 @@ class String(ConstantBase):
     String constants are enclosed in quotes in ASP syntax.
     """
 
-    def __init__(self, value: str):
+    def __init__(self, value: str, /):
         """No double quotes, backslashes, or newlines (no escaping support); single quotes are fine."""
         if not isinstance(value, str):
             raise TypeError(f"String constant value must be a string, got {type(value).__name__}")
@@ -665,8 +669,10 @@ class DefinedConstant(ConstantBase):
     at grounding.
     """
 
-    def __init__(self, value: str):
+    def __init__(self, value: str, /):
         """value is the constant's name: lowercase first letter, then letters, digits, and underscores."""
+        if not isinstance(value, str):
+            raise TypeError(f"Defined constant name must be a string, got {type(value).__name__}")
         if not value.isascii():
             raise ValueError(f"Defined constant name must be ASCII (gringo's lexer is ASCII-only): {value!r}")
         if not value or not value[0].islower():
@@ -1323,11 +1329,23 @@ class Comparison(Negatable):
         like `C1 = C2 :- body` means the body forces the equality to hold.
         Comparisons involving aggregates are body-only: clingo rejects them in
         heads with a misleading "unsafe variables" error, so raise honestly here.
+        Pool comparisons are body-only too: a pool in a HEAD expands
+        conjunctively, so the head would force equality with every pool
+        element at once — false whenever the pool has two distinct elements,
+        making the program silently unsatisfiable.
         """
         if is_in_head and any(isinstance(term, AggregateBase) for term in (self._left_term, self._right_term)):
             raise ValueError(
                 "Comparisons involving aggregates cannot be rule heads; "
                 "compute the aggregate in a body condition instead"
+            )
+        if is_in_head and any(isinstance(term, Pool) for term in (self._left_term, self._right_term)):
+            raise ValueError(
+                "A pool comparison cannot be a rule head: head pools expand "
+                "conjunctively, so 'X = (1; 2)' forces X to equal every element "
+                "at once — false for every X, and the program is silently "
+                "unsatisfiable. State the domain restriction in the body instead: "
+                "when(X.in_(...), ...)."
             )
 
     def __str__(self) -> str:

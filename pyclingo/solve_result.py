@@ -743,6 +743,14 @@ def _search_generator(
                 state.exhausted = False if timed_out else outcome.exhausted
                 state.timed_out = timed_out
                 final = outcome
+    except BaseException:
+        # A generator dead from an exception can only StopIteration on
+        # resume, which a retained iterator would read as clean exhaustion —
+        # the silent-empty misread the closed flag exists to make loud (the
+        # timeout terminals below do the same). GeneratorExit lands here
+        # too, harmlessly: close() already sets the flag it re-sets.
+        state.closed = True
+        raise
     finally:
         state.finished = True
         # Messages after the last emission (exhaustion proof, cancellation)

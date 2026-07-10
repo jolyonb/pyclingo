@@ -109,9 +109,9 @@ class WeakConstraint(ProgramElement):
             )
         # An auto tuple delegates identity to the library; the program render
         # completes it with a per-statement discriminator (see the class
-        # docstring). None until a program render assigns it.
+        # docstring), passed into render() — never stored, so rendering
+        # stays pure and programs sharing this element cannot interfere.
         self._auto_tuple = tuple_terms is None
-        self.discriminator: int | None = None
         if tuple_terms is None:
             # Per-match charging by default: the tuple gets the conditions'
             # global variables, spelled out in the render. gringo's bare
@@ -166,14 +166,14 @@ class WeakConstraint(ProgramElement):
         for cond in self._conditions:
             cond.freeze()
 
-    def render(self) -> str:
+    def render(self, discriminator: int | None = None) -> str:
         parts = [_weight_at_priority(self._targets[0], self._priority)]
         # The discriminator names this statement in the shared tuple set —
         # two auto-tupled statements over one domain must not merge charges.
-        # Standalone renders (fragments, validation error text) have no
-        # program-assigned ordinal and render the user's tuple bare.
-        if self._auto_tuple and self.discriminator is not None:
-            parts.append(f'"weak-constraint-{self.discriminator}"')
+        # Standalone renders (fragments, validation error text) pass no
+        # ordinal and render the user's tuple bare.
+        if self._auto_tuple and discriminator is not None:
+            parts.append(f'"weak-constraint-{discriminator}"')
         parts.extend(term.render() for term in self._targets[1:])
         return f":~ {render_body_terms(self._conditions)}. [{', '.join(parts)}]"
 

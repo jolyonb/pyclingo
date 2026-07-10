@@ -101,6 +101,16 @@ def test_aggregate_comparisons_cannot_be_heads() -> None:
         program.when(P(x=1)).derive(Count(X, condition=P(x=X)) == 1)
 
 
+def test_pool_comparisons_cannot_be_heads() -> None:
+    # Head pools expand conjunctively: X = (1; 2) forces X to equal BOTH
+    # elements — false for every X, silently unsatisfiable
+    program = ASPProgram()
+    P = Predicate.define("p_ph", ["x"])
+    X = Variable("X")
+    with pytest.raises(ValueError, match=r"silently\s+unsatisfiable.*in the body"):
+        program.when(P(x=X)).derive(X.in_((1, 2)))
+
+
 def test_const_nullary_predicate_collision_rejected() -> None:
     # gringo substitutes a #const into every occurrence of a same-named atom
     program = ASPProgram()
@@ -139,11 +149,13 @@ def test_empty_fact_rejected() -> None:
 
 def test_empty_conditional_literal_condition_rejected() -> None:
     # A conditionless CL renders as a plain (binding) literal — a category
-    # error caught at construction
+    # error caught at construction; None must not slip past the empty-list wall
     P = Predicate.define("p_cl", ["x"])
     X = Variable("X")
     with pytest.raises(ValueError, match="at least one condition"):
         ConditionalLiteral(P(x=X), [])
+    with pytest.raises(ValueError, match="at least one condition"):
+        ConditionalLiteral(P(x=X), None)  # type: ignore[arg-type]
 
 
 def test_failed_rule_leaves_builders_unfrozen() -> None:
@@ -375,6 +387,22 @@ def test_annotate_records_a_closer_on_a_different_line() -> None:
     closed = SourceLocation(here.filename, here.lineno + 2).display()
     lines = program.render(annotate=True).splitlines()
     assert f"p_far(1) :- q_far(1).  % {opened} (closed at {closed})" in lines
+
+
+def test_annotate_honors_mid_line_script_boundaries() -> None:
+    # A #script block opening after a statement on the same line, or
+    # closing with a statement after "#end." on the same line, is judged
+    # character-wise: no note lands inside embedded source, and statements
+    # after a mid-line close are annotated again
+    program = ASPProgram()
+    P = Predicate.define("p_msb", ["x"])
+    program.raw_asp("q_msb(1). #script (python)\nimport clingo\n#end. q_msb(2).")
+    program.fact(P(x=1))
+    lines = program.render(annotate=True).splitlines()
+    (import_line,) = [line for line in lines if "import clingo" in line]
+    assert "%" not in import_line  # nothing stamped into the embedded source
+    (fact_line,) = [line for line in lines if line.startswith("p_msb(1).")]
+    assert "  % " in fact_line  # annotation resumes after the mid-line close
 
 
 def test_annotate_preserves_line_numbering() -> None:

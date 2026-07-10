@@ -175,8 +175,14 @@ def test_raw_show_term_forms_get_a_teaching_error() -> None:
     program = ASPProgram()
     program.fact(P(x=2))
     program.raw_asp("#show 2*X : p_term(X).")
+    result = program.solve()
+    retained = iter(result)
     with pytest.raises(ValueError, match="non-predicate output"):
-        list(program.solve())
+        next(retained)
+    # The dead generator marks itself closed: the retained iterator stays
+    # loud instead of silently reading as clean exhaustion
+    with pytest.raises(RuntimeError, match="closed"):
+        next(retained)
 
 
 def test_part_directives_rejected_with_teaching() -> None:

@@ -12,7 +12,7 @@ from pyclingo.core import DefaultNegation, DefinedConstant, PredicateOccurrence,
 from pyclingo.exceptions import GroundingError
 from pyclingo.optimization import OptimizationTermType, OptStrategy, WeakConstraint
 from pyclingo.predicate import NegatedSignature, Predicate
-from pyclingo.program_elements import RawASP, RenderedLine, Rule
+from pyclingo.program_elements import RawASP, RenderedLine, Rule, script_spans
 from pyclingo.scoping import validate_rule
 from pyclingo.segment import Segment, When
 from pyclingo.solve_result import (
@@ -94,25 +94,33 @@ def _annotate_lines(lines: list[RenderedLine]) -> list[RenderedLine]:
     the reverse map: a raw-clingo error at line N is explained by the
     comment on line N. Every non-blank line of a multi-line statement gets
     its origin; formatting elements are never stamped so they stay bare,
-    and so do lines inside a raw #script block — a note there would become
-    part of the embedded script's source.
+    and so is any line a #script block touches — a note there would become
+    part of the embedded script's source. Script extents come from the
+    same character-level scan raw_asp validation uses, so blocks opening
+    or closing mid-line are honored.
     """
-    annotated: list[RenderedLine] = []
-    in_script = False
+    text = "\n".join(line.text for line in lines)
+    spans = script_spans(text)
+    starts: list[int] = []
+    position = 0
     for line in lines:
-        text, element = line.text, line.element
-        stripped = text.strip()
-        if not in_script and stripped.startswith("#script"):
-            in_script = True
-        skip_note = in_script
-        if in_script and stripped == "#end.":
-            in_script = False
-        if element is not None and text != "" and not skip_note and element.source_location is not None:
+        starts.append(position)
+        position += len(line.text) + 1
+    touched = {
+        index
+        for index, line in enumerate(lines)
+        for span_start, span_end in spans
+        if starts[index] < span_end and starts[index] + len(line.text) > span_start
+    }
+    annotated: list[RenderedLine] = []
+    for index, line in enumerate(lines):
+        line_text, element = line.text, line.element
+        if element is not None and line_text != "" and index not in touched and element.source_location is not None:
             note = element.source_location.display()
             if element.closed_at is not None:
                 note += f" (closed at {element.closed_at.display()})"
-            text = f"{text}  % {note}"
-        annotated.append(RenderedLine(text, element))
+            line_text = f"{line_text}  % {note}"
+        annotated.append(RenderedLine(line_text, element))
     return annotated
 
 
@@ -625,14 +633,17 @@ class ASPProgram:
         # Discriminate auto-tupled weak constraints program-wide, in document
         # order: two statements' coinciding ground tuples must not merge
         # charges in the shared tuple set. A program-level concern like the
-        # #show block — segments are append-only, so ordinals are stable
-        # across re-renders as the program grows.
-        ordinal = 0
+        # #show block, computed fresh into a render-local map each render —
+        # rendering never mutates elements, so programs sharing a segment
+        # cannot interfere, however they are threaded. Uniqueness within one
+        # render is the guarantee; ordinals stay stable across renders while
+        # the program only appends (deleting or replacing a segment shifts
+        # later ordinals).
+        weak_discriminators: dict[int, int] = {}
         for segment in self._segments.values():
             for element in segment:
                 if isinstance(element, WeakConstraint) and element.auto_tuple:
-                    element.discriminator = ordinal
-                    ordinal += 1
+                    weak_discriminators[id(element)] = len(weak_discriminators)
 
         # 1. Header comments
         lines: list[str] = []
@@ -665,7 +676,7 @@ class ASPProgram:
             if with_headers and not first_segment:
                 rendered.append(RenderedLine("", None))
             first_segment = False
-            segment_lines = segment.render_lines(with_header=with_headers)
+            segment_lines = segment.render_lines(with_header=with_headers, weak_discriminators=weak_discriminators)
             rendered.extend(_annotate_lines(segment_lines) if annotate else segment_lines)
 
         # 4. #show directives: program overrides first, class defaults second.
@@ -1153,10 +1164,23 @@ class GroundedProgram:
         Close the previous solve's result if it is still open, freeing this
         grounding for the next solve() — useful when the old result is no
         longer in hand. Idempotent; a no-op if nothing is open.
+
+        Only a SUSPENDED search can be closed: if the previous solve is
+        executing right now (in another thread), this raises with the
+        remedies instead of silently failing to free the grounding.
         """
         with self._solve_lock:
             if self._active is not None:
-                self._active.close()
+                try:
+                    self._active.close()
+                except ValueError as e:
+                    # generator.close() on an executing generator
+                    raise RuntimeError(
+                        "abandon() can only close a suspended search, but this "
+                        "grounding's active solve is executing right now (in "
+                        "another thread). Interrupt it with .control.interrupt(), "
+                        "or give that solve a timeout."
+                    ) from e
                 self._active = None
 
     def solve(
