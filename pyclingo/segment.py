@@ -98,6 +98,10 @@ class Segment:
             raise ValueError("Segment names cannot be empty")
         if "\n" in name or "\r" in name:
             raise ValueError("Segment names must be single-line (they render as section comments)")
+        if "\x00" in name:
+            raise ValueError(
+                "Segment names cannot contain NUL: clingo silently truncates the program at the first NUL byte"
+            )
         return name
 
     @property

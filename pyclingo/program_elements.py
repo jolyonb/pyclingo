@@ -72,6 +72,10 @@ class Comment(ProgramElement):
         # text renders after %, where anything goes.
         if "\n" in text and ("%*" in text or "*%" in text):
             raise ValueError("Multi-line comment text cannot contain '%*' or '*%' (ASP block comment delimiters)")
+        if "\x00" in text:
+            raise ValueError(
+                "Comment text cannot contain NUL: clingo silently truncates the program at the first NUL byte"
+            )
         self.text = text
 
     def render(self) -> str:
@@ -181,6 +185,10 @@ class RawASP(ProgramElement):
         # A subclass converts to its natural plain str first: what the scan
         # below inspects is exactly what will render
         self.text = str(text)
+        if "\x00" in self.text:
+            raise ValueError(
+                "raw_asp() text cannot contain NUL: clingo silently truncates the program at the first NUL byte"
+            )
         if directive := _find_unsupported_directive(self.text):
             if directive == "#external":
                 raise ValueError(

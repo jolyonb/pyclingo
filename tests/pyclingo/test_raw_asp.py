@@ -266,3 +266,9 @@ def test_unrepresentable_string_values_diagnose_the_atom() -> None:
     program.raw_asp('p_esc("a\\"b").', predicates=[P])
     with pytest.raises(ValueError, match=r'p_esc\("a\\"b"\) cannot be read back as p_esc.*double quotes'):
         list(program.solve())
+
+
+def test_nul_rejected_in_raw_text() -> None:
+    program = ASPProgram()
+    with pytest.raises(ValueError, match=r"NUL.*silently truncates"):
+        program.raw_asp("a.\x00")

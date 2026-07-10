@@ -208,6 +208,20 @@ def test_model_membership_rejects_what_could_never_be_present() -> None:
         P(x=Variable("X")) in model  # noqa: B015
 
 
+def test_membership_teaches_on_const_bearing_atoms() -> None:
+    # gringo substitutes #const at grounding, so p(c) can never be a model
+    # atom — a quiet False here answered the wrong question (probed: the
+    # model holds p(3), and the same p(v=c) works as an assumption)
+    program = ASPProgram()
+    P = Predicate.define("p_member_const", ["v"])
+    c = program.define_constant("c_member", 3)
+    program.fact(P(v=c))
+    model = program.solve().first()
+    assert P(v=3) in model  # the resolved value is the member
+    with pytest.raises(ValueError, match=r"references #const c_member.*resolved values.*plain value"):
+        P(v=c) in model  # noqa: B015 (the membership test is the act under test)
+
+
 def test_hidden_class_reads_teach_instead_of_silent_empty() -> None:
     # show=False keeps helper atoms out of results BY DESIGN (never touching
     # them is what keeps model reads fast at scale); asking for one must

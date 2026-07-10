@@ -103,6 +103,10 @@ def test_negative_cardinality_rejected_for_number_too() -> None:
         Choice(P(x=X)).exactly(-1)
     with pytest.raises(ValueError, match="non-negative"):
         Choice(P(x=X)).exactly(Number(-1))
+    # The literal spelling -Number(1): the one Expression shape the guard
+    # folds (general expressions are not evaluated — gringo owns those)
+    with pytest.raises(ValueError, match="non-negative"):
+        Choice(P(x=X)).at_most(-Number(1))
 
 
 def test_negation_wrapped_aggregate_condition_rejected() -> None:

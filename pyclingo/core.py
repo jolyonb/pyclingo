@@ -1225,6 +1225,23 @@ class Expression(ComparableTerm, ArithmeticOps):
         return variables
 
 
+def negated_literal_value(term: object) -> int | None:
+    """
+    The integer behind the one constant-negative spelling -Number(k): a
+    unary-minus Expression over a literal Number. None for every other
+    shape — general expressions are deliberately not evaluated (the sign
+    guards catch the literal spelling; gringo owns the rest).
+    """
+    if (
+        isinstance(term, Expression)
+        and term.is_unary
+        and term.operator is Operation.UNARY_MINUS
+        and isinstance(term.second_term, Number)
+    ):
+        return -term.second_term.value
+    return None
+
+
 class Comparison(Negatable):
     """
     Represents a comparison between two terms in an ASP program.

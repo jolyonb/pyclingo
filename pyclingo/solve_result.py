@@ -164,6 +164,15 @@ class AtomCollection:
             raise TypeError(f"Membership takes a grounded atom, got {type(atom).__name__}")
         if not atom.is_grounded:
             raise ValueError(f"Membership takes a grounded atom, but {atom.render()} contains variables")
+        if referenced := atom.collect_defined_constants():
+            # gringo substitutes #const references at grounding, so model
+            # atoms carry the VALUES — this atom can never be present
+            names = ", ".join(sorted(referenced))
+            raise ValueError(
+                f"{atom.render()} references #const {names}, but model atoms carry "
+                f"gringo's resolved values — a quiet False here would be a lie. "
+                f"Ask with the plain value instead (as in p(3) rather than p(c))."
+            )
         self._reject_hidden(type(atom))
         return atom in self._by_class.get(type(atom), [])
 

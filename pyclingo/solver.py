@@ -275,6 +275,10 @@ class ASPProgram:
         value = None if value is None else str(value)
         if value is not None and ("\n" in value or "\r" in value):
             raise ValueError("Program header must be a single line (it renders as one % comment)")
+        if value is not None and "\x00" in value:
+            raise ValueError(
+                "Program header cannot contain NUL: clingo silently truncates the program at the first NUL byte"
+            )
         self._header = value
 
     @property

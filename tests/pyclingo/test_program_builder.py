@@ -165,6 +165,8 @@ def test_atom_valued_const_value_hits_the_collision_wall() -> None:
 def test_multiline_header_rejected() -> None:
     with pytest.raises(ValueError, match="single line"):
         ASPProgram(header="a\nb")
+    with pytest.raises(ValueError, match=r"NUL.*silently truncates"):
+        ASPProgram(header="a\x00b")
 
 
 def test_not_reserved_as_constant_name() -> None:

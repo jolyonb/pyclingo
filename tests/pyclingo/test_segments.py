@@ -135,6 +135,8 @@ def test_segment_names_are_verbatim() -> None:
         Segment("   ")
     with pytest.raises(ValueError, match="single-line"):
         Segment("a\nb")
+    with pytest.raises(ValueError, match=r"NUL.*silently truncates"):
+        Segment("a\x00b")
 
 
 def test_segment_is_a_container_not_a_builder() -> None:

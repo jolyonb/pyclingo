@@ -4,6 +4,7 @@ gringo NESTS block comments, so both delimiters are forbidden in multi-line
 text; single-line text is unrestricted (nothing after % is parsed).
 """
 
+import clingo
 import pytest
 
 from pyclingo import ASPProgram, Predicate
@@ -40,3 +41,21 @@ def test_comments_round_trip_through_a_program() -> None:
     rendered = program.render()
     assert "% single line" in rendered
     assert "%*\nblock\ncomment\n*%" in rendered
+
+
+def test_nul_rejected_in_comment_text() -> None:
+    with pytest.raises(ValueError, match=r"NUL.*silently truncates"):
+        Comment("note\x00")
+
+
+def test_clingo_truncates_at_nul_receipt() -> None:
+    # The hazard every NUL wall exists for: Control.add drops everything
+    # after the first NUL byte with zero diagnostics. If this receipt ever
+    # fails, clingo has started rejecting NUL and the walls can come down.
+    messages: list[str] = []
+    control = clingo.Control(logger=lambda code, message: messages.append(message))
+    control.add("base", [], "a.\x00 b.")
+    control.ground([("base", [])])
+    atoms = [str(atom.symbol) for atom in control.symbolic_atoms]
+    assert atoms == ["a"]  # b. silently gone
+    assert messages == []  # and clingo said nothing

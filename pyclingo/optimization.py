@@ -32,6 +32,7 @@ from pyclingo.core import (
     Term,
     Value,
     Variable,
+    negated_literal_value,
 )
 from pyclingo.predicate import Predicate, coerce_tuple_term
 from pyclingo.program_elements import ProgramElement, render_body_terms
@@ -101,9 +102,14 @@ class WeakConstraint(ProgramElement):
         # Checked after coercion so Number(-3) is caught the same as -3. A
         # negative weight is legal ASP but turns the penalty into a reward,
         # inverting the verb's name — almost certainly a sign flip
-        if isinstance(weight, Number) and weight.value < 0:
+        negative = weight.value if isinstance(weight, Number) and weight.value < 0 else None
+        if negative is None:
+            # The literal spelling -Number(3) is caught the same way
+            folded = negated_literal_value(weight)
+            negative = folded if folded is not None and folded < 0 else None
+        if negative is not None:
             raise ValueError(
-                f"penalize() charges a cost, but weight={weight.value} would reward the match "
+                f"penalize() charges a cost, but weight={negative} would reward the match "
                 f"instead. To deliberately reward, use maximize() (or minimize() with a negative "
                 f"weight) — the objective verbs say what they mean."
             )

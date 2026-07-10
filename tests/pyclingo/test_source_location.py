@@ -329,6 +329,8 @@ def test_display_escapes_newlines() -> None:
     # line so an annotated render never gains lines (or injects statements)
     assert SourceLocation("evil\nq(666).", 1).display() == "evil\\nq(666).:1"
     assert SourceLocation("evil\rq(7).", 2).display() == "evil\\rq(7).:2"
+    # NUL joins the family: clingo truncates its read at a raw NUL byte
+    assert SourceLocation("evil\x00tail", 3).display() == "evil\\x00tail:3"
 
 
 def test_registration_rebinds_instead_of_mutating(skip_registry: None) -> None:

@@ -31,16 +31,17 @@ class SourceLocation:
     def display(self) -> str:
         """
         path:line, relative to the working directory when it lies inside it.
-        Always one line: a newline in the filename (compile() accepts any
-        string) is escaped, so consumers may embed the result in line-
-        oriented output — an annotated render must not gain lines.
+        Always one line: a newline or NUL in the filename (compile()
+        accepts any string) is escaped, so consumers may embed the result
+        in line-oriented output — an annotated render must not gain lines
+        or truncate clingo's read of it.
         """
         try:
             relative = os.path.relpath(self.filename)
         except ValueError:  # pragma: no cover — only Windows raises here (path on a different drive)
             relative = self.filename
         path = self.filename if relative.startswith("..") else relative
-        path = path.replace("\r", "\\r").replace("\n", "\\n")
+        path = path.replace("\r", "\\r").replace("\n", "\\n").replace("\x00", "\\x00")
         return f"{path}:{self.lineno}"
 
 

@@ -346,6 +346,8 @@ def test_penalize_rejects_negative_weight() -> None:
         program.penalize(Pick(x=1), weight=-3)
     with pytest.raises(ValueError, match="would reward the match"):
         program.penalize(Pick(x=1), weight=Number(-3))  # caught the same after coercion
+    with pytest.raises(ValueError, match="would reward the match"):
+        program.penalize(Pick(x=1), weight=-Number(3))  # the literal unary-minus spelling too
     pending = program.when(Pick(x=1))
     with pytest.raises(ValueError, match="would reward the match"):
         pending.penalize(Pick(x=2), weight=-1)

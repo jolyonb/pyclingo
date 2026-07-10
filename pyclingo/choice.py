@@ -10,6 +10,7 @@ from pyclingo.core import (
     String,
     Term,
     Value,
+    negated_literal_value,
 )
 from pyclingo.predicate import Predicate
 
@@ -98,9 +99,12 @@ class Choice(FreezableBuilder, Term):
             raise TypeError(f"{description} must be integer-valued, got {count.render()}")
 
         count = Number(count) if isinstance(count, int) else count
-        # Checked after coercion so Number(-1) is caught the same as -1
+        # Checked after coercion so Number(-1) is caught the same as -1;
+        # the literal spelling -Number(1) is caught the same way
         if isinstance(count, Number) and count.value < 0:
             raise ValueError(f"{description} must be non-negative, got {count.value}")
+        if (folded := negated_literal_value(count)) is not None and folded < 0:
+            raise ValueError(f"{description} must be non-negative, got {folded}")
 
         return count
 
