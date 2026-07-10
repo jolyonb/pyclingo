@@ -55,7 +55,7 @@ def test_show_when_validates_its_condition() -> None:
     P = Predicate.define("p", ["x"])
     Q = Predicate.define("q", ["x"])
     X, Y = Variable("X"), Variable("Y")
-    with pytest.raises(ValueError, match="Unsafe"):
+    with pytest.raises(ValueError, match="nothing gives them a value"):
         program.show_when(ConditionalLiteral(P(x=X), Q(x=Y)))
 
 

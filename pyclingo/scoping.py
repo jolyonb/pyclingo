@@ -65,6 +65,10 @@ class LocalScope:
     # Choice elements without conditions expose their target variables
     # globally; aggregate targets must be bound by their own condition
     targets_are_global_without_condition: bool = False
+    # Conditional literals get a dedicated teaching error when a promoted
+    # head variable ends up unsafe (a deliberate pyclingo-only lint —
+    # gringo quietly treats such a variable as local to the literal)
+    is_conditional_literal: bool = False
     # Aggregate element tuples must not share variables with the rule's
     # globals: the tuple collapses to at most one element per ground instance
     is_aggregate_element: bool = False
@@ -84,6 +88,10 @@ class RuleScopes:
     # (variable, element description) pairs where an aggregate tuple shares a
     # variable with the rule's globals — valid clingo with collapsed semantics
     globals_in_aggregate_tuples: list[tuple[str, str]] = field(default_factory=list)
+    # Variables promoted out of a conditional literal's head because nothing
+    # in the literal's condition binds them; if one ends up unsafe, the
+    # error teaches this case specifically
+    cl_head_promotions: set[str] = field(default_factory=set)
 
     def global_occurrences(self) -> Counter[str]:
         return self.head_counts + self.body_counts
@@ -288,7 +296,11 @@ def analyze(head: Term | None, body: list[Term]) -> RuleScopes:
         elif isinstance(term, Comparison):
             _analyze_comparison(term, scopes)
         elif isinstance(term, ConditionalLiteral):
-            scope = LocalScope(description="conditional literal", targets_are_global_without_condition=True)
+            scope = LocalScope(
+                description="conditional literal",
+                targets_are_global_without_condition=True,
+                is_conditional_literal=True,
+            )
             scope.target_counts.update(_occurrences(term.head))
             for condition in term.condition:
                 _analyze_local_condition(condition, scope)
@@ -325,6 +337,8 @@ def _resolve_localities(scopes: RuleScopes) -> None:
             condition_names = set(scope.condition_counts)
             for name in [n for n in scope.target_counts if n not in condition_names]:
                 scopes.body_counts[name] += scope.target_counts.pop(name)
+                if scope.is_conditional_literal:
+                    scopes.cl_head_promotions.add(name)
 
 
 def validate_optimization_element(element: ConditionedElement, rule_text: str, check_singletons: bool = True) -> None:
@@ -395,6 +409,20 @@ def _check_scopes(scopes: RuleScopes, kind: str, rule_text: Callable[[], str], c
 
     bound = _bind_fixpoint(scopes.global_binders, scopes.equality_edges, scopes.directed_edges)
     unsafe = sorted(set(scopes.global_occurrences()) - bound)
+    cl_unsafe = [name for name in unsafe if name in scopes.cl_head_promotions]
+    if cl_unsafe:
+        names = ", ".join(cl_unsafe)
+        raise ValueError(
+            f"In a conditional literal, variable(s) {names} appear before the ':' "
+            f"but nothing gives them a value — not the condition after the ':', "
+            f"and not anywhere else in the {kind}: {rule_text()}\n"
+            f"This is usually a typo in the condition. Either use the variable in "
+            f"the condition itself (p(X) : q(X)), or have an ordinary atom elsewhere "
+            f"in the {kind} give it a value (e.g. a body atom q(X)). (clingo would "
+            f"accept this text but silently "
+            f"read it as something different from a conjunction over the "
+            f"condition; if you truly want clingo's reading, use raw_asp().)"
+        )
     if unsafe:
         names = ", ".join(unsafe)
         raise ValueError(

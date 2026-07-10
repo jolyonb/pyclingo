@@ -178,10 +178,18 @@ def test_choice_element_variable_bound_by_own_condition_is_local() -> None:
 
 def test_conditional_literal_head_var_not_in_condition_is_global() -> None:
     # gringo GROUNDS this text (an unbound conditional-literal head variable
-    # is local to the literal); pyclingo rejects it anyway — the stricter
-    # verdict is recorded here as deliberate
-    bad(None, [ConditionalLiteral(P(x=X), Q(x=Y)), R2(x=Y, y=Y)], "Unsafe|Singleton", gringo_rejects=False)
+    # is local to the literal); pyclingo rejects it anyway — a deliberate
+    # lint, with a dedicated error teaching both remedies
+    bad(
+        None,
+        [ConditionalLiteral(P(x=X), Q(x=Y)), R2(x=Y, y=Y)],
+        "(?s)conditional literal.*nothing gives them a value.*usually a typo.*raw_asp",
+        gringo_rejects=False,
+    )
+    # Remedy 1: bind it in the literal's own condition (local)
     ok(None, [ConditionalLiteral(P(x=X), Q(x=X)), Not(P(x=1))])
+    # Remedy 2: bind it with a positive body literal (global)
+    ok(None, [ConditionalLiteral(P(x=X), R2(x=Y, y=Y)), Q(x=X)])
 
 
 # --- anonymous variable ---
