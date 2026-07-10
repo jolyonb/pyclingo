@@ -9,23 +9,23 @@ from pyclingo.source_location import SourceLocation
 
 
 class LogLevel(IntEnum):
-    """Log levels for Clingo messages."""
+    """
+    Log levels for Clingo messages. clingo emits only info/warning/error;
+    CRITICAL exists as a stop_on_log_level threshold meaning "never halt".
+    """
 
-    DEBUG = 10
-    INFO = 20
-    WARNING = 30
-    ERROR = 40
-    CRITICAL = 50
+    INFO = 10
+    WARNING = 20
+    ERROR = 30
+    CRITICAL = 40
 
     @classmethod
     def from_string(cls, level_str: str) -> LogLevel:
-        """Convert Clingo's string levels to our enum."""
+        """Convert Clingo's string levels to our enum (unknown words read as INFO)."""
         mapping = {
-            "debug": cls.DEBUG,
             "info": cls.INFO,
             "warning": cls.WARNING,
             "error": cls.ERROR,
-            "critical": cls.CRITICAL,
         }
         return mapping.get(level_str.lower(), cls.INFO)
 

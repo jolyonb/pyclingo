@@ -1393,7 +1393,9 @@ class Comparison(Negatable):
                 "Comparisons involving aggregates cannot be rule heads; "
                 "compute the aggregate in a body condition instead"
             )
-        if is_in_head and any(isinstance(term, Pool) for term in (self._left_term, self._right_term)):
+        # Right side only: the constructor already rejects a Pool as the
+        # LEFT operand (Pool is not a ComparableTerm)
+        if is_in_head and isinstance(self._right_term, Pool):
             raise ValueError(
                 "A pool comparison cannot be a rule head: head pools expand "
                 "conjunctively, so 'X = (1; 2)' forces X to equal every element "

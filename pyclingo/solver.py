@@ -91,8 +91,10 @@ def _validate_timeout(timeout: float) -> None:
     """The timeout checks, shared by _begin_solve and the sugar verbs (cheap checks before grounding is paid for)."""
     if isinstance(timeout, bool) or not isinstance(timeout, (int, float)):
         raise TypeError(f"timeout is seconds (a number), got {type(timeout).__name__}")
-    if timeout < 0 or math.isnan(timeout):
-        raise ValueError(f"timeout must be non-negative, got {timeout}")
+    if timeout < 0 or not math.isfinite(timeout):
+        # inf would pointlessly engage the async solver thread for a call
+        # that means "no limit" — 0 already says that, without the thread
+        raise ValueError(f"timeout must be non-negative and finite (0 means no limit), got {timeout}")
 
 
 def _validate_max_iterations(max_iterations: int) -> None:
@@ -1080,19 +1082,19 @@ class GroundedProgram:
         control: clingo.Control,
         predicate_types: dict[tuple[str, int], type[Predicate]],
         message_handler: ClingoMessageHandler,
-        defined_constants: dict[str, int | str] | None = None,
-        ground_levels: tuple[int, ...] = (),
-        derivation_sites: dict[tuple[str, int], tuple[SourceLocation | None, ...]] | None = None,
-        hidden_classes: frozenset[type[Predicate]] = frozenset(),
+        defined_constants: dict[str, int | str],
+        ground_levels: tuple[int, ...],
+        derivation_sites: dict[tuple[str, int], tuple[SourceLocation | None, ...]],
+        hidden_classes: frozenset[type[Predicate]],
     ) -> None:
         self._text = text
         self._control = control
         self._predicate_types = predicate_types
         self._message_handler = message_handler
-        self._defined_constants = defined_constants or {}
+        self._defined_constants = defined_constants
         # Signature -> the authoring lines of its deriving statements, for
         # analyze_grounding()
-        self._derivation_sites = derivation_sites or {}
+        self._derivation_sites = derivation_sites
         # Classes whose atoms are never shown: read surfaces teach instead
         # of returning a silent empty
         self._hidden_classes = hidden_classes
@@ -1446,9 +1448,11 @@ class GroundedProgram:
         items: dict[int, int] | None = None
         if bound is not None and isinstance(bound, Mapping):
             items = dict(bound)
-            if not items or not all(
-                isinstance(v, int) and not isinstance(v, bool) for pair in items.items() for v in pair
-            ):
+            if not items:
+                # An empty mapping states "no bounds", exactly like None
+                items = None
+                bound = None
+            elif not all(isinstance(v, int) and not isinstance(v, bool) for pair in items.items() for v in pair):
                 raise TypeError(f"priority-keyed bounds must map int priorities to int bounds, got {bound!r}")
         elif bound is not None and (isinstance(bound, bool) or not isinstance(bound, int)):
             # Positional lists are deliberately unsupported: their meaning

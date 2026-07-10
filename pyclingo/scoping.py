@@ -109,10 +109,9 @@ def _first_ungrounded_pool(term: Term) -> ExplicitPool | None:
     if isinstance(term, ExplicitPool):
         return term if not term.is_grounded else None
     children: tuple[Term, ...] = ()
+    # We don't need to check expressions; their constructor rejects Pool operands
     if isinstance(term, Predicate):
         children = tuple(term.arguments)
-    elif isinstance(term, Expression):
-        children = tuple(t for t in (term.first_term, term.second_term) if t is not None)
     elif isinstance(term, Comparison):
         children = (term.left_term, term.right_term)
     elif isinstance(term, DefaultNegation):

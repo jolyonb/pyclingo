@@ -31,7 +31,7 @@ def test_model_is_an_atom_collection() -> None:
     P = Predicate.define("p_ac", ["x"])
     model = Model([P(x=1), P(x=2)])
     assert isinstance(model, AtomCollection)
-    assert model.messages == []
+    assert model.messages == ()
     collection = AtomCollection([P(x=1)])
     assert len(collection) == 1
     assert collection.atoms(P)[0]["x"].value == 1
@@ -49,7 +49,7 @@ def test_costed_model_carries_its_cost() -> None:
     assert isinstance(model, Model)
     assert isinstance(model, AtomCollection)
     assert model.cost == (2, 7)
-    assert model.messages == []
+    assert model.messages == ()
     assert model.atoms(P)[0]["x"].value == 1
     assert repr(model).startswith("CostedModel(cost=[2, 7]")
 

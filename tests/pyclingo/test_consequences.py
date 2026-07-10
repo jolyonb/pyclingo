@@ -314,8 +314,8 @@ def test_brave_timeout_with_zero_emissions_returns_empty_partial() -> None:
 def test_steps_timeout_leaves_consistent_state() -> None:
     grounded = _pigeonhole().ground()
     steps = grounded.brave_iter(timeout=0.05)
-    with pytest.raises(TimeoutError, match="did not finish"):
-        list(steps)
+    with pytest.raises(TimeoutError, match="before its first approximation"):
+        list(steps)  # zero yields: the message claims no bound it does not have
     assert steps.finished  # the stream ended, loudly
     assert not steps.exhausted  # a timed-out search never claims exhaustion
     assert steps.satisfiable is None  # nothing was learned either way

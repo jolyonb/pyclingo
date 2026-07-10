@@ -40,7 +40,7 @@ and the next solve attempt raises the loud still-open error.
 import copy
 import time
 from abc import ABC, abstractmethod
-from collections.abc import Generator, Iterator
+from collections.abc import Generator, Iterator, Sequence
 from contextlib import suppress
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -127,6 +127,9 @@ class AtomCollection:
         atoms() with no argument returns everything. Asking for a HIDDEN
         class raises with the remedy: hidden atoms are never read back into
         results, so an empty answer would be a lie (see _reject_hidden).
+        A class shown only through a show_when CONDITION returns just the
+        condition-filtered atoms — a partial extension, by that directive's
+        explicit intent.
         """
         if predicate is None:
             return list(self._atoms)
@@ -184,12 +187,12 @@ class Model(AtomCollection):
     def __init__(
         self,
         atoms: list[Predicate],
-        messages: list[ClingoMessage] | None = None,
+        messages: Sequence[ClingoMessage] | None = None,
         hidden_classes: frozenset[type[Predicate]] = frozenset(),
     ) -> None:
         super().__init__(atoms, hidden_classes)
-        # Diagnostics clingo emitted while searching for this model (usually empty)
-        self.messages = messages if messages is not None else []
+        # Diagnostics clingo emitted while searching for this model (usually empty).
+        self.messages = tuple(messages) if messages is not None else ()
 
 
 class CostedModel(Model):
@@ -215,7 +218,7 @@ class CostedModel(Model):
         atoms: list[Predicate],
         cost: tuple[int, ...],
         proven: bool = False,
-        messages: list[ClingoMessage] | None = None,
+        messages: Sequence[ClingoMessage] | None = None,
         hidden_classes: frozenset[type[Predicate]] = frozenset(),
     ) -> None:
         super().__init__(atoms, messages, hidden_classes)
@@ -253,7 +256,7 @@ class Optimum(CostedModel):
         cost: tuple[int, ...],
         path: tuple[CostedModel, ...],
         proven: bool,
-        messages: list[ClingoMessage] | None = None,
+        messages: Sequence[ClingoMessage] | None = None,
         optima: tuple[CostedModel, ...] | None = None,
         complete: bool = False,
         levels: dict[int, int] | None = None,
@@ -301,7 +304,7 @@ class Consequences(AtomCollection):
         atoms: list[Predicate],
         path: tuple[AtomCollection, ...],
         complete: bool,
-        messages: list[ClingoMessage],
+        messages: Sequence[ClingoMessage],
         timed_out: bool = False,
         statistics: dict[str, Any] | None = None,
         hidden_classes: frozenset[type[Predicate]] = frozenset(),
@@ -309,7 +312,7 @@ class Consequences(AtomCollection):
         super().__init__(atoms, hidden_classes)
         self.path = path
         self.complete = complete
-        self.messages = messages
+        self.messages = tuple(messages)
         # The search's statistics snapshot (see Search.statistics), carried
         # so the eager verb loses nothing its _iter twin exposes
         self.statistics = statistics
@@ -505,14 +508,16 @@ class Search(ABC):
         return self._state.satisfiable
 
     @property
-    def messages(self) -> list[ClingoMessage]:
+    def messages(self) -> tuple[ClingoMessage, ...]:
         """
-        Diagnostics clingo emitted during the solve phase (after grounding).
+        Diagnostics clingo emitted during the solve phase (after grounding),
+        as an immutable snapshot — the records (Model, Consequences,
+        Optimum) carry the same shape.
 
         These never halt solving — the stop_on_log_level threshold applies
         to parsing and grounding only.
         """
-        return list(self._state.messages)
+        return tuple(self._state.messages)
 
     @property
     def statistics(self) -> dict[str, Any] | None:
@@ -861,6 +866,11 @@ def _search_generator(
         # generator dead from an exception can only StopIteration on
         # resume, which would read as clean exhaustion.
         state.closed = True
+        if state.emission_count == 0:
+            raise TimeoutError(
+                f"{mode} refinement did not finish within {timeout}s, before its first "
+                f"approximation — nothing usable is in hand."
+            )
         raise TimeoutError(
             f"{mode} refinement did not finish within {timeout}s; approximations yielded "
             f"so far form a {'superset' if mode is RefinementMode.CAUTIOUS else 'subset'} "

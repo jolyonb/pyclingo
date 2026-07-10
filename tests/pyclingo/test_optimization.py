@@ -522,9 +522,10 @@ def test_bound_type_validated() -> None:
     with pytest.raises(TypeError, match="bound must be"):
         grounded.optimize(bound=[1, 0])  # type: ignore[arg-type]  # positional lists are gone
     with pytest.raises(TypeError, match="priority-keyed"):
-        grounded.optimize(bound={})
-    with pytest.raises(TypeError, match="priority-keyed"):
         grounded.optimize(bound={0: "cheap"})  # type: ignore[dict-item]
+    # An empty mapping states "no bounds", exactly like None — not an error
+    unbounded = grounded.optimize(bound={})
+    assert unbounded is not None and unbounded.proven
 
 
 def test_raw_optimization_gets_ground_truth_guarding_too() -> None:

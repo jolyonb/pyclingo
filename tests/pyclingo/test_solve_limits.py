@@ -163,7 +163,7 @@ def test_solve_phase_messages_attach_instead_of_halting() -> None:
     result = grounded.solve()
     iterator = iter(result)
     first = next(iterator)
-    assert first.messages == []
+    assert first.messages == ()
 
     # The grounding's handler is the generator's handler: inject through the
     # stable route instead of reaching into the generator frame's locals
@@ -211,6 +211,14 @@ def test_held_iterator_is_loud_after_close() -> None:
     finished.close()  # close after natural end changes nothing
     with pytest.raises(StopIteration):
         next(iterator)
+
+
+def test_infinite_timeout_rejected() -> None:
+    # inf would engage the async solver thread for a call that means "no
+    # limit" — 0 already says that without the second thread
+    grounded = make_choice_program(1).ground()
+    with pytest.raises(ValueError, match="finite"):
+        grounded.solve(timeout=float("inf"))
 
 
 def test_nan_timeout_rejected() -> None:

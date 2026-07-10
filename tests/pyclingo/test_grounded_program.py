@@ -106,7 +106,7 @@ def test_messages_window_per_solve_on_shared_handler() -> None:
 
     second = grounded.solve()
     list(second)
-    assert second.messages == []  # the first solve's message was cleared
+    assert second.messages == ()  # the first solve's message was cleared
     assert grounded._message_handler.messages == []  # nothing accumulates across solves
 
 

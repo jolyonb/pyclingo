@@ -505,12 +505,12 @@ class Predicate(PredicateBase, Negatable, metaclass=_PredicateMeta):
 
     @classmethod
     def argument_fields(cls) -> list[DataclassField]:
-        """Get fields that represent predicate arguments (not starting with _)."""
-        return [f for f in fields(cls) if not f.name.startswith("_")]
+        """Every dataclass field is a predicate argument (underscore names are rejected at class creation)."""
+        return list(fields(cls))
 
     @classmethod
     def field_names(cls) -> list[str]:
-        """Get field names that represent predicate arguments (not starting with _)."""
+        """The predicate's argument names, in declaration order."""
         return [f.name for f in cls.argument_fields()]
 
     def read_as_term(self, field_name: str) -> FieldAsTermType:
