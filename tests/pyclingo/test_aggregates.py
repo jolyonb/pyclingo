@@ -93,17 +93,23 @@ def test_expression_element_variables_are_scoped() -> None:
         program.when(S == Sum((X * Y, X), condition=P(x=X))).derive(Q(x=S))
 
 
-def test_aggregate_element_rejects_raw_python_value() -> None:
-    # A bare int is neither Value, Expression, nor Predicate
-    with pytest.raises(TypeError, match="Values, Expressions, or Predicates"):
-        Count(5)  # type: ignore[arg-type]
+def test_aggregate_elements_coerce_ints_and_strs() -> None:
+    # Plain literals coerce exactly as in every other term slot; a constant
+    # tuple discriminator is a standard idiom
+    X = Variable("X")
+    P = Predicate.define("p_coerce", ["x"])
+    assert Count(5).render() == "#count{ 5 }"
+    assert Sum((1, X), condition=P(x=X)).render() == "#sum{ 1, X : p_coerce(X) }"
+    assert Count(("tag", X), condition=P(x=X)).render() == '#count{ "tag", X : p_coerce(X) }'
 
 
 def test_aggregate_tuple_element_rejects_bad_item() -> None:
-    # The tuple path checks each item; the raw int trips the guard
+    # bool is never a term, and unknown types still trip the guard
     X = Variable("X")
-    with pytest.raises(TypeError, match="Values, Expressions, or Predicates"):
-        Sum((1, X))  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match="got bool"):
+        Sum((True, X))  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match="Values, Expressions, or Predicates, got list"):
+        Count(([1], X))  # type: ignore[arg-type]
 
 
 def test_aggregate_is_grounded_reflects_elements() -> None:

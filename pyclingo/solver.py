@@ -1,6 +1,7 @@
 import math
 import threading
 from collections.abc import Iterator, Mapping, Sequence
+from dataclasses import dataclass
 
 import clingo
 
@@ -8,7 +9,7 @@ from pyclingo.choice import Choice
 from pyclingo.clingo_handler import ClingoMessageHandler, LogLevel
 from pyclingo.conditional_literal import ConditionalLiteral
 from pyclingo.conditioned_element import ConditionType
-from pyclingo.core import DefaultNegation, DefinedConstant, PredicateOccurrence, Term
+from pyclingo.core import Comparison, DefaultNegation, DefinedConstant, PredicateOccurrence, Term
 from pyclingo.exceptions import GroundingError
 from pyclingo.optimization import OptimizationTermType, OptStrategy, WeakConstraint
 from pyclingo.predicate import NegatedSignature, Predicate
@@ -138,6 +139,23 @@ def _annotate_lines(lines: list[RenderedLine]) -> list[RenderedLine]:
             line_text = f"{line_text}  % {note}"
         annotated.append(RenderedLine(line_text, element))
     return annotated
+
+
+@dataclass(frozen=True)
+class SignatureGrounding:
+    """
+    One row of a grounding profile: a signature's ground atom count and
+    the statements that derive it. derived_at holds authoring locations,
+    deduplicated in document order; None stands for a statement whose
+    segment had source locations switched off, and an empty tuple means
+    no pyclingo statement derives the signature (e.g. raw-text atoms
+    declared only via show()).
+    """
+
+    name: str
+    arity: int
+    atom_count: int
+    derived_at: tuple[SourceLocation | None, ...]
 
 
 class ASPProgram:
@@ -371,9 +389,9 @@ class ASPProgram:
         """Forbid the combination, in the default segment; see Segment.forbid()."""
         self._default_segment().forbid(*conditions)
 
-    def require(self, *comparison: Term) -> None:
+    def require(self, comparison: Comparison) -> None:
         """Require a comparison to hold, in the default segment; see Segment.require()."""
-        self._default_segment().require(*comparison)
+        self._default_segment().require(comparison)
 
     def minimize(
         self,
@@ -948,7 +966,12 @@ class ASPProgram:
         assumptions: Sequence[Predicate | DefaultNegation] | None = None,
         stop_on_log_level: LogLevel = LogLevel.INFO,
     ) -> CautiousConsequences | None:
-        """The atoms true in every answer set; sugar for ground().cautious(). See GroundedProgram.cautious()."""
+        """
+        The atoms true in every answer set; sugar for ground().cautious().
+        See GroundedProgram.cautious(). For the stepwise cautious_iter()
+        form, call ground() and use the handle — stepwise control belongs
+        with a grounding you keep.
+        """
         _validate_timeout(timeout)  # before grounding is paid for
         _validate_max_iterations(max_iterations)
         return self.ground(stop_on_log_level=stop_on_log_level).cautious(
@@ -962,7 +985,12 @@ class ASPProgram:
         assumptions: Sequence[Predicate | DefaultNegation] | None = None,
         stop_on_log_level: LogLevel = LogLevel.INFO,
     ) -> BraveConsequences | None:
-        """The atoms true in at least one answer set; sugar for ground().brave(). See GroundedProgram.brave()."""
+        """
+        The atoms true in at least one answer set; sugar for
+        ground().brave(). See GroundedProgram.brave(). For the stepwise
+        brave_iter() form, call ground() and use the handle — stepwise
+        control belongs with a grounding you keep.
+        """
         _validate_timeout(timeout)  # before grounding is paid for
         _validate_max_iterations(max_iterations)
         return self.ground(stop_on_log_level=stop_on_log_level).brave(
@@ -979,7 +1007,12 @@ class ASPProgram:
         assumptions: Sequence[Predicate | DefaultNegation] | None = None,
         stop_on_log_level: LogLevel = LogLevel.INFO,
     ) -> Optimum | None:
-        """The best answer set by the objectives; sugar for ground().optimize(). See GroundedProgram.optimize()."""
+        """
+        The best answer set by the objectives; sugar for
+        ground().optimize(). See GroundedProgram.optimize(). For the
+        stepwise optimize_iter() form, call ground() and use the handle —
+        stepwise control belongs with a grounding you keep.
+        """
         _validate_timeout(timeout)  # before grounding is paid for
         _validate_max_iterations(max_iterations)
         return self.ground(stop_on_log_level=stop_on_log_level).optimize(
@@ -1074,34 +1107,50 @@ class GroundedProgram:
         """
         return self._ground_levels
 
-    def analyze_grounding(self) -> str:
+    def grounding_profile(self) -> tuple[SignatureGrounding, ...]:
         """
-        Where the grounding's size comes from: ground atom counts per
-        signature, largest first, each joined to the statements that
-        derive it. The first stop when grounding is slow or huge — the
-        top rows name the authoring lines to rethink. Counts are gringo's
+        Where the grounding's size comes from, as data: one
+        SignatureGrounding per signature, largest atom count first, each
+        joined to the statements that derive it. Counts are gringo's
         ground truth (atoms simplified away at grounding are already
         gone; both signs of a signature count together).
+        analyze_grounding() renders exactly this as prose.
+        """
+        counts: dict[tuple[str, int], int] = {}
+        for name, arity, positive in self._control.symbolic_atoms.signatures:
+            tally = sum(1 for _ in self._control.symbolic_atoms.by_signature(name, arity, positive=positive))
+            counts[(name, arity)] = counts.get((name, arity), 0) + tally
+        profile: list[SignatureGrounding] = []
+        for (name, arity), count in sorted(counts.items(), key=lambda item: (-item[1], item[0])):
+            deduped: list[SourceLocation | None] = []
+            for site in self._derivation_sites.get((name, arity), ()):
+                if site not in deduped:
+                    deduped.append(site)
+            profile.append(SignatureGrounding(name, arity, count, tuple(deduped)))
+        return tuple(profile)
+
+    def analyze_grounding(self) -> str:
+        """
+        The grounding profile as prose: ground atom counts per signature,
+        largest first, each joined to the authoring lines that derive it.
+        The first stop when grounding is slow or huge — the top rows name
+        the lines to rethink. grounding_profile() is the same data,
+        structured.
 
         One blind spot, stated plainly: the report joins on HEADS, so a
         statement whose body grounds large without deriving new atoms
         (a wide joint feeding a small head) shows up under its head's
         count, not as its own row.
         """
-        counts: dict[tuple[str, int], int] = {}
-        for name, arity, positive in self._control.symbolic_atoms.signatures:
-            tally = sum(1 for _ in self._control.symbolic_atoms.by_signature(name, arity, positive=positive))
-            counts[(name, arity)] = counts.get((name, arity), 0) + tally
-        total = sum(counts.values())
-        lines = [f"Grounding profile: {total} ground atoms across {len(counts)} signatures"]
-        for (name, arity), count in sorted(counts.items(), key=lambda item: (-item[1], item[0])):
-            described: list[str] = []
-            for site in self._derivation_sites.get((name, arity), ()):
-                text = site.display() if site is not None else "unknown (source locations off)"
-                if text not in described:
-                    described.append(text)
+        profile = self.grounding_profile()
+        total = sum(entry.atom_count for entry in profile)
+        lines = [f"Grounding profile: {total} ground atoms across {len(profile)} signatures"]
+        for entry in profile:
+            described = [
+                site.display() if site is not None else "unknown (source locations off)" for site in entry.derived_at
+            ]
             origin = ", ".join(described) if described else "no pyclingo statement (declared but underived?)"
-            lines.append(f"  {name}/{arity}: {count} atoms — derived at {origin}")
+            lines.append(f"  {entry.name}/{entry.arity}: {entry.atom_count} atoms — derived at {origin}")
         return "\n".join(lines)
 
     def _convert_assumptions(

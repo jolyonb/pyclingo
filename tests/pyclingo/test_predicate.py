@@ -3,7 +3,7 @@ import pickle
 
 import pytest
 
-from pyclingo import ASPProgram, Comparison, DefaultNegation, Field, Number, Predicate, Variable
+from pyclingo import ASPProgram, Comparison, DefaultNegation, Field, Predicate, Variable
 
 
 class CluePred(Predicate):
@@ -94,7 +94,7 @@ def test_define_validates_field_names() -> None:
     with pytest.raises(ValueError, match="shadow"):
         Predicate.define("p", ["render"])
     with pytest.raises(ValueError, match="shadow"):
-        Predicate.define("p", ["items"])
+        Predicate.define("p", ["arguments"])
     with pytest.raises(ValueError, match="identifier"):
         Predicate.define("p", ["not valid"])
 
@@ -161,14 +161,6 @@ def test_getitem_unknown_field_raises_key_error() -> None:
     P = Predicate.define("p", ["x"])
     with pytest.raises(KeyError, match="no field named 'nope'"):
         P(x=1)["nope"]
-
-
-def test_items_returns_field_name_term_pairs() -> None:
-    P = Predicate.define("p", ["x", "y"])
-    d = dict(P(x=1, y=2).items())
-    assert set(d) == {"x", "y"}
-    assert isinstance(d["x"], Number) and d["x"].value == 1
-    assert isinstance(d["y"], Number) and d["y"].value == 2
 
 
 def test_ne_non_predicate_returns_not_implemented() -> None:

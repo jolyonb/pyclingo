@@ -192,14 +192,14 @@ class Segment:
         rule = Rule(body=list(conditions), check_singletons=self._check_singletons)
         self.append(rule)
 
-    def require(self, *comparison: Term) -> None:
+    def require(self, comparison: Comparison) -> None:
         """
         Require that a comparison holds in every answer set. Takes exactly
         one Comparison; a conditional requirement is spelled
         when(*conditions).require(comparison). Sugar for forbidding the
         inverse comparison.
         """
-        target = _single_required_comparison(comparison)
+        target = _required_comparison(comparison)
         rule = Rule(body=[target.inverse()], check_singletons=self._check_singletons)
         self.append(rule)
 
@@ -300,6 +300,14 @@ class Segment:
         both signs, and emits "#show p/n."; if the block also derives
         classically negated atoms, declare -P as well to emit "#show -p/n."
         (predicates=[P, -P]), or the -p atoms stay absent from output.
+
+        Directives that need solver configuration ground SILENTLY INERT
+        under the pyclingo verbs: #project does nothing until the solve
+        projects (grounded.control.configuration.solve.project =
+        "project"), and #heuristic does nothing until the Domain heuristic
+        is on (grounded.control.configuration.solver.heuristic = "Domain").
+        Set the knob through the control escape hatch between ground() and
+        the solve, or the directive quietly changes nothing.
         """
         if not isinstance(text, str):
             raise TypeError(f"raw_asp() text must be a string, got {type(text).__name__}")
@@ -455,12 +463,12 @@ class When:
         rule = Rule(head=head, body=list(self._conditions), check_singletons=self._segment._check_singletons)
         self._complete("derive", rule)
 
-    def require(self, *comparison: Term) -> None:
+    def require(self, comparison: Comparison) -> None:
         """
         Require the comparison to hold under the conditions. Takes exactly
         one Comparison; sugar for forbid(*conditions, comparison.inverse()).
         """
-        target = _single_required_comparison(comparison)
+        target = _required_comparison(comparison)
         self._guard()
         rule = Rule(
             body=[*self._conditions, target.inverse()],
@@ -518,13 +526,8 @@ class When:
         self._complete("penalize", weak)
 
 
-def _single_required_comparison(args: tuple[Term, ...]) -> Comparison:
-    """Exactly one Comparison, with teaching errors for every other shape."""
-    if len(args) != 1:
-        raise TypeError(
-            "require() takes exactly one Comparison; conditions go in when(): when(*conditions).require(comparison)"
-        )
-    target = args[0]
+def _required_comparison(target: Comparison) -> Comparison:
+    """The require() operand, with teaching errors for the wrong-type and pool shapes."""
     if not isinstance(target, Comparison):
         raise TypeError(
             f"require() takes a Comparison, got {type(target).__name__}. To make "

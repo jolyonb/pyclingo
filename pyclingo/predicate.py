@@ -35,6 +35,26 @@ type PredicateClassType = type[Predicate]
 _clone_lock = threading.Lock()
 
 
+def coerce_tuple_term(term: object, noun: str) -> Value | Expression | Predicate:
+    """
+    Convert one entry of an element tuple (aggregate, #minimize/#maximize,
+    or weak constraint) into a Term: a plain int becomes a Number, a plain
+    str becomes a String — the same coercion predicate arguments perform —
+    and Terms pass through unchanged. bool and anything else are rejected;
+    noun labels the error with the construct doing the rejecting (e.g.
+    "Aggregate").
+    """
+    if isinstance(term, bool):
+        raise TypeError(f"{noun} tuple terms must be Values, Expressions, or Predicates, got bool")
+    if isinstance(term, int):
+        return Number(term)
+    if isinstance(term, str):
+        return String(term)
+    if not isinstance(term, (Value, Expression, Predicate)):
+        raise TypeError(f"{noun} tuple terms must be Values, Expressions, or Predicates, got {type(term).__name__}")
+    return term
+
+
 class Field[T]:
     """
     A typed predicate field: annotate class-syntax fields as Field[int],
@@ -513,10 +533,6 @@ class Predicate(PredicateBase, Negatable, metaclass=_PredicateMeta):
         if key not in self.field_names():
             raise KeyError(f"Predicate has no field named '{key}'")
         return self.read_as_term(key)
-
-    def items(self) -> list[tuple[str, FieldAsTermType]]:
-        """Return (field_name, field_value) tuples for all argument fields, values as Terms."""
-        return [(f.name, self.read_as_term(f.name)) for f in self.argument_fields()]
 
     @classmethod
     def get_name(cls) -> str:

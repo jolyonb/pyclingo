@@ -49,7 +49,7 @@ from typing import Any, Literal, Self, cast, overload
 import clingo
 
 from pyclingo.clingo_handler import ClingoMessage, ClingoMessageHandler
-from pyclingo.core import INF, SUP, DefinedConstant, ExtremeConstant, Infimum, Number, String, Supremum
+from pyclingo.core import INF, SUP, DefaultNegation, DefinedConstant, ExtremeConstant, Infimum, Number, String, Supremum
 from pyclingo.exceptions import UnsatisfiableError
 from pyclingo.predicate import Predicate
 from pyclingo.statistics import format_statistics_clingo_style
@@ -324,6 +324,7 @@ class _SearchState:
     satisfiable: bool | None = None
     exhausted: bool = False
     timed_out: bool = False
+    unsat_core: tuple[Predicate | DefaultNegation, ...] | None = None
     emission_count: int = 0
     statistics: dict[str, Any] | None = None
     finished: bool = False
@@ -455,6 +456,18 @@ class Search(ABC):
         return self._state.timed_out
 
     @property
+    def unsat_core(self) -> tuple[Predicate | DefaultNegation, ...] | None:
+        """
+        The assumptions clasp reports as jointly unsatisfiable, in the
+        shapes they were given (an atom assumed true, ~atom assumed
+        false) — available once this search has PROVEN unsatisfiability.
+        None before then and for satisfiable programs; () when UNSAT
+        needed no assumptions at all. This is A core, not necessarily a
+        minimal one: clasp promises it contains a conflict, nothing more.
+        """
+        return self._state.unsat_core
+
+    @property
     def satisfiable(self) -> bool | None:
         """True/False once known; None if nothing has been learned yet."""
         return self._state.satisfiable
@@ -538,8 +551,16 @@ class SolveResult(Search):
         programs expected to be satisfiable. Raises UnsatisfiableError
         when there is no model; if UNSAT is an expected outcome for your
         program, use next(iter(result), None), which gives None instead
-        of raising.
+        of raising. A stream that has already yielded models refuses —
+        first() is not a cursor.
         """
+        if self._state.emission_count:
+            raise RuntimeError(
+                f"first() refuses a stream that has already yielded "
+                f"{self._state.emission_count} model(s): the next model is not 'the "
+                f"first'. Keep the iterator you are holding, or call solve() again "
+                f"for a fresh search."
+            )
         for model in self:
             self.close()
             return model
@@ -741,6 +762,19 @@ def _search_generator(
                 # check; a timed-out search must never claim exhaustion
                 state.exhausted = False if timed_out else outcome.exhausted
                 state.timed_out = timed_out
+                if outcome.satisfiable is False:
+                    # The culprits, in the shapes the caller gave: clasp's
+                    # core is solver literals, mapped back through the
+                    # assumption list (a core, not necessarily minimal)
+                    core = set(handle.core())
+                    conflicting: list[Predicate | DefaultNegation] = []
+                    for symbol, truth in assumptions:
+                        symbolic = control.symbolic_atoms[symbol]
+                        assert symbolic is not None  # existence-checked at conversion
+                        if (symbolic.literal if truth else -symbolic.literal) in core:
+                            atom = convert_symbol_to_predicate(symbol, predicate_types)
+                            conflicting.append(atom if truth else DefaultNegation(atom))
+                    state.unsat_core = tuple(conflicting)
                 final = outcome
     except BaseException:
         # A generator dead from an exception can only StopIteration on

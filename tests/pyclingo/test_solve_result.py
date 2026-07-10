@@ -159,6 +159,18 @@ def test_first_returns_one_model_and_frees_the_grounding() -> None:
     grounded.solve().close()  # first() closed its search: no still-open guard
 
 
+def test_first_refuses_a_partially_consumed_stream() -> None:
+    # first() is the one-answer sugar, not a cursor: after models have been
+    # pulled by hand, "the first" would be a lie
+    program = ASPProgram()
+    P = Predicate.define("p_first_cursor", ["x"])
+    program.fact(P(x=1), P(x=2))  # one model, but the guard fires on yields, not truth
+    result = program.solve()
+    next(iter(result))
+    with pytest.raises(RuntimeError, match=r"already yielded 1 model.*solve\(\) again"):
+        result.first()
+
+
 def test_first_on_unsatisfiable_raises_teaching() -> None:
     program = ASPProgram()
     P = Predicate.define("p_first_unsat", ["x"])

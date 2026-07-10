@@ -33,12 +33,12 @@ from pyclingo.core import (
     Value,
     Variable,
 )
-from pyclingo.predicate import Predicate
+from pyclingo.predicate import Predicate, coerce_tuple_term
 from pyclingo.program_elements import ProgramElement, render_body_terms
 from pyclingo.scoping import body_global_variables
 
 # What may be aggregated over: the same universe as aggregate tuple terms
-type OptimizationTermType = Value | Expression | Predicate
+type OptimizationTermType = int | str | Value | Expression | Predicate
 
 
 def _validated_weight(weight: int | OptimizationTermType, noun: str) -> Value | Expression:
@@ -121,11 +121,7 @@ class WeakConstraint(ProgramElement):
             # purpose.
             names = sorted(body_global_variables(list(conditions)))
             tuple_terms = tuple(Variable(name) for name in names)
-        for term in tuple_terms:
-            if not isinstance(term, (Value, Expression, Predicate)):
-                raise TypeError(
-                    f"Weak-constraint tuple terms must be Values, Expressions, or Predicates, got {type(term).__name__}"
-                )
+        tuple_terms = tuple(coerce_tuple_term(term, "Weak-constraint") for term in tuple_terms)
         _validate_priority(priority, "Weak-constraint")
         if not conditions:
             raise ValueError("A weak constraint requires at least one condition")
@@ -236,16 +232,12 @@ class OptimizationDirective(ProgramElement):
         priority: int,
     ) -> None:
         weight = _validated_weight(weight, "Optimization")
-        for term in tuple_terms:
-            if not isinstance(term, (Value, Expression, Predicate)):
-                raise TypeError(
-                    f"Optimization tuple terms must be Values, Expressions, or Predicates, got {type(term).__name__}"
-                )
+        coerced = tuple(coerce_tuple_term(term, "Optimization") for term in tuple_terms)
         _validate_priority(priority, "Optimization")
 
         self._optimization = optimization
         self._priority = priority
-        self._element = ConditionedElement((weight, *tuple_terms), condition, "optimization")
+        self._element = ConditionedElement((weight, *coerced), condition, "optimization")
 
     @property
     def optimization(self) -> Optimization:

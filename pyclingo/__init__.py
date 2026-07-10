@@ -19,6 +19,7 @@ from .core import (
     ANY,
     INF,
     SUP,
+    ComparableTerm,
     Comparison,
     Compl,
     DefaultNegation,
@@ -26,6 +27,7 @@ from .core import (
     ExplicitPool,
     Expression,
     Infimum,
+    Negatable,
     Not,
     Number,
     Pool,
@@ -41,9 +43,9 @@ from .core import (
 )
 from .exceptions import GroundingError, UnsatisfiableError
 from .operators import ComparisonOperator
-from .optimization import OptStrategy
+from .optimization import OptimizationTermType, OptStrategy
 from .predicate import Field, NegatedSignature, Predicate, PredicateField
-from .program_elements import RenderedLine
+from .program_elements import ProgramElement, RenderedLine
 from .segment import Segment, When
 from .solve_result import (
     AtomCollection,
@@ -60,7 +62,7 @@ from .solve_result import (
     convert_predicate_to_symbol,
     convert_symbol_to_predicate,
 )
-from .solver import ASPProgram, GroundedProgram
+from .solver import ASPProgram, GroundedProgram, SignatureGrounding
 from .source_location import (
     SourceLocation,
     attribute_to_caller,
@@ -76,6 +78,7 @@ __all__ = [  # noqa: RUF022 (categorized deliberately, not sorted)
     "Segment",
     "When",
     "GroundedProgram",
+    "SignatureGrounding",
     "SolveResult",
     "Model",
     "CostedModel",
@@ -128,8 +131,12 @@ __all__ = [  # noqa: RUF022 (categorized deliberately, not sorted)
     # Hierarchy types: these appear in public signatures and return types —
     # annotate with them; you rarely construct them directly
     "ConditionType",
+    "OptimizationTermType",
     "Term",
     "Value",
+    "ComparableTerm",
+    "Negatable",
+    "ProgramElement",
     "Expression",
     "Comparison",
     "ComparisonOperator",

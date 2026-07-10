@@ -955,6 +955,10 @@ def pool(elements: range | Sequence[int | str | BasicTerm] | Pool) -> Pool:
     Returns:
         An appropriate Pool object (RangePool for continuous ranges, ExplicitPool otherwise)
 
+    Note the reading of a pool under negation: gringo expands a pool in a
+    negated atom by duplicating the RULE per element, so not p((1; 2))
+    means "not p(1) AND not p(2)" — not-EACH, never "not in {1, 2}".
+
     Examples:
         >>> pool(range(1, 6)).render()
         '1..5'

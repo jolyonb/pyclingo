@@ -11,7 +11,7 @@ from itertools import islice
 import clingo
 import pytest
 
-from pyclingo import ASPProgram, Choice, Number, Predicate, RangePool, SourceLocation, Variable
+from pyclingo import ASPProgram, Choice, Number, Predicate, RangePool, SignatureGrounding, SourceLocation, Variable
 from pyclingo.solver import GroundedProgram
 
 A = Predicate.define("a", ["value"])
@@ -326,13 +326,17 @@ def test_analyze_grounding_ranks_signatures_and_names_the_lines() -> None:
     program.fact(*[P(x=i) for i in range(1, 4)])  # lineno + 1: 3 atoms, one shared line
     program.fact(*[Q(x=i) for i in range(1, 4)])  # lineno + 2
     program.when(P(x=X), Q(x=Y)).derive(Pair(a=X, b=Y))  # lineno + 3: the 9-atom product
-    report = program.ground().analyze_grounding()
+    grounded = program.ground()
+    report = grounded.analyze_grounding()
     lines = report.splitlines()
     assert lines[0] == "Grounding profile: 15 ground atoms across 3 signatures"
     pair_site = SourceLocation(frame.f_code.co_filename, lineno + 3).display()
     assert lines[1] == f"  pair_an/2: 9 atoms — derived at {pair_site}"
     fact_site = SourceLocation(frame.f_code.co_filename, lineno + 1).display()
     assert lines[2] == f"  p_an/1: 3 atoms — derived at {fact_site}"  # three facts, one deduped line
+    # The prose renders grounding_profile(): the same rows, structured
+    top = grounded.grounding_profile()[0]
+    assert top == SignatureGrounding("pair_an", 2, 9, (SourceLocation(frame.f_code.co_filename, lineno + 3),))
 
 
 def test_analyze_grounding_attributes_choices_and_raw_blocks() -> None:
@@ -405,3 +409,52 @@ def test_abandon_cannot_close_an_executing_solve_and_teaches() -> None:
     assert not worker.is_alive()
     grounded.abandon()  # the search is suspended now: freeing works quietly
     grounded.solve().close()  # and the grounding accepts the next solve
+
+
+def test_unsat_core_names_the_conflicting_assumptions() -> None:
+    program = ASPProgram()
+    P = Predicate.define("p_core", ["x"])
+    Q = Predicate.define("q_core", ["x"])
+    program.choose(Choice(P(x=RangePool(1, 3))))
+    program.fact(Q(x=1))
+    program.forbid(P(x=1), P(x=2))  # p(1) and p(2) cannot coexist
+    grounded = program.ground()
+    result = grounded.solve(assumptions=[P(x=1), P(x=2), Q(x=1)])
+    before = result.unsat_core
+    assert before is None  # nothing proven yet
+    assert list(result) == []
+    core = result.unsat_core
+    assert core is not None
+    rendered = {atom.render() for atom in core}
+    assert {"p_core(1)", "p_core(2)"} <= rendered  # the joint conflict is in the core
+    assert result.satisfiable is False
+
+
+def test_unsat_core_keeps_the_negated_shape() -> None:
+    program = ASPProgram()
+    Q = Predicate.define("q_core_neg", ["x"])
+    program.fact(Q(x=1))
+    grounded = program.ground()
+    result = grounded.solve(assumptions=[~Q(x=1)])  # assume false what is a fact
+    assert list(result) == []
+    core = result.unsat_core
+    assert core is not None and len(core) == 1
+    assert core[0].render() == "not q_core_neg(1)"
+
+
+def test_unsat_core_is_empty_when_no_assumptions_conflict() -> None:
+    # UNSAT with no assumptions: the core is empty, not None — the proof
+    # needed nothing from the caller
+    program = ASPProgram()
+    P = Predicate.define("p_core_plain", ["x"])
+    program.fact(P(x=1))
+    program.forbid(P(x=1))
+    result = program.solve()
+    assert list(result) == []
+    assert result.unsat_core == ()
+    # And a satisfiable solve reports None: there is no core to speak of
+    sat_program = ASPProgram()
+    sat_program.fact(P(x=2))
+    sat_result = sat_program.solve()
+    assert len(list(sat_result)) == 1
+    assert sat_result.unsat_core is None

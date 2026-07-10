@@ -169,12 +169,13 @@ def test_require_checks_rather_than_derives() -> None:
 
 
 def test_require_rejects_extra_arguments_with_teaching() -> None:
-    # require() takes one comparison; conditions belong in when()
+    # require() takes one comparison (Python's own arity error — the
+    # signature is the wall); conditions belong in when()
     program = ASPProgram()
     P = Predicate.define("p11", ["x"])
     C = Variable("C")
-    with pytest.raises(TypeError, match=r"exactly one Comparison; conditions go in when\(\)"):
-        program.require(P(x=C), C > 0)
+    with pytest.raises(TypeError, match="positional argument"):
+        program.require(P(x=C), C > 0)  # type: ignore[call-arg, arg-type]
 
 
 def test_inverse_refuses_pool_comparisons_with_explanation() -> None:

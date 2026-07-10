@@ -652,12 +652,15 @@ def test_penalize_weight_rejects_bare_python_type() -> None:
         program.penalize(Pick(x=ANY), weight="cheap")  # type: ignore[arg-type]
 
 
-def test_penalize_tuple_term_type_validated() -> None:
-    # The tuple-term loop rejects a raw python value: only Values,
-    # Expressions, or Predicates may sit in the weak-constraint tuple
+def test_penalize_tuple_terms_coerce_and_reject() -> None:
+    # Plain literals coerce (an explicit str discriminator mirrors the
+    # library's own auto-tuple tag); bool never becomes a term
     program = ASPProgram()
-    with pytest.raises(TypeError, match="Values, Expressions, or Predicates"):
-        program.penalize(Pick(x=Variable("X")), terms=["bad"])  # type: ignore[list-item]
+    X = Variable("X")
+    program.penalize(Pick(x=X), terms=["mine", X])
+    assert ':~ pick(X). [1, "mine", X]' in program.render()
+    with pytest.raises(TypeError, match="got bool"):
+        program.penalize(Pick(x=ANY), terms=[True])  # type: ignore[list-item]
 
 
 def test_penalize_condition_must_be_term() -> None:
@@ -677,12 +680,15 @@ def test_weak_constraint_priority_getter() -> None:
     assert wc.conditions == [Pick(x=Variable("X"))]
 
 
-def test_optimization_directive_tuple_term_type_validated() -> None:
-    # The directive's tuple-term loop mirrors the weak constraint's: a raw
-    # python value is rejected
+def test_optimization_directive_tuple_terms_coerce_and_reject() -> None:
+    # The directive's tuple terms mirror the weak constraint's: literals
+    # coerce, bool is rejected
     program = ASPProgram()
-    with pytest.raises(TypeError, match="Values, Expressions, or Predicates"):
-        program.minimize(1, "bad", condition=Pick(x=ANY))  # type: ignore[arg-type]
+    program.minimize(1, "tag", condition=Pick(x=ANY))
+    assert '#minimize{ 1, "tag" : pick(_) }.' in program.render()
+    other = ASPProgram()
+    with pytest.raises(TypeError, match="got bool"):
+        other.minimize(1, True, condition=Pick(x=ANY))  # type: ignore[arg-type]
 
 
 def test_optimization_directive_getters() -> None:

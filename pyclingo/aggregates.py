@@ -12,9 +12,9 @@ from pyclingo.core import (
     String,
     Value,
 )
-from pyclingo.predicate import Predicate
+from pyclingo.predicate import Predicate, coerce_tuple_term
 
-type AggregateElementType = Value | Expression | Predicate
+type AggregateElementType = int | str | Value | Expression | Predicate
 
 
 class AggregateType(StrEnum):
@@ -83,12 +83,8 @@ class Aggregate(FreezableBuilder, AggregateBase, ABC):
             '#count{ X; Y : p(Y); Z, W : q(Z), r(W) }'
         """
         self._require_mutable()
-        element_tuple = element if isinstance(element, tuple) else (element,)
-        for item in element_tuple:
-            if not isinstance(item, (Value, Expression, Predicate)):
-                raise TypeError(
-                    f"Aggregate element items must be Values, Expressions, or Predicates, got {type(item).__name__}"
-                )
+        raw_tuple = element if isinstance(element, tuple) else (element,)
+        element_tuple = tuple(coerce_tuple_term(item, "Aggregate") for item in raw_tuple)
 
         # Per-class: #sum/#sum+ SUM the first tuple term, so a literal String
         # (or #sup/#inf) there draws gringo's "tuple ignored" info at ground —
