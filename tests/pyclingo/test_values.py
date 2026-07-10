@@ -6,6 +6,7 @@ variable indexing, and comparison-operand guards.
 
 import copy
 import gc
+import pickle
 import threading
 import weakref
 
@@ -430,3 +431,11 @@ def test_non_string_names_get_teaching_type_errors() -> None:
         Variable(5)  # type: ignore[arg-type]
     with pytest.raises(TypeError, match="Defined constant name must be a string, got int"):
         DefinedConstant(5)  # type: ignore[arg-type]
+
+
+def test_values_reintern_through_pickle() -> None:
+    # Unpickling calls the class, which routes through the interning cache:
+    # the loaded object IS the canonical resident, so set membership holds
+    for original in (Variable("PklVar"), Number(741), String("pkl"), DefinedConstant("pklconst"), SUP, INF):
+        assert pickle.loads(pickle.dumps(original)) is original
+    assert pickle.loads(pickle.dumps(Number(9414))) in {Number(9414)}

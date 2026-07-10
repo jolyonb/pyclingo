@@ -3,12 +3,16 @@ import pickle
 
 import pytest
 
-from pyclingo import ASPProgram, Comparison, DefaultNegation, Field, Predicate, Variable
+from pyclingo import ASPProgram, Comparison, DefaultNegation, Field, Number, Predicate, PredicateField, Variable
 
 
 class CluePred(Predicate):
     loc: Field[str]
     value: Field[int]
+
+
+class UntypedPkl(Predicate):
+    x: PredicateField
 
 
 def test_definition_sites_are_recorded_for_both_syntaxes() -> None:
@@ -30,14 +34,44 @@ def test_runtime_built_classes_claim_the_callers_module() -> None:
     assert defined.in_namespace("ns_mod").__module__ == __name__
 
 
-def test_atoms_refuse_pickle_with_teaching() -> None:
-    # Un-interned Values and unfindable runtime classes make pickle unsound;
-    # the wall teaches render()-based transport
+def test_runtime_built_atoms_refuse_pickle_with_teaching() -> None:
+    # A define()/in_namespace() class cannot be found by name on import;
+    # its atoms wall loudly, teaching render()-based transport
     defined = Predicate.define("p_pkl", ["x"])
     with pytest.raises(TypeError, match=r"do not pickle.*render\(\)"):
         pickle.dumps(defined(x=1))
-    with pytest.raises(TypeError, match=r"do not pickle"):
-        pickle.dumps(CluePred(loc="a1", value=7))  # class syntax hits the same wall
+
+
+def test_deepcopy_works_where_pickle_refuses() -> None:
+    # Copy and pickle are separate paths: __copy__/__deepcopy__ return self
+    # and never consult the pickle gate, so a runtime-built atom deepcopies
+    # fine while pickling it refuses
+    defined = Predicate.define("p_copy_not_pkl", ["x"])
+    atom = defined(x=1)
+    assert copy.deepcopy(atom) is atom
+    with pytest.raises(TypeError, match="do not pickle"):
+        pickle.dumps(atom)
+
+
+def test_nested_runtime_atom_refuses_pickle_through_a_findable_one() -> None:
+    # The findability gate applies wherever pickle reaches: a class-syntax
+    # atom holding a define()-built atom in a field refuses at the nested atom
+    inner_class = Predicate.define("p_inner_pkl", ["x"])
+    outer = UntypedPkl(x=inner_class(x=1))
+    with pytest.raises(TypeError, match="do not pickle"):
+        pickle.dumps(outer)
+
+
+def test_class_syntax_atoms_round_trip_through_pickle() -> None:
+    # A findable class pickles by the default machinery; the Values inside
+    # re-intern, so identity guarantees survive the round trip
+    atom = CluePred(loc="a1", value=7)
+    loaded = pickle.loads(pickle.dumps(atom))
+    assert loaded == atom and type(loaded) is CluePred
+    negated = pickle.loads(pickle.dumps(-atom))
+    assert negated.negated is True and negated == -atom
+    untyped = pickle.loads(pickle.dumps(UntypedPkl(x=5)))
+    assert untyped["x"] is Number(5)  # the stored Number is the cache resident again
 
 
 def test_copies_of_an_atom_are_the_atom() -> None:

@@ -18,6 +18,7 @@ from pyclingo import (
     GroundingError,
     Number,
     Predicate,
+    PyClingoBaseException,
     RangePool,
     SourceLocation,
     Variable,
@@ -268,13 +269,15 @@ def test_ground_wraps_a_clingo_parse_error() -> None:
         program.ground()
 
 
-def test_grounding_error_is_a_runtime_error() -> None:
-    # The builtin base is frozen contract: pre-GroundingError handlers
-    # catching RuntimeError keep working
-    assert issubclass(GroundingError, RuntimeError)
+def test_grounding_error_roots_at_the_family_base() -> None:
+    # GroundingError is pyclingo's own class, rooted at the family base —
+    # deliberately NOT a RuntimeError (pre-publication, there is no old
+    # handler to keep working)
+    assert issubclass(GroundingError, PyClingoBaseException)
+    assert not issubclass(GroundingError, RuntimeError)
     program = ASPProgram()
     program.raw_asp("p_ge(1")  # unterminated: a parse error
-    with pytest.raises(RuntimeError):
+    with pytest.raises(PyClingoBaseException):
         program.ground()
 
 

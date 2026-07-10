@@ -304,10 +304,11 @@ class ASPProgram:
 
     def __setitem__(self, segment: str, value: Segment) -> None:
         """
-        Assign a segment, dict-style: a new name appends, an existing
-        name REPLACES the segment with its rendering position preserved.
-        The segment's own name must match the key: names are never
-        rebound.
+        REPLACE an existing segment in place, rendering position
+        preserved — the one thing add_segment cannot express. Assignment
+        never creates (add_segment is the one creation point; a typo here
+        must not silently append a segment at the end of the program), and
+        the segment's own name must match the key: names are never rebound.
         """
         key = Segment.validate_name(segment)
         if not isinstance(value, Segment):
@@ -316,6 +317,12 @@ class ASPProgram:
             raise ValueError(
                 f"Key '{key}' does not match the segment's name '{value.name}'; "
                 f"names are never rebound — construct the Segment with the name you mean"
+            )
+        if key not in self._segments:
+            existing = ", ".join(f"'{name}'" for name in self._segments) or "none"
+            raise KeyError(
+                f"Segment '{key}' does not exist, and assignment only replaces — "
+                f"create segments with add_segment(). Existing segments: {existing}"
             )
         self._segments[key] = value
 

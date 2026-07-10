@@ -100,12 +100,15 @@ def test_add_segment_attaches_a_prebuilt_segment() -> None:
     program.add_segment(Segment("Grid"))  # a different name: case is significant
 
 
-def test_setitem_assigns_and_replaces_in_place() -> None:
-    # Dict-style assignment: a new name appends; an existing name swaps
-    # the segment in place, position preserved — the variant-swap workflow
+def test_setitem_replaces_in_place_and_never_creates() -> None:
+    # Assignment REPLACES an existing segment, position preserved — the
+    # variant-swap workflow. Creation stays add_segment's job: a typo'd
+    # replacement must not silently append a segment at the program's end
     program = ASPProgram()
     program.fact(P(x=1))
-    program["extra"] = Segment("extra")
+    with pytest.raises(KeyError, match=r"assignment only replaces.*add_segment"):
+        program["extra"] = Segment("extra")
+    program.add_segment("extra")
     program["extra"].fact(P(x=2))
     program.add_segment("tail")
     program["tail"].fact(P(x=3))

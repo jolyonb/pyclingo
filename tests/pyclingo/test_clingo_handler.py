@@ -5,7 +5,7 @@ Tests for clingo message parsing and severity handling.
 import clingo
 import pytest
 
-from pyclingo import ASPProgram, LogLevel, Predicate, SourceLocation
+from pyclingo import ASPProgram, GroundingError, LogLevel, Predicate, SourceLocation
 from pyclingo.clingo_handler import ClingoMessageHandler
 
 
@@ -116,7 +116,7 @@ def test_message_carries_code_and_raw_text_for_user_dispatch() -> None:
     P = Predicate.define("p_code", ["x"])
     Q = Predicate.define("q_code", ["x"], show=False)
     program.when(Q(x=1)).derive(P(x=1))
-    with pytest.raises(RuntimeError):
+    with pytest.raises(GroundingError):
         program.ground()  # q never in a head: INFO halts at the default threshold
     program2 = ASPProgram()
     program2.when(Q(x=1)).derive(P(x=1))

@@ -41,7 +41,7 @@ from .core import (
     Vars,
     pool,
 )
-from .exceptions import GroundingError, UnsatisfiableError
+from .exceptions import GroundingError, PyClingoBaseException, UnsatisfiableError
 from .operators import ComparisonOperator
 from .optimization import OptimizationTermType, OptStrategy
 from .predicate import Field, NegatedSignature, Predicate, PredicateField
@@ -93,6 +93,7 @@ __all__ = [  # noqa: RUF022 (categorized deliberately, not sorted)
     "Search",
     "LogLevel",
     "ClingoMessage",
+    "PyClingoBaseException",
     "GroundingError",
     "UnsatisfiableError",
     "RenderedLine",

@@ -1,11 +1,12 @@
 import keyword
 import re
+import sys
 import threading
 import types
 from abc import ABCMeta
 from dataclasses import Field as DataclassField
 from dataclasses import dataclass, fields
-from typing import Any, ClassVar, NoReturn, Self, cast, dataclass_transform, get_args, get_origin, overload
+from typing import Any, ClassVar, Self, SupportsIndex, cast, dataclass_transform, get_args, get_origin, overload
 
 from pyclingo.core import (
     DefinedConstant,
@@ -640,15 +641,33 @@ class Predicate(PredicateBase, Negatable, metaclass=_PredicateMeta):
         """
         return self
 
-    def __reduce__(self) -> NoReturn:
-        """Copy goes through the hooks above; this one is pickle's, and it refuses loudly."""
-        raise TypeError(
-            f"{type(self).__name__} atoms do not pickle: a runtime-built class "
-            f"(Predicate.define()) cannot be found by name on import, and the interned "
-            f"Values inside would come back un-interned, silently losing their identity "
-            f"guarantees. Transport atoms as text instead: render() them out and rebuild "
-            f"with {type(self).__name__}(...) on the other side."
-        )
+    def __reduce_ex__(self, protocol: SupportsIndex) -> Any:
+        """
+        Copy goes through the hooks above and never reaches this one —
+        this is pickle's alone. An atom pickles by the default machinery
+        when its class can be found by name on import (class-syntax
+        predicates at module level): the instance dict carries the sign
+        and the field values, and any Values inside re-intern through
+        their own __reduce__, so identity guarantees survive the round
+        trip. A runtime-built class (define()/in_namespace()) cannot be
+        found — its __module__ names the caller, but no module attribute
+        holds it — so its atoms refuse loudly; the gate applies to nested
+        atoms too, when pickle reaches them. The whole story: "Copying,
+        Pickling, and Identity" in pyclingo/CLAUDE.md.
+        """
+        cls = type(self)
+        resolved: object = sys.modules.get(cls.__module__)
+        for part in cls.__qualname__.split("."):
+            resolved = getattr(resolved, part, None)
+        if resolved is not cls:
+            raise TypeError(
+                f"{cls.__name__} atoms do not pickle: the class was built at runtime "
+                f"(Predicate.define()/in_namespace()) and cannot be found by name on "
+                f"import. Class-syntax predicates at module level pickle fine; "
+                f"otherwise transport atoms as text — render() them out and rebuild "
+                f"with {cls.__name__}(...) on the other side."
+            )
+        return super().__reduce_ex__(protocol)
 
     def collect_predicate_occurrences(self, *, as_argument: bool) -> set[PredicateOccurrence]:
         # The one node that reads as_argument: this occurrence is an atom

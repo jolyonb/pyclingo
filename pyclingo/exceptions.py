@@ -8,7 +8,16 @@ builtin is too broad a catch target.
 """
 
 
-class GroundingError(RuntimeError):
+class PyClingoBaseException(Exception):
+    """
+    The root of pyclingo's dedicated exceptions. Catching it nets every
+    exception CLASS pyclingo defines — not every error pyclingo raises:
+    validation and misuse failures deliberately stay on builtins (see the
+    module docstring).
+    """
+
+
+class GroundingError(PyClingoBaseException):
     """
     clingo rejected the rendered program: a parse error, a grounding
     failure, or diagnostics at or above the stop threshold. Raised by
@@ -18,7 +27,7 @@ class GroundingError(RuntimeError):
     """
 
 
-class UnsatisfiableError(ValueError):
+class UnsatisfiableError(PyClingoBaseException):
     """
     The program has no answer set, raised where an answer was required.
     The one exception reporting an OUTCOME rather than a mistake: catch

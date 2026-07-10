@@ -391,8 +391,10 @@ class Value(BasicTerm, ComparableTerm, ArithmeticOps, ABC, metaclass=_ValueMeta)
     same object, e.g. Variable("X") is Variable("X"). Values are immutable, so sharing
     is safe — and because equal values are the same object, sets and dicts of Values
     behave correctly even though __eq__ builds Comparison terms instead of comparing.
-    The cache is weak (dead values are evicted, not hoarded), and copy/deepcopy
-    return the object itself, so the guarantee survives copying a program.
+    The cache is weak (dead values are evicted, not hoarded); copy/deepcopy
+    return the object itself, and unpickling re-interns through this cache,
+    so the guarantee survives copying and pickling alike. (See "Copying,
+    Pickling, and Identity" in pyclingo/CLAUDE.md for the whole story.)
     """
 
     _cache: ClassVar[weakref.WeakValueDictionary[tuple[type, Any], Value]] = weakref.WeakValueDictionary()
@@ -421,6 +423,19 @@ class Value(BasicTerm, ComparableTerm, ArithmeticOps, ABC, metaclass=_ValueMeta)
         breaking the same-object guarantee identity hashing rests on.
         """
         return self
+
+    def __reduce__(self) -> tuple[type[Value], tuple[Any, ...]]:
+        """
+        Pickle as "call the class with the stored value": unpickling routes
+        through the interning metaclass, so the loaded object IS the
+        canonical resident and the identity guarantees survive the round
+        trip. Concrete Values hold exactly their constructor argument
+        (Supremum/Infimum hold nothing, and their __new__ returns the
+        singleton), so the instance dict is the argument list. copy and
+        deepcopy never reach this hook — __copy__/__deepcopy__ above return
+        self directly.
+        """
+        return (type(self), tuple(self.__dict__.values()))
 
     @abstractmethod
     def render(

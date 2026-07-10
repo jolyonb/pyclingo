@@ -242,6 +242,54 @@ segments the program creates, while a Segment attached as-is keeps its own):
   rule's line — recorded unconditionally at freeze, independent of the
   program's source_locations switch).
 
+## Copying, Pickling, and Identity
+
+The identity story has three layers that must be understood TOGETHER —
+each hook exists because of the others.
+
+**The guarantee.** Values intern (a weak cache keyed by the CONVERTED
+plain value; constructors are positional-only so keywords never reach the
+cache), and Values hash by identity — so "equal live values are the same
+object" is what makes sets and dicts of Values work at all, given that
+`==` builds Comparison terms instead of comparing.
+
+**Copy.** `__copy__`/`__deepcopy__` on Value AND Predicate return `self`:
+both are immutable data, and a distinct copy would be equal-but-not-
+identical to the cache resident, silently breaking set membership.
+Because these hooks exist, `copy.copy`/`copy.deepcopy` NEVER consult the
+pickle hooks below — copy and pickle are entirely separate paths. Two
+knock-on effects, both deliberate:
+- `Predicate.__neg__` hand-builds its field-sharing duplicate (it cannot
+  use `copy.copy`, which now returns the original it must not mutate).
+- `copy.deepcopy` works on atoms whose classes CANNOT pickle (see below):
+  deepcopy of a program containing define()-built atoms is fine.
+
+**Pickle, Values.** `Value.__reduce__` returns `(type(self),
+tuple(self.__dict__.values()))` — "call the class with the stored value".
+Unpickling therefore routes through the interning metaclass and lands on
+the canonical cache resident: identity survives the round trip
+(`pickle.loads(pickle.dumps(v)) is v` while v lives). Every concrete
+Value stores exactly its one constructor argument, and Supremum/Infimum
+store nothing (their `__new__` returns the singleton), so the same hook
+covers all of them.
+
+**Pickle, Predicates.** `Predicate.__reduce_ex__` gates on whether the
+CLASS can be found by name on import (walk `sys.modules[cls.__module__]`
+through `cls.__qualname__`):
+- Findable (class-syntax predicates at module level): pickle proceeds by
+  the default machinery. The instance `__dict__` carries the `_negated`
+  sign and the field values; any Values inside re-intern through their
+  own hook on load, so the loaded atom is sound.
+- Not findable (classes built by `define()`/`in_namespace()` — their
+  `__module__` names the caller, but no module attribute holds them):
+  refuse with a teaching error (transport atoms as text via render()).
+  The gate applies recursively: a findable atom holding a runtime-built
+  atom in a field refuses too, when pickle reaches the nested atom.
+
+All of this is pinned: `test_values.py` (interning, copy identity, pickle
+re-interning), `test_predicate.py` (copy identity, negation-vs-copy, the
+findability gate both ways, nested refusal, re-interned field values).
+
 ## Key Design Principles
 
 1. **Type Safety**: Extensive use of type hints and runtime validation
