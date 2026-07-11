@@ -18,7 +18,7 @@ from typing import Any
 import clingo.ast
 import pytest
 
-from pyclingo import (
+from aspalchemy import (
     Aggregate,
     ASPProgram,
     Choice,

@@ -37,23 +37,23 @@ repos:
         types: [python]
         pass_filenames: false
 
-      # pyclingo standalone: the unit suite + module doctests, gated at 100%
+      # aspalchemy standalone: the unit suite + module doctests, gated at 100%
       # line coverage. Excludes the puzzle integration test so the number is
-      # what it will be after the aspuzzle repo split — pyclingo alone must be
+      # what it will be after the aspuzzle repo split — aspalchemy alone must be
       # fully covered, not propped up by puzzle-driven lines. (--cov needs the
       # whole run, so no -x: a fail-fast would report misleading coverage.)
       - id: pytest
-        name: pytest (pyclingo, 100% coverage gate)
-        description: "Run pyclingo's tests and enforce 100% line coverage"
+        name: pytest (aspalchemy, 100% coverage gate)
+        description: "Run aspalchemy's tests and enforce 100% line coverage"
         entry: uv run pytest
         language: system
         pass_filenames: false
         args:
           [
             "tests/",
-            "pyclingo/",
+            "aspalchemy/",
             "--ignore=tests/test_puzzles.py",
-            "--cov=pyclingo",
+            "--cov=aspalchemy",
             "--cov-fail-under=100",
             "--cov-report=term-missing:skip-covered",
           ]

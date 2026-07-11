@@ -4,7 +4,7 @@ Tests for the suite-wide render conformance checker itself.
 
 import pytest
 
-from pyclingo import (
+from aspalchemy import (
     ASPProgram,
     Count,
     DefinedConstant,

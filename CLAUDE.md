@@ -1,8 +1,8 @@
-# PyClingo Project: Logic Puzzle Solver Framework
+# ASPAlchemy Project: Logic Puzzle Solver Framework
 
 ## Terminology
 
-Do not call pyclingo a "DSL" (in code, comments, docs, or conversation) — it
+Do not call aspalchemy a "DSL" (in code, comments, docs, or conversation) — it
 is a Python library that builds ASP programs. Describe it in those plain
 terms.
 
@@ -12,7 +12,7 @@ This project implements a **layered architecture** for solving logic puzzles usi
 
 ```
 High Level:  aspuzzle/     - Puzzle-specific solvers and framework
-Middle Layer: pyclingo/    - Python-to-ASP translation layer  
+Middle Layer: aspalchemy/  - Python-to-ASP translation layer  
 Low Level:    clingo       - ASP solver engine
 ```
 
@@ -20,7 +20,7 @@ Low Level:    clingo       - ASP solver engine
 
 ## Architecture Layers
 
-### 1. PyClingo (`pyclingo/`)
+### 1. ASPAlchemy (`aspalchemy/`)
 **Purpose**: Object-oriented Python interface to ASP programming
 
 - **Term System**: Rich hierarchy (Variable, Predicate, Expression, Choice, Aggregate)
@@ -132,7 +132,7 @@ regions = RegionConstructor(..., contiguous_regionless=True)
 For advanced modifications (new ASP constructs, non-rectangular grids, novel module types):
 
 **Recommended Approach**: Work in partnership with the project author, using existing implementations as templates:
-- **New ASP constructs**: Follow patterns in `pyclingo/` (e.g., `Choice`, `Aggregate` classes)
+- **New ASP constructs**: Follow patterns in `aspalchemy/` (e.g., `Choice`, `Aggregate` classes)
 - **Alternative grid geometries**: Extend `Grid` base class, copy `RectangularGrid` structure
 - **Novel module types**: Follow `RegionConstructor`/`SymbolSet` patterns for module organization
 
@@ -224,8 +224,8 @@ python solveit.py puzzle --stats
 - **Generated files**: `solver_scripts/` - Never edit manually
 - **Test data**: `puzzles/` - JSON configs with expected solutions
 - **Documentation**: `rules/` - Human-readable puzzle rules
-- **Core library**: `pyclingo/` - Stable, low-level ASP interface
+- **Core library**: `aspalchemy/` - Stable, low-level ASP interface
 - **Framework**: `aspuzzle/` - High-level, extensible puzzle framework
 - **Implementations**: `aspuzzle/solvers/` - Growing collection of puzzle types
 
-This architecture enables rapid development of new puzzle types while maintaining performance and correctness through the strong typing and validation provided by the PyClingo foundation.
+This architecture enables rapid development of new puzzle types while maintaining performance and correctness through the strong typing and validation provided by the ASPAlchemy foundation.

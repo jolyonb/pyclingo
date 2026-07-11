@@ -1,6 +1,6 @@
 # tests/
 
-This directory contains the testing strategy for the PyClingo project, using a multi-layered approach to ensure correctness and prevent regressions.
+This directory contains the testing strategy for the ASPAlchemy project, using a multi-layered approach to ensure correctness and prevent regressions.
 
 ## Test Architecture
 
@@ -20,8 +20,8 @@ This directory contains the testing strategy for the PyClingo project, using a m
 
 **Key insight**: Any new puzzle added to `puzzles/` is automatically included in the test suite.
 
-### Unit Testing (`tests/pyclingo/`)
-**Purpose**: Tests the pyclingo library in isolation from aspuzzle, at 100% line coverage
+### Unit Testing (`tests/aspalchemy/`)
+**Purpose**: Tests the aspalchemy library in isolation from aspuzzle, at 100% line coverage
 
 Files are organized by construct (e.g. `test_choice.py`, `test_aggregates.py`,
 `test_arithmetic.py`, `test_values.py`) and by cross-cutting concern (e.g.
@@ -29,8 +29,8 @@ Files are organized by construct (e.g. `test_choice.py`, `test_aggregates.py`,
 `test_optimization.py` / `test_optimize_solve.py`). `test_end_to_end.py` holds
 the paved-path smoke tests: small complete programs run construct → render →
 solve → typed reconstruction. Location-sensitive tests capture expected line
-numbers at runtime (via `inspect`), never as literals. This suite carries pyclingo's coverage on its own — the puzzle
-integration test contributes almost nothing pyclingo-side — so it stays whole
+numbers at runtime (via `inspect`), never as literals. This suite carries aspalchemy's coverage on its own — the puzzle
+integration test contributes almost nothing aspalchemy-side — so it stays whole
 when aspuzzle splits into its own repo.
 
 ## Validation Strategy
@@ -67,14 +67,14 @@ pytest tests/test_puzzles.py::test_puzzle_solves[minesweeper.json]
 # Run with verbose output to see all puzzle names
 pytest -v tests/test_puzzles.py
 
-# Run PyClingo unit tests only
-pytest tests/pyclingo/
+# Run ASPAlchemy unit tests only
+pytest tests/aspalchemy/
 ```
 
 ## Adding Test Coverage
 
 1. **New puzzle types**: Add `.json` file to `puzzles/` directory - automatically included in tests
-2. **PyClingo components**: Add unit tests in `tests/pyclingo/`
+2. **ASPAlchemy components**: Add unit tests in `tests/aspalchemy/`
 3. **Framework validation**: Integration tests catch issues across the entire solver pipeline
 
 ## Quality Control via Pre-commit
@@ -86,9 +86,9 @@ The project uses pre-commit hooks to maintain high code quality. Every commit au
 2. **ruff (formatter)**: Consistent code formatting
 3. **mypy**: Static type checking for type safety
 4. **pyright**: Additional static type checking
-5. **pytest (pyclingo, 100% coverage gate)**: Runs the pyclingo suite + module
+5. **pytest (aspalchemy, 100% coverage gate)**: Runs the aspalchemy suite + module
    doctests and fails under 100% line coverage (excludes `test_puzzles.py` so the
-   number reflects pyclingo standalone)
+   number reflects aspalchemy standalone)
 6. **pytest (puzzle integration)**: Solves the puzzle corpus end to end; leaves
    with the aspuzzle repo split
 7. **config validation**: Ensures pre-commit setup stays valid

@@ -1,9 +1,9 @@
 [project]
-name = "pyclingo"
-version = "0.2.0"
+name = "aspalchemy"
+version = "0.3.0"
 description = "TODO: Fix this before publication"
 license = { text = "MIT" }
-readme = "pyclingo/README.md"
+readme = "aspalchemy/README.md"
 requires-python = ">=3.14"
 authors = [{ name = "Jolyon Bloomfield", email = "jkb84@cornell.edu" }]
 dependencies = ["clingo>=5.8.0,<6"]
@@ -26,7 +26,7 @@ build-backend = "uv_build"
 [tool.uv.build-backend]
 module-root = ""
 # Internal docs and OS litter must not ship in the wheel
-source-exclude = ["pyclingo/CLAUDE.md", "**/.DS_Store"]
+source-exclude = ["aspalchemy/CLAUDE.md", "**/.DS_Store"]
 
 [tool.mypy]
 python_version = "3.14"
@@ -38,10 +38,10 @@ check_untyped_defs = true
 disallow_untyped_decorators = true
 no_implicit_optional = true
 strict_optional = true
-files = ["pyclingo", "aspuzzle", "tests", "solveit.py"]
+files = ["aspalchemy", "aspuzzle", "tests", "solveit.py"]
 
 [tool.pyright]
-include = ["pyclingo", "aspuzzle", "tests", "solveit.py"]
+include = ["aspalchemy", "aspuzzle", "tests", "solveit.py"]
 
 [tool.ruff]
 line-length = 120
@@ -60,11 +60,11 @@ fixable = ["ALL"]
 "aspuzzle/solvers/base.py" = ["B027"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["pyclingo", "aspuzzle"]
+known-first-party = ["aspalchemy", "aspuzzle"]
 section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests", "pyclingo"]
+testpaths = ["tests", "aspalchemy"]
 addopts = "--doctest-modules"
 markers = [
     "allow_invalid_render: opt this test out of the suite-wide render parse-check (for tests exercising invalid-program error handling)",
@@ -73,10 +73,10 @@ python_files = "test_*.py"
 python_functions = "test_*"
 
 [tool.coverage.run]
-source = ["pyclingo"]
+source = ["aspalchemy"]
 
 [tool.coverage.report]
-# Line coverage of pyclingo must be total. Genuinely unexecutable lines are
+# Line coverage of aspalchemy must be total. Genuinely unexecutable lines are
 # excluded here (not with scattered pragmas): abstract-method bodies that
 # subclasses always override, and type-checking-only imports.
 exclude_also = [
