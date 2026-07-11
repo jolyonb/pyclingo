@@ -210,10 +210,11 @@ def test_part_directives_in_comments_and_scripts_are_inert() -> None:
     program.raw_asp('#script (python)\ntext = "#program fake."\n#end.')
     program.raw_asp("p_inert(4). % a trailing comment mentioning #program, no newline")
     assert "p_inert(1)." in program.render()
-    # An unterminated #script swallows the rest of the scan (gringo itself
-    # rejects the block at parse, so the scan need not judge its interior)
+    # An unterminated #script is rejected outright: self-containment is
+    # enforced, so the scan never has to judge a dangling interior
     throwaway = ASPProgram()
-    throwaway.raw_asp("#script (python)\n#program fake.")
+    with pytest.raises(ValueError, match="opens a #script block that never closes"):
+        throwaway.raw_asp("#script (python)\n#program fake.")
 
 
 def test_external_rejected_with_teaching() -> None:
@@ -312,11 +313,10 @@ def test_script_end_matches_gringo_token_grammar() -> None:
     with pytest.raises(ValueError, match="#external"):
         program.raw_asp("#script (python)\ns = '#end'\n#end .\n#external q.", predicates=[P])
     # #end followed by a comment that never ends is NOT a terminator: the
-    # block is held as an unterminated script (accepted here — gringo
-    # rejects the block itself, loudly, at ground)
+    # script is unterminated, and self-containment rejects the block
     program = ASPProgram()
-    program.raw_asp("#script (python)\nx=1\n#end %never closed", predicates=[])
-    assert len(program.segments[0]) == 1  # accepted as a raw element
+    with pytest.raises(ValueError, match="never closes"):
+        program.raw_asp("#script (python)\nx=1\n#end %never closed", predicates=[])
 
 
 def test_annotate_notes_resume_after_whitespace_terminated_script() -> None:
@@ -359,3 +359,37 @@ def test_const_rejected_in_raw_text_with_teaching() -> None:
         program.raw_asp("#const n = 5.\nq(n).")
     # ...but only as a DIRECTIVE: the token inside comments and strings is text
     program.raw_asp('% #const in a comment is fine\np_rawconst("#const").', predicates=[])
+
+
+def test_unterminated_constructs_rejected_for_self_containment() -> None:
+    # gringo lexes the whole program as ONE stream: a construct left open in
+    # one raw block would carry lexical state into whatever renders after it.
+    # Every raw block must therefore be lexically self-contained.
+    program = ASPProgram()
+    with pytest.raises(ValueError, match=r"opens a %\* block comment that never closes"):
+        program.raw_asp("%* never closed\np(1).")
+    with pytest.raises(ValueError, match=r"opens a %\* block comment that never closes"):
+        program.raw_asp("%* outer %* inner *% still open\np(1).")  # nesting counts
+    with pytest.raises(ValueError, match=r"opens a #script block that never closes"):
+        program.raw_asp("#script (python)\nx = 1\n")
+    # Closed constructs of every kind stay legal
+    P = Predicate.define("p_selfcont", ["x"])
+    program.raw_asp("%* closed\nacross lines *%\np_selfcont(1).", predicates=[P])
+    program.raw_asp("#script (python)\nx = 1\n#end.")
+    assert "p_selfcont(1)." in program.render()
+
+
+def test_cross_block_comment_smuggling_is_dead() -> None:
+    # The SE-m1 reproduction: an unterminated %* in block one used to make
+    # the per-block scanner blind to directives in block two (gringo's
+    # single-stream lexer would still be inside the comment — or worse,
+    # a *% in block two would END it, letting a #const reach the grounder).
+    # Self-containment kills the staging step itself.
+    program = ASPProgram()
+    with pytest.raises(ValueError, match="never closes"):
+        program.raw_asp("size(3). %* open")
+    # Block two never gets a corrupted context to exploit: scanned fresh
+    # (at code depth, an orphan *% is just star-then-line-comment, same as
+    # gringo), its directive is caught
+    with pytest.raises(ValueError, match="#const"):
+        program.raw_asp("*%\n#const n = 5. size(n).")

@@ -170,8 +170,7 @@ def test_public_signatures_speak_exported_names() -> None:
 def test_the_old_package_name_is_gone() -> None:
     # The 2026-07 rename: the package is aspalchemy. Its old name must not
     # regrow anywhere in the tracked tree — source, tests, docs, configs,
-    # generated scripts. uv.lock is machine-generated (exempt); temp/ is
-    # untracked audit history and exempts itself.
+    # generated scripts. uv.lock is machine-generated (exempt).
     repo = Path(__file__).resolve().parents[2]
     tracked = subprocess.run(
         ["git", "ls-files"], capture_output=True, text=True, check=True, cwd=repo

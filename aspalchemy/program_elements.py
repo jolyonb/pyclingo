@@ -129,18 +129,31 @@ def _script_end(text: str, start: int) -> int | None:
     return None
 
 
-def _scan_asp_text(text: str) -> tuple[str | None, list[tuple[int, int]]]:
+@dataclass(frozen=True)
+class _ScanResult:
+    directive: str | None  # the first unsupported directive, or None
+    script_spans: list[tuple[int, int]]  # [start, end) of every #script block
+    unterminated: str | None  # a construct left open at end of text, or None
+
+
+def _scan_asp_text(text: str) -> _ScanResult:
     """
-    One character-level scan of ASP text, two products: the first
-    #program/#include/#external/#const directive (or None), and the [start, end)
+    One character-level scan of ASP text, three products: the first
+    #program/#include/#external/#const directive (or None), the [start, end)
     span of every #script block — both judged outside string literals and
-    comments. The first two directives restructure the program itself
-    (parts, files), which a single-base-part grounding cannot honor;
+    comments — and whether the text ends inside an unterminated block
+    comment or #script. The first two directives restructure the program
+    itself (parts, files), which a single-base-part grounding cannot honor;
     #external declares atoms whose truth is set through an API no aspalchemy
     verb speaks. Script spans let the annotator keep its notes out of
     embedded source. Block comments NEST in gringo (see Comment), so only
     depth 0 is code; a character scan is required because a line can close
     a comment and resume code, and % may sit inside a string.
+
+    The scan is PER BLOCK, but gringo lexes the whole program as one
+    stream — an unterminated construct would carry lexical state into
+    whatever follows this block. raw_asp() therefore rejects unterminated
+    verdicts: every raw block must be lexically self-contained.
     """
     directive: str | None = None
     spans: list[tuple[int, int]] = []
@@ -174,10 +187,10 @@ def _scan_asp_text(text: str) -> tuple[str | None, list[tuple[int, int]]]:
         elif text.startswith("#script", i):
             end = _script_end(text, i)
             if end is None:
-                # Unterminated script: gringo rejects the block itself, and
-                # it swallows the rest of the scan either way
+                # Unterminated script: it swallows the rest of the scan, and
+                # raw_asp() rejects the block (self-containment)
                 spans.append((i, n))
-                break
+                return _ScanResult(directive, spans, "#script block")
             spans.append((i, end))
             i = end
         elif directive is None and text.startswith("#program", i):
@@ -194,17 +207,12 @@ def _scan_asp_text(text: str) -> tuple[str | None, list[tuple[int, int]]]:
             i += len("#const")
         else:
             i += 1
-    return directive, spans
-
-
-def _find_unsupported_directive(text: str) -> str | None:
-    """The first #program/#include/#external/#const directive outside strings, comments, and #script blocks."""
-    return _scan_asp_text(text)[0]
+    return _ScanResult(directive, spans, "%* block comment" if depth else None)
 
 
 def script_spans(text: str) -> list[tuple[int, int]]:
     """The [start, end) character span of every #script block, judged outside strings and comments."""
-    return _scan_asp_text(text)[1]
+    return _scan_asp_text(text).script_spans
 
 
 class RawASP(ProgramElement):
@@ -242,7 +250,15 @@ class RawASP(ProgramElement):
             raise ValueError(
                 "raw_asp() text cannot contain NUL: clingo silently truncates the program at the first NUL byte"
             )
-        if directive := _find_unsupported_directive(self.text):
+        scan = _scan_asp_text(self.text)
+        if scan.unterminated is not None:
+            raise ValueError(
+                f"raw_asp() text opens a {scan.unterminated} that never closes: every raw "
+                f"block must be lexically self-contained. gringo reads the whole program as "
+                f"ONE stream, so an unclosed construct would silently swallow everything "
+                f"rendered after this block. Close it within the block."
+            )
+        if directive := scan.directive:
             if directive == "#const":
                 raise ValueError(
                     "raw_asp() text contains #const — register it with define_constant() "
