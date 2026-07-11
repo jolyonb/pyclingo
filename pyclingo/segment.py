@@ -7,15 +7,16 @@ verbs delegate to its default segment. fact() adds grounded atoms;
 choose() adds a bare choice rule. when(*conditions) holds the
 conditions and completes
 with exactly one closer, which adds the conditions as the rule body:
-derive (a rule head — an atom or a choice), require (a comparison the
-body must satisfy), forbid (extra body literals that must not all
-hold), or penalize (the same as a weak constraint). forbid, require,
-and penalize also exist as flat verbs with no conditions.
+derive (a rule head — an atom or a choice), choose (a choice head,
+named), require (a comparison the body must satisfy), forbid (extra
+body literals that must not all hold), or penalize (the same as a weak
+constraint). forbid, require, and penalize also exist as flat verbs
+with no conditions.
 
-Some verbs are readability sugar over forbid: require(cmp) is
-forbid(cmp.inverse()), and when(*conds).forbid(*extra) renders
-identically to flat forbid(*conds, *extra) — the split just names which
-part is the situation and which is the violation.
+Some verbs are readability sugar: require(cmp) is forbid(cmp.inverse()),
+when(*conds).forbid(*extra) renders identically to flat
+forbid(*conds, *extra), and when(*conds).choose(c) is derive(c) — each
+split just names what the statement means.
 """
 
 from collections.abc import Iterator, Mapping, Sequence
@@ -169,7 +170,7 @@ class Segment:
         Add a bare choice rule: "{ elements } bounds." with no body — the
         solver freely picks which elements hold, within the bounds.
         Element variables are local to their conditions. A choice under
-        conditions is spelled when(*conditions).derive(choice).
+        conditions is spelled when(*conditions).choose(choice).
         """
         if isinstance(choice, Predicate):
             raise TypeError(
@@ -184,8 +185,8 @@ class Segment:
     def when(self, *conditions: Term) -> When:
         """
         Hold the conditions as a rule body, to be completed by exactly one
-        of .derive/.require/.forbid/.penalize. Returns a pending context; a
-        when() left unclosed fails at render.
+        of .derive/.choose/.require/.forbid/.penalize. Returns a pending
+        context; a when() left unclosed fails at render.
         """
         if not conditions:
             raise ValueError(
@@ -407,7 +408,7 @@ class Segment:
             )
             raise ValueError(
                 f"Segment '{self._name}' has incomplete when() statements: {listing}. "
-                f"Complete each with .derive/.require/.forbid/.penalize."
+                f"Complete each with .derive/.choose/.require/.forbid/.penalize."
             )
 
     def collect_predicate_occurrences(self) -> set[PredicateOccurrence]:
@@ -428,7 +429,7 @@ class Segment:
 class When:
     """
     The pending context returned by when(): conditions awaiting a closer.
-    Exactly one of derive, require, forbid, or penalize completes it, using
+    Exactly one of derive, choose, require, forbid, or penalize completes it, using
     the conditions as the rule body; completing it twice raises, and a When
     left incomplete (no closer ever ran) fails the render.
 
@@ -506,6 +507,22 @@ class When:
             self._guard()
             rule = Rule(head=head, body=list(self._conditions), check_singletons=self._segment._check_singletons)
             self._complete("derive", rule)
+
+    def choose(self, choice: Choice) -> None:
+        """
+        Add a choice rule under the conditions: "{ elements } bounds :-
+        conditions." — the conditional twin of Segment.choose(). Readability
+        sugar for derive(choice); a choice is a legal rule head.
+        """
+        with self._unregister_on_error():
+            if not isinstance(choice, Choice):
+                raise TypeError(
+                    f"when(...).choose() takes a Choice, got {type(choice).__name__}; "
+                    f"for a non-choice head use .derive()"
+                )
+            self._guard()
+            rule = Rule(head=choice, body=list(self._conditions), check_singletons=self._segment._check_singletons)
+            self._complete("choose", rule)
 
     def require(self, comparison: Comparison) -> None:
         """

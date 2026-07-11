@@ -244,3 +244,18 @@ def test_conditioned_element_collect_variables_targets_and_conditions() -> None:
     Q = Predicate.define("q", ["x"])
     X, Y = Variable("X"), Variable("Y")
     assert Choice(P(x=X), condition=Q(x=Y)).collect_variables() == {"X", "Y"}
+
+
+def test_when_choose_is_the_conditional_choice_spelling() -> None:
+    # when(...).choose(c) and when(...).derive(c) are one statement; the
+    # verb names it, as require does for forbid
+    P = Predicate.define("p_wc", ["x"])
+    Q = Predicate.define("q_wc", ["x"])
+    X = Variable("X")
+    named = ASPProgram()
+    named.when(Q(x=X)).choose(Choice(P(x=X)).exactly(1))
+    general = ASPProgram()
+    general.when(Q(x=X)).derive(Choice(P(x=X)).exactly(1))
+    assert named.render() == general.render()
+    with pytest.raises(TypeError, match=r"choose\(\) takes a Choice, got p_wc.*\.derive\(\)"):
+        ASPProgram().when(Q(x=1)).choose(P(x=1))  # type: ignore[arg-type]

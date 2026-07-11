@@ -12,6 +12,8 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from pyclingo.clingo_handler import ClingoMessage
+    from pyclingo.core import DefaultNegation
+    from pyclingo.predicate import Predicate
 
 
 class PyClingoError(Exception):
@@ -41,9 +43,25 @@ class GroundingError(PyClingoError):
 
 class UnsatisfiableError(PyClingoError):
     """
-    The program has no answer set, raised where an answer was required.
-    The one exception reporting an OUTCOME rather than a mistake: catch
-    it to branch on UNSAT, or use a verb that reports UNSAT without
-    raising (solve() yields no models; cautious(), brave(), and
-    optimize() return None).
+    The program has no answer set, raised where an answer was required:
+    first() and the eager verbs (cautious, brave, optimize). The one
+    exception reporting an OUTCOME rather than a mistake — catch it to
+    branch on UNSAT, or use a stream, which never raises it: solve() and
+    the _iter twins report UNSAT by yielding nothing (check .satisfiable
+    or .exhausted on the handle).
+
+    Carries the search's evidence: .unsat_core is the conflicting
+    assumptions in the shapes they were given (() when UNSAT needed no
+    assumptions; None when the raising verb had no core to report), and
+    .messages is the solve's structured ClingoMessage tuple.
     """
+
+    def __init__(
+        self,
+        message: str,
+        unsat_core: tuple[Predicate | DefaultNegation, ...] | None = None,
+        messages: Sequence[ClingoMessage] = (),
+    ) -> None:
+        super().__init__(message)
+        self.unsat_core = unsat_core
+        self.messages = tuple(messages)

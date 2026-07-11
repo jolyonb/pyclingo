@@ -19,6 +19,7 @@ from pyclingo import (
     Count,
     Predicate,
     RangePool,
+    UnsatisfiableError,
     Variable,
 )
 
@@ -62,7 +63,6 @@ def test_cautious_finds_forced_atoms() -> None:
     program = build()
     program.when(Color(x=ANY)).derive(Forced())
     result = program.cautious()
-    assert result is not None
     assert len(result.atoms(Forced)) == 1
 
 
@@ -71,7 +71,6 @@ def test_path_keeps_the_receipts() -> None:
     # (not Models, not Consequences); path[0] is in fact an answer set —
     # for brave, a subset of the union with at least one atom
     result = build().brave()
-    assert result is not None
     assert len(result.path) >= 2  # the union is no single answer set
     assert all(type(entry) is AtomCollection for entry in result.path)
     first = {a["x"].value for a in result.path[0].atoms(Color)}
@@ -108,27 +107,31 @@ def test_bound_landing_on_the_last_step_is_still_incomplete() -> None:
     # Completeness is a proof, not a coincidence: cap exactly at the natural
     # step count and the result still reports incomplete
     unbounded = build().brave()
-    assert unbounded is not None and unbounded.complete
+    assert unbounded.complete
     capped = build().brave(max_iterations=len(unbounded.path))
-    assert capped is not None
     assert not capped.complete
     assert {a["x"].value for a in capped.atoms(Color)} == {1, 2, 3}  # same atoms, weaker claim
 
 
-def test_unsat_returns_none() -> None:
+def test_unsat_raises_with_evidence() -> None:
+    # The eager verbs raise on UNSAT (streams report by yielding nothing);
+    # no assumptions were involved, so the core is the empty tuple
     P = Predicate.define("p_unsat_c", [])
     program = ASPProgram()
     program.fact(P())
     program.forbid(P())
-    assert program.cautious() is None
-    assert program.brave() is None
+    with pytest.raises(UnsatisfiableError, match=r"cautious\(\) found no answer sets") as caught:
+        program.cautious()
+    assert caught.value.unsat_core == ()
+    assert caught.value.messages == ()
+    with pytest.raises(UnsatisfiableError, match=r"brave\(\) found no answer sets"):
+        program.brave()
 
 
 def test_consequences_respect_show_config() -> None:
     # Dom is hidden: trivially in every answer set, absent from the result —
     # and asking for it teaches instead of returning a silent []
     result = build().brave()
-    assert result is not None
     assert all(type(atom) is not Dom for atom in result.atoms())
     with pytest.raises(ValueError, match=r"dom/1 is hidden.*show\(\) the class"):
         result.atoms(Dom)
@@ -140,9 +143,9 @@ def test_grounding_answers_many_questions() -> None:
     grounded = build().ground()
     assert len(list(grounded.solve())) == 5
     cautious = grounded.cautious()
-    assert cautious is not None and cautious.atoms(Color) == []
+    assert cautious.atoms(Color) == []
     brave = grounded.brave()
-    assert brave is not None and len(brave.atoms(Color)) == 3
+    assert len(brave.atoms(Color)) == 3
     assert len(list(grounded.solve())) == 5
 
 
@@ -151,10 +154,9 @@ def test_consequences_under_assumptions() -> None:
     # and the assumption does not persist
     grounded = build().ground()
     result = grounded.cautious(assumptions=[Color(x=3)])
-    assert result is not None
     assert sorted(a["x"].value for a in result.atoms(Color)) == [3]
     unassumed = grounded.cautious()
-    assert unassumed is not None and unassumed.atoms(Color) == []
+    assert unassumed.atoms(Color) == []
 
 
 def test_sequential_guard_covers_consequences() -> None:
@@ -164,7 +166,7 @@ def test_sequential_guard_covers_consequences() -> None:
     with pytest.raises(RuntimeError, match="still open"):
         grounded.cautious()
     stream.close()
-    assert grounded.cautious() is not None
+    grounded.cautious()  # the grounding is free for the next search
 
 
 def test_optimizing_program_rejected() -> None:
@@ -207,17 +209,17 @@ def test_ignore_optimization_refines_over_all_answer_sets() -> None:
     program.raw_asp("#minimize{ 1,X : color(X) }.", predicates=[Color])
     grounded = program.ground()
     union = grounded.brave(ignore_optimization=True)
-    assert union is not None and union.complete
+    assert union.complete
     assert sorted(atom["x"].value for atom in union.atoms(Color)) == [1, 2, 3]
     forced = grounded.cautious(ignore_optimization=True)
-    assert forced is not None and forced.complete
+    assert forced.complete
     assert forced.atoms(Color) == []
     # The iterator twins take the flag too, and nothing leaks: a later
     # optimize() on the SAME grounding still optimizes
     steps = grounded.cautious_iter(ignore_optimization=True)
     assert list(steps)[-1].atoms(Color) == []
     best = grounded.optimize()
-    assert best is not None and best.cost == (1,)  # at_least(1) forces one color
+    assert best.cost == (1,)  # at_least(1) forces one color
     # And the flag still requires an objective to ignore
     with pytest.raises(ValueError, match="Nothing to ignore"):
         build().cautious(ignore_optimization=True)

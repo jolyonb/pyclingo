@@ -10,7 +10,7 @@ from pyclingo.clingo_handler import ClingoMessageHandler, LogLevel
 from pyclingo.conditional_literal import ConditionalLiteral
 from pyclingo.conditioned_element import ConditionType
 from pyclingo.core import Comparison, DefaultNegation, DefinedConstant, PredicateOccurrence, Term
-from pyclingo.exceptions import GroundingError
+from pyclingo.exceptions import GroundingError, UnsatisfiableError
 from pyclingo.optimization import OptimizationTermType, OptStrategy, WeakConstraint
 from pyclingo.predicate import NegatedSignature, Predicate
 from pyclingo.program_elements import RawASP, RenderedLine, Rule, script_spans
@@ -1041,7 +1041,7 @@ class ASPProgram:
         assumptions: Sequence[Predicate | DefaultNegation] | None = None,
         stop_on_log_level: LogLevel = LogLevel.INFO,
         ignore_optimization: bool = False,
-    ) -> CautiousConsequences | None:
+    ) -> CautiousConsequences:
         """
         The atoms true in every answer set; sugar for ground().cautious().
         See GroundedProgram.cautious(). For the stepwise cautious_iter()
@@ -1064,7 +1064,7 @@ class ASPProgram:
         assumptions: Sequence[Predicate | DefaultNegation] | None = None,
         stop_on_log_level: LogLevel = LogLevel.INFO,
         ignore_optimization: bool = False,
-    ) -> BraveConsequences | None:
+    ) -> BraveConsequences:
         """
         The atoms true in at least one answer set; sugar for
         ground().brave(). See GroundedProgram.brave(). For the stepwise
@@ -1089,7 +1089,7 @@ class ASPProgram:
         bound: int | Mapping[int, int] | None = None,
         assumptions: Sequence[Predicate | DefaultNegation] | None = None,
         stop_on_log_level: LogLevel = LogLevel.INFO,
-    ) -> Optimum | None:
+    ) -> Optimum:
         """
         The best answer set by the objectives; sugar for
         ground().optimize(). See GroundedProgram.optimize(). For the
@@ -1455,13 +1455,13 @@ class GroundedProgram:
         max_iterations: int = 0,
         assumptions: Sequence[Predicate | DefaultNegation] | None = None,
         ignore_optimization: bool = False,
-    ) -> CautiousConsequences | None:
+    ) -> CautiousConsequences:
         """
         The atoms true in EVERY answer set (the intersection) — "which cells
         are forced" is this question. Eager sugar over cautious_iter().
-        Returns None if the program is unsatisfiable. To learn WHICH
-        assumptions conflicted, use the iterator twin: exhaust
-        cautious_iter(assumptions=...) and read unsat_core off the handle.
+        Raises UnsatisfiableError if the program has no answer set — the
+        error carries unsat_core (which assumptions conflicted) and the
+        solve's messages.
 
         timeout (seconds) and max_iterations (refinement steps) each bound
         the work, 0 meaning unbounded; a bounded run returns an INCOMPLETE
@@ -1484,13 +1484,13 @@ class GroundedProgram:
         max_iterations: int = 0,
         assumptions: Sequence[Predicate | DefaultNegation] | None = None,
         ignore_optimization: bool = False,
-    ) -> BraveConsequences | None:
+    ) -> BraveConsequences:
         """
         The atoms true in AT LEAST ONE answer set (the union) — "which cells
         are possible" is this question. Eager sugar over brave_iter().
-        Returns None if the program is unsatisfiable. To learn WHICH
-        assumptions conflicted, use the iterator twin: exhaust
-        brave_iter(assumptions=...) and read unsat_core off the handle.
+        Raises UnsatisfiableError if the program has no answer set — the
+        error carries unsat_core (which assumptions conflicted) and the
+        solve's messages.
 
         timeout (seconds) and max_iterations (refinement steps) each bound
         the work, 0 meaning unbounded; a bounded run returns an INCOMPLETE
@@ -1532,8 +1532,9 @@ class GroundedProgram:
         tuple lexicographically against the applied bounds, not tier by
         tier. An APPLIED bound changes what comes back when it bites:
         only models at or below it are considered, so a too-tight bound
-        is reported as unsatisfiable (None) — clasp cannot tell the
-        difference. A maximization's bound lives in NEGATED-cost space
+        is reported as unsatisfiable (an empty stream here; the eager
+        optimize() raises) — clasp cannot tell the difference.
+        A maximization's bound lives in NEGATED-cost space
         like everything else about its cost: to accept totals of at
         least 9, pass bound=-9.
         """
@@ -1623,15 +1624,14 @@ class GroundedProgram:
         strategy: OptStrategy = OptStrategy.BB,
         all_optima: bool = False,
         bound: int | Mapping[int, int] | None = None,
-    ) -> Optimum | None:
+    ) -> Optimum:
         """
         The best answer set by the program's objectives. Eager sugar over
-        optimize_iter(). Returns None if the program is unsatisfiable —
-        or, with bound=, if no model exists within the bound (clasp
-        reports the two identically). To learn WHICH assumptions
-        conflicted, use the iterator twin: exhaust
-        optimize_iter(assumptions=...) and read unsat_core off the
-        handle. strategy selects clasp's algorithm
+        optimize_iter(). Raises UnsatisfiableError if the program is
+        unsatisfiable — or, with bound=, if no model exists within the
+        bound (clasp reports the two identically); the error carries
+        unsat_core (which assumptions conflicted) and the solve's
+        messages. strategy selects clasp's algorithm
         (see OptStrategy: USC can be night-and-day faster when branch and
         bound stalls).
 
@@ -1665,7 +1665,13 @@ class GroundedProgram:
         if not path:
             # A timeout before any model raised from the iteration itself;
             # reaching here empty-handed means the search exhausted
-            return None  # unsatisfiable (or nothing within the bound)
+            raise UnsatisfiableError(
+                "optimize() found no model: the program is unsatisfiable — or, "
+                "with bound=, nothing exists within the bound (clasp reports "
+                "the two identically).",
+                unsat_core=steps.unsat_core,
+                messages=steps.messages,
+            )
         certified = [model for model in path if model.proven]
         best = certified[0] if certified else path[-1]
         return Optimum(
@@ -1694,7 +1700,7 @@ class GroundedProgram:
         max_iterations: int,
         assumptions: Sequence[Predicate | DefaultNegation] | None,
         ignore_optimization: bool = False,
-    ) -> C | None:
+    ) -> C:
         """
         The shared fold under cautious()/brave(): consume the steps
         primitive, honoring the bounds, and build the injected result
@@ -1702,7 +1708,7 @@ class GroundedProgram:
         (the last is the headline answer) and its complete is True only
         when the refinement PROVED exhaustion (False whenever a bound cut
         it short, including a cap landing exactly on the final step).
-        Returns None for proven unsatisfiability.
+        Raises UnsatisfiableError for proven unsatisfiability.
         """
         _validate_max_iterations(max_iterations)
         steps = self._refine_iter(mode, timeout, assumptions, ignore_optimization)
@@ -1727,7 +1733,12 @@ class GroundedProgram:
         finally:
             steps.close()
         if not path and complete:
-            return None  # proved unsatisfiable: no answer sets to ask about
+            # Proved unsatisfiable: no answer sets to ask about
+            raise UnsatisfiableError(
+                f"{mode.value}() found no answer sets: the program is unsatisfiable.",
+                unsat_core=steps.unsat_core,
+                messages=steps.messages,
+            )
         return result_class(
             atoms=list(path[-1].atoms()) if path else [],
             path=tuple(path),

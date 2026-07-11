@@ -23,6 +23,7 @@ from pyclingo import (
     Segment,
     SolveResult,
     String,
+    UnsatisfiableError,
     Variable,
 )
 from pyclingo.clingo_handler import ClingoMessageHandler, LogLevel
@@ -313,7 +314,7 @@ def test_penalize_detected_as_optimizing() -> None:
     with pytest.raises(ValueError, match=r"optimize\(\)"):
         program.solve()
     result = program.optimize()
-    assert result is not None and result.proven
+    assert result.proven
     assert result.cost == (1,)
 
 
@@ -462,7 +463,7 @@ def test_penalize_accepts_aggregate_comparisons() -> None:
     program.penalize(Count(X, condition=Pick(x=X)) >= 2, terms=[])
     assert ":~ #count{ X : pick(X) } >= 2. [1]" in program.render()
     result = program.optimize()
-    assert result is not None and result.proven
+    assert result.proven
     assert result.cost == (0,)  # the optimum picks at most one, dodging the charge
     assert len(result.atoms(Pick)) <= 1
 
@@ -501,7 +502,7 @@ def test_penalize_accepts_conditional_literals() -> None:
     )
     assert ":~ covered_wc(X) : cell_wc(X), covered_wc(X); covered_wc(1). [1]" in program.render()
     result = program.optimize()
-    assert result is not None and result.proven
+    assert result.proven
     assert result.cost == (0,)  # skip covering everything (or cell 1) and pay nothing
 
 
@@ -527,7 +528,7 @@ def test_bound_type_validated() -> None:
         grounded.optimize(bound={0: "cheap"})  # type: ignore[dict-item]
     # An empty mapping states "no bounds", exactly like None — not an error
     unbounded = grounded.optimize(bound={})
-    assert unbounded is not None and unbounded.proven
+    assert unbounded.proven
 
 
 def test_raw_optimization_gets_ground_truth_guarding_too() -> None:
@@ -540,11 +541,12 @@ def test_raw_optimization_gets_ground_truth_guarding_too() -> None:
         return program
 
     hinted = build_raw().ground().optimize(bound={0: 1, 2: 0})  # 2 ignored
-    assert hinted is not None and [m.cost for m in hinted.path] == [(1,)]
+    assert [m.cost for m in hinted.path] == [(1,)]
     pruned = build_raw().ground().optimize(bound=1)
-    assert pruned is not None and pruned.proven
+    assert pruned.proven
     assert [m.cost for m in pruned.path] == [(1,)]  # the bound pruned the search
-    assert build_raw().ground().optimize(bound=0) is None  # hard ceiling applied
+    with pytest.raises(UnsatisfiableError):
+        build_raw().ground().optimize(bound=0)  # hard ceiling applied
 
 
 def test_oversized_bound_rejected_with_range() -> None:
@@ -607,16 +609,16 @@ def test_vanished_tier_bound_keys_drop_silently() -> None:
     grounded = program.ground()
     assert grounded.optimization_levels == (1,)  # tier 2 vanished
     dead_key = grounded.optimize(bound={2: 0, 1: 5})  # dead tier 2: ignored
-    assert dead_key is not None and dead_key.cost == (1,)
+    assert dead_key.cost == (1,)
     # Naming only the survivor is the same hint
     informed = grounded.optimize(bound={1: 5})
-    assert informed is not None and informed.proven
+    assert informed.proven
     assert informed.cost == (1,)
     # A bare int works here: exactly one tier survived
-    assert grounded.optimize(bound=5) is not None
+    grounded.optimize(bound=5)
     # Without bounds the program is still perfectly optimizable
     result = grounded.optimize()
-    assert result is not None and result.proven
+    assert result.proven
     assert result.cost == (1,)  # ONE entry: the cost tuple follows ground levels
 
 
@@ -646,7 +648,7 @@ def test_observer_catches_every_optimization_spelling() -> None:
         with pytest.raises(ValueError, match=r"optimize\(\)"):
             grounded.solve()
         result = grounded.optimize()
-        assert result is not None and result.proven, raw
+        assert result.proven, raw
 
 
 def test_penalize_weight_rejects_bare_python_type() -> None:

@@ -20,6 +20,7 @@ from pyclingo import (
     RangePool,
     SignatureGrounding,
     SourceLocation,
+    UnsatisfiableError,
     Variable,
 )
 from pyclingo.solver import GroundedProgram
@@ -326,9 +327,9 @@ def test_sugar_verbs_take_assumptions() -> None:
     models = list(program.solve(assumptions=[P(x=2)]))
     assert models and all(any(a["x"].value == 2 for a in m.atoms(P)) for m in models)
     cautious = program.cautious(assumptions=[P(x=2)])
-    assert cautious is not None and P(x=2) in cautious.atoms(P)
+    assert P(x=2) in cautious.atoms(P)
     brave = program.brave(assumptions=[~P(x=1)])
-    assert brave is not None and P(x=1) not in brave.atoms(P)
+    assert P(x=1) not in brave.atoms(P)
 
     optimizing = ASPProgram()
     Q = Predicate.define("q_sugar_asm", ["x"])
@@ -336,7 +337,7 @@ def test_sugar_verbs_take_assumptions() -> None:
     optimizing.choose(Choice(Q(x=RangePool(1, 3))).at_least(1))
     optimizing.minimize(X, condition=Q(x=X))
     best = optimizing.optimize(assumptions=[Q(x=3)])
-    assert best is not None and best.cost == (3,)  # q(3) forced in; the rest minimized away
+    assert best.cost == (3,)  # q(3) forced in; the rest minimized away
 
 
 class _Doubler:
@@ -487,18 +488,21 @@ def test_unsat_core_keeps_the_negated_shape() -> None:
     assert core[0].render() == "not q_core_neg(1)"
 
 
-def test_unsat_core_reachable_through_the_iterator_twins() -> None:
-    # The eager verbs return bare None on UNSAT; the documented route to
-    # the core is their _iter twin's handle. Pin it on a refinement twin
+def test_unsat_core_rides_the_eager_raise_and_the_iterator_handle() -> None:
+    # Two routes to the core, one truth: the eager verb raises with it
+    # attached, and the _iter twin's handle carries it after exhaustion
     # (the core-mapping terminal is shared by every mode)
     program = ASPProgram()
     P = Predicate.define("p_core_iter", ["x"])
     program.choose(Choice(P(x=RangePool(1, 3))))
     program.forbid(P(x=1), P(x=2))
     grounded = program.ground()
-    assert grounded.cautious(assumptions=[P(x=1), P(x=2)]) is None  # the eager verb: None, no core
+    with pytest.raises(UnsatisfiableError) as caught:
+        grounded.cautious(assumptions=[P(x=1), P(x=2)])
+    assert caught.value.unsat_core is not None
+    assert {atom.render() for atom in caught.value.unsat_core} == {"p_core_iter(1)", "p_core_iter(2)"}
     steps = grounded.cautious_iter(assumptions=[P(x=1), P(x=2)])
-    assert list(steps) == []  # zero approximations: UNSAT
+    assert list(steps) == []  # zero approximations: UNSAT — streams never raise
     core = steps.unsat_core
     assert core is not None
     assert {atom.render() for atom in core} == {"p_core_iter(1)", "p_core_iter(2)"}

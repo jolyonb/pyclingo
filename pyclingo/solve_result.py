@@ -631,7 +631,9 @@ class SolveResult(Search):
         raise UnsatisfiableError(
             "first() found no model: the program is unsatisfiable. If UNSAT is "
             "an expected outcome here, use next(iter(result), None), which "
-            "returns None when there is no model instead of raising."
+            "returns None when there is no model instead of raising.",
+            unsat_core=self.unsat_core,
+            messages=self.messages,
         )
 
 
