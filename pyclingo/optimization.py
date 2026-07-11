@@ -35,15 +35,12 @@ from pyclingo.core import (
     negated_literal_value,
     require_int32,
 )
-from pyclingo.predicate import Predicate, coerce_tuple_term
+from pyclingo.predicate import Predicate, TupleTermType, coerce_tuple_term
 from pyclingo.program_elements import ProgramElement, render_body_terms
 from pyclingo.scoping import body_global_variables
 
-# What may be aggregated over: the same universe as aggregate tuple terms
-type OptimizationTermType = int | str | Value | Expression | Predicate
 
-
-def _validated_weight(weight: int | OptimizationTermType, noun: str) -> Value | Expression:
+def _validated_weight(weight: int | TupleTermType, noun: str) -> Value | Expression:
     """The weight rules both constructs share; the noun keeps each error's spelling."""
     if isinstance(weight, int):
         weight = Number(weight)
@@ -90,8 +87,8 @@ class WeakConstraint(ProgramElement):
     def __init__(
         self,
         conditions: tuple[Term, ...],
-        weight: int | OptimizationTermType,
-        terms: tuple[OptimizationTermType, ...] | None,
+        weight: int | TupleTermType,
+        terms: tuple[TupleTermType, ...] | None,
         priority: int,
     ) -> None:
         weight = _validated_weight(weight, "Weak-constraint")
@@ -228,8 +225,8 @@ class OptimizationDirective(ProgramElement):
     def __init__(
         self,
         optimization: Optimization,
-        weight: int | OptimizationTermType,
-        terms: tuple[OptimizationTermType, ...],
+        weight: int | TupleTermType,
+        terms: tuple[TupleTermType, ...],
         condition: ConditionType | list[ConditionType] | None,
         priority: int,
     ) -> None:

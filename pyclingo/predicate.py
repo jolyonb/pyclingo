@@ -31,7 +31,9 @@ type PredicateField = int | str | Value | Predicate | Expression | Pool
 # The Term view of a stored field: primitives are wrapped by read_as_term,
 # so int/str never appear here (unlike PredicateField, the write union)
 type FieldAsTermType = Value | Predicate | Expression | Pool
-type PredicateClassType = type[Predicate]
+# The tuple-term universe shared by aggregates, #minimize/#maximize, and weak
+# constraints — exactly coerce_tuple_term's domain
+type TupleTermType = int | str | Value | Expression | Predicate
 
 # Serializes in_namespace()'s clone creation: racing callers must agree on
 # one clone class per (base, namespace)

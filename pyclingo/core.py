@@ -27,14 +27,14 @@ if TYPE_CHECKING:
     # Annotation-only upward reference (scoping.py holds another):
     # collect_predicates returns predicate classes, but core cannot import
     # predicate at runtime
-    from pyclingo.predicate import Predicate, PredicateClassType
+    from pyclingo.predicate import Predicate
 
 
 # One occurrence of a predicate class: (class, classically negated, is_atom).
 # is_atom marks whether it occurs as an atom (a statement, which can be true
 # or false) or as an argument (data nested inside another predicate);
 # Term.collect_predicate_occurrences decides that role.
-type PredicateOccurrence = tuple[PredicateClassType, bool, bool]
+type PredicateOccurrence = tuple[type[Predicate], bool, bool]
 
 # Type aliases for the operator cluster
 type ExpressionFieldType = Value | Expression | int
@@ -129,7 +129,7 @@ class Term(ABC):
         """
         return set()
 
-    def collect_predicates(self) -> set[PredicateClassType]:
+    def collect_predicates(self) -> set[type[Predicate]]:
         """All Predicate classes used in this term."""
         return {predicate for predicate, _negated, _is_atom in self.collect_predicate_occurrences(as_argument=False)}
 
@@ -1111,7 +1111,7 @@ class Expression(ComparableTerm, ArithmeticOps):
         raise TypeError(f"Cannot convert {type(value).__name__} to an ASP term")  # pragma: no cover
 
     @property
-    def first_term(self) -> ValueExpressionType | None:
+    def first_term(self) -> Value | Expression | None:
         """The left term; None for unary operations."""
         return self._first_term
 
@@ -1120,7 +1120,7 @@ class Expression(ComparableTerm, ArithmeticOps):
         return self._operator
 
     @property
-    def second_term(self) -> ValueExpressionType:
+    def second_term(self) -> Value | Expression:
         return self._second_term
 
     @property
@@ -1602,7 +1602,7 @@ def Not(term: Negatable) -> DefaultNegation | Comparison:
     return DefaultNegation(term)
 
 
-def Compl(term: ExpressionFieldType) -> Expression:
+def Compl(term: Value | Expression | int) -> Expression:
     """
     Builds a bitwise-complement expression, rendered ~term.
 

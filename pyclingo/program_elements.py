@@ -1,16 +1,13 @@
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, ClassVar
+from typing import ClassVar
 
 from pyclingo.conditional_literal import ConditionalLiteral
 from pyclingo.core import PredicateOccurrence, Term
 from pyclingo.predicate import NegatedSignature, Predicate
 from pyclingo.scoping import validate_rule
 from pyclingo.source_location import SourceLocation
-
-if TYPE_CHECKING:
-    from pyclingo.predicate import PredicateClassType
 
 
 class ProgramElement(ABC):
@@ -230,7 +227,7 @@ class RawASP(ProgramElement):
     -p/n." is emitted (P for positive, -P for negative).
     """
 
-    def __init__(self, text: str, predicates: Sequence[PredicateClassType | NegatedSignature] = ()):
+    def __init__(self, text: str, predicates: Sequence[type[Predicate] | NegatedSignature] = ()):
         if not isinstance(text, str):
             raise TypeError(f"raw_asp() text must be a string, got {type(text).__name__}")
         # A subclass converts to its natural plain str first: what the scan

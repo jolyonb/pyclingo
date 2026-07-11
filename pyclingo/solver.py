@@ -11,7 +11,7 @@ from pyclingo.conditional_literal import ConditionalLiteral
 from pyclingo.conditioned_element import ConditionType
 from pyclingo.core import Comparison, DefaultNegation, DefinedConstant, Pool, PredicateOccurrence, Term, require_int32
 from pyclingo.exceptions import GroundingError, UnsatisfiableError
-from pyclingo.optimization import OptimizationTermType, OptStrategy, WeakConstraint
+from pyclingo.optimization import OptStrategy, TupleTermType, WeakConstraint
 from pyclingo.predicate import NegatedSignature, Predicate
 from pyclingo.program_elements import RawASP, RenderedLine, Rule, script_spans
 from pyclingo.scoping import validate_rule
@@ -448,8 +448,8 @@ class ASPProgram:
 
     def minimize(
         self,
-        weight: int | OptimizationTermType,
-        *terms: OptimizationTermType,
+        weight: int | TupleTermType,
+        *terms: TupleTermType,
         condition: ConditionType | list[ConditionType] | None = None,
         priority: int = 0,
     ) -> None:
@@ -458,8 +458,8 @@ class ASPProgram:
 
     def maximize(
         self,
-        weight: int | OptimizationTermType,
-        *terms: OptimizationTermType,
+        weight: int | TupleTermType,
+        *terms: TupleTermType,
         condition: ConditionType | list[ConditionType] | None = None,
         priority: int = 0,
     ) -> None:
@@ -469,8 +469,8 @@ class ASPProgram:
     def penalize(
         self,
         *conditions: Term,
-        weight: int | OptimizationTermType = 1,
-        terms: Sequence[OptimizationTermType] | None = None,
+        weight: int | TupleTermType = 1,
+        terms: Sequence[TupleTermType] | None = None,
         priority: int = 0,
     ) -> None:
         """Charge for each match of the conditions, in the default segment; see Segment.penalize()."""

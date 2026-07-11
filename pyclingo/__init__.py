@@ -11,10 +11,10 @@ from .aggregates import (
     Sum,
     SumPlus,
 )
-from .choice import Choice
+from .choice import CardinalityType, Choice
 from .clingo_handler import ClingoMessage, LogLevel
 from .conditional_literal import ConditionalLiteral
-from .conditioned_element import ConditionType
+from .conditioned_element import ConditionedElement, ConditionType
 from .core import (
     ANY,
     INF,
@@ -35,6 +35,7 @@ from .core import (
     Pool,
     PredicateOccurrence,
     RangePool,
+    RenderingContext,
     String,
     Supremum,
     Term,
@@ -46,8 +47,8 @@ from .core import (
 )
 from .exceptions import GroundingError, PyClingoError, UnsatisfiableError
 from .operators import ComparisonOperator, Operation
-from .optimization import OptimizationTermType, OptStrategy
-from .predicate import Field, FieldAsTermType, NegatedSignature, Predicate, PredicateField
+from .optimization import OptStrategy
+from .predicate import Field, FieldAsTermType, NegatedSignature, Predicate, PredicateField, TupleTermType
 from .program_elements import ProgramElement, RenderedLine
 from .segment import Segment, When
 from .solve_result import (
@@ -59,6 +60,7 @@ from .solve_result import (
     Model,
     OptimizeSteps,
     Optimum,
+    PredicateTypes,
     RefinementSteps,
     Search,
     SolveResult,
@@ -135,7 +137,10 @@ __all__ = [  # noqa: RUF022 (categorized deliberately, not sorted)
     # Hierarchy types: these appear in public signatures and return types —
     # annotate with them; you rarely construct them directly
     "ConditionType",
-    "OptimizationTermType",
+    "ConditionedElement",
+    "TupleTermType",
+    "CardinalityType",
+    "PredicateTypes",
     "FieldAsTermType",
     "PredicateOccurrence",
     "Term",
@@ -149,6 +154,7 @@ __all__ = [  # noqa: RUF022 (categorized deliberately, not sorted)
     "Comparison",
     "ComparisonOperator",
     "Operation",
+    "RenderingContext",
     "DefaultNegation",
     "DefinedConstant",
     "Aggregate",

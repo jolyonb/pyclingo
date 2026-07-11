@@ -15,7 +15,6 @@ from pyclingo.core import (
 )
 from pyclingo.predicate import Predicate
 
-type ChoiceElementType = Predicate
 type CardinalityType = int | Value | Expression
 
 
@@ -42,7 +41,7 @@ class Choice(FreezableBuilder, Term):
 
     def __init__(
         self,
-        element: ChoiceElementType,
+        element: Predicate,
         condition: ConditionType | list[ConditionType] | None = None,
     ):
         """
@@ -61,7 +60,7 @@ class Choice(FreezableBuilder, Term):
 
     def add(
         self,
-        element: ChoiceElementType,
+        element: Predicate,
         condition: ConditionType | list[ConditionType] | None = None,
     ) -> Self:
         """

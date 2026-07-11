@@ -5,16 +5,12 @@ from typing import ClassVar, Self
 from pyclingo.conditioned_element import ConditionedElement, ConditionType, FreezableBuilder
 from pyclingo.core import (
     AggregateBase,
-    Expression,
     ExtremeConstant,
     PredicateOccurrence,
     RenderingContext,
     String,
-    Value,
 )
-from pyclingo.predicate import Predicate, coerce_tuple_term
-
-type AggregateElementType = int | str | Value | Expression | Predicate
+from pyclingo.predicate import Predicate, TupleTermType, coerce_tuple_term
 
 
 class AggregateType(StrEnum):
@@ -48,7 +44,7 @@ class Aggregate(FreezableBuilder, AggregateBase, ABC):
 
     def __init__(
         self,
-        element: AggregateElementType | tuple[AggregateElementType, ...],
+        element: TupleTermType | tuple[TupleTermType, ...],
         condition: ConditionType | list[ConditionType] | None = None,
     ):
         """
@@ -64,7 +60,7 @@ class Aggregate(FreezableBuilder, AggregateBase, ABC):
 
     def add(
         self,
-        element: AggregateElementType | tuple[AggregateElementType, ...],
+        element: TupleTermType | tuple[TupleTermType, ...],
         condition: ConditionType | list[ConditionType] | None = None,
     ) -> Self:
         """

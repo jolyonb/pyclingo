@@ -14,6 +14,7 @@ module top, of any module, not just intra-package ones.
 """
 
 import ast
+import re
 from pathlib import Path
 
 import pyclingo
@@ -114,3 +115,52 @@ def test_every_export_resolves() -> None:
     # either direction only surfaces on `from pyclingo import *` otherwise
     for name in pyclingo.__all__:
         assert hasattr(pyclingo, name), f"__all__ names {name}, but pyclingo does not provide it"
+
+
+def _package_defined_names() -> set[str]:
+    """Every class and type-alias name defined at the top level of any package module."""
+    names: set[str] = set()
+    for path in sorted(PACKAGE_DIR.glob("*.py")):
+        tree = ast.parse(path.read_text())
+        for node in tree.body:
+            if isinstance(node, ast.ClassDef):
+                names.add(node.name)
+            elif isinstance(node, ast.TypeAlias) and isinstance(node.name, ast.Name):
+                names.add(node.name.id)
+    return names
+
+
+def test_public_signatures_speak_exported_names() -> None:
+    # The export rule, as a machine invariant instead of a review finding:
+    # every package-defined type mentioned in a PUBLIC signature or return
+    # annotation of an exported name must itself be exported — otherwise
+    # users import it from a private module path, which freezes as de facto
+    # API the day the package ships. Checked statically (annotations are
+    # never evaluated, so TYPE_CHECKING-only names are fine).
+    package_names = _package_defined_names()
+    exported = set(pyclingo.__all__)
+    identifier = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+    violations: list[str] = []
+
+    def check_function(owner: str, func: ast.FunctionDef) -> None:
+        annotations = [arg.annotation for arg in [*func.args.posonlyargs, *func.args.args, *func.args.kwonlyargs]]
+        annotations.append(func.args.vararg.annotation if func.args.vararg else None)
+        annotations.append(func.returns)
+        for annotation in annotations:
+            if annotation is None:
+                continue
+            for name in identifier.findall(ast.unparse(annotation)):
+                if name in package_names and name not in exported:
+                    violations.append(f"{owner}.{func.name}: {name}")
+
+    for path in sorted(PACKAGE_DIR.glob("*.py")):
+        tree = ast.parse(path.read_text())
+        for node in tree.body:
+            if isinstance(node, ast.ClassDef) and node.name in exported:
+                for member in node.body:
+                    if isinstance(member, ast.FunctionDef) and not member.name.startswith("_"):
+                        check_function(node.name, member)
+            elif isinstance(node, ast.FunctionDef) and node.name in exported:
+                check_function(path.stem, node)
+
+    assert not violations, "unexported types in public signatures:\n" + "\n".join(sorted(set(violations)))

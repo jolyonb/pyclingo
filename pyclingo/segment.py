@@ -28,7 +28,7 @@ from pyclingo.core import Comparison, Pool, PredicateOccurrence, Term
 from pyclingo.optimization import (
     Optimization,
     OptimizationDirective,
-    OptimizationTermType,
+    TupleTermType,
     WeakConstraint,
 )
 from pyclingo.predicate import NegatedSignature, Predicate
@@ -39,8 +39,8 @@ from pyclingo.source_location import SourceLocation, capture_location
 
 def _build_weak_constraint(
     conditions: tuple[Term, ...],
-    weight: int | OptimizationTermType,
-    terms: Sequence[OptimizationTermType] | None,
+    weight: int | TupleTermType,
+    terms: Sequence[TupleTermType] | None,
     priority: int,
     check_singletons: bool,
 ) -> WeakConstraint:
@@ -221,8 +221,8 @@ class Segment:
     def penalize(
         self,
         *conditions: Term,
-        weight: int | OptimizationTermType = 1,
-        terms: Sequence[OptimizationTermType] | None = None,
+        weight: int | TupleTermType = 1,
+        terms: Sequence[TupleTermType] | None = None,
         priority: int = 0,
     ) -> None:
         """
@@ -250,8 +250,8 @@ class Segment:
 
     def minimize(
         self,
-        weight: int | OptimizationTermType,
-        *terms: OptimizationTermType,
+        weight: int | TupleTermType,
+        *terms: TupleTermType,
         condition: ConditionType | list[ConditionType] | None = None,
         priority: int = 0,
     ) -> None:
@@ -278,8 +278,8 @@ class Segment:
 
     def maximize(
         self,
-        weight: int | OptimizationTermType,
-        *terms: OptimizationTermType,
+        weight: int | TupleTermType,
+        *terms: TupleTermType,
         condition: ConditionType | list[ConditionType] | None = None,
         priority: int = 0,
     ) -> None:
@@ -294,8 +294,8 @@ class Segment:
     def _add_optimization(
         self,
         sense: Optimization,
-        weight: int | OptimizationTermType,
-        terms: tuple[OptimizationTermType, ...],
+        weight: int | TupleTermType,
+        terms: tuple[TupleTermType, ...],
         condition: ConditionType | list[ConditionType] | None,
         priority: int,
     ) -> None:
@@ -562,8 +562,8 @@ class When:
     def penalize(
         self,
         *violation: Term,
-        weight: int | OptimizationTermType = 1,
-        terms: Sequence[OptimizationTermType] | None = None,
+        weight: int | TupleTermType = 1,
+        terms: Sequence[TupleTermType] | None = None,
         priority: int = 0,
     ) -> None:
         """
