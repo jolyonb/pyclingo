@@ -614,9 +614,8 @@ class Number(ConstantBase):
         # bool subclasses int, and a boolean is never a valid ASP term
         if isinstance(value, bool) or not isinstance(value, int):
             raise TypeError(f"Number value must be an integer, got {type(value).__name__}")
-        # A subclass converts to its natural plain int first, so the checks
-        # below (and rendering) see exactly that value
-        value = int(value)
+        # value is a plain int here: _ValueMeta.__call__ normalizes subclass
+        # instances before construction (what is keyed is what is stored)
         require_int32(value, "Number value")
         self._value = value
 
@@ -650,10 +649,8 @@ class String(ConstantBase):
         """No double quotes, backslashes, or newlines (no escaping support); single quotes are fine."""
         if not isinstance(value, str):
             raise TypeError(f"String constant value must be a string, got {type(value).__name__}")
-        # A subclass converts to its natural plain str first (its __str__),
-        # so the content checks below see exactly the text that will render
-        value = str(value)
-
+        # value is a plain str here: _ValueMeta.__call__ normalizes subclass
+        # instances before construction (what is keyed is what is stored)
         if '"' in value:
             raise ValueError(f"String constant cannot contain double quotes (no escaping support): {value}")
         if "\\" in value or "\n" in value or "\r" in value or "\x00" in value:
@@ -1556,7 +1553,12 @@ class DefaultNegation(Negatable):
     def validate_in_context(self, is_in_head: bool) -> None:
         """Default negation is body-only: raises in heads."""
         if is_in_head:
-            raise ValueError("Default negation (not) cannot be used in rule heads")
+            raise ValueError(
+                "pyclingo does not model negated heads: gringo itself rewrites "
+                "'not p :- body' into a constraint before grounding — nothing is "
+                "derived. Spell the constraint directly: forbid(*body, p) (or "
+                "when(*body).forbid(p))."
+            )
 
     def __invert__(self) -> DefaultNegation:
         """~ on a negation negates again: a double survives, a triple collapses to a single (see DefaultNegation)."""

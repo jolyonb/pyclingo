@@ -19,7 +19,7 @@ from pyclingo import (
 )
 from pyclingo.clingo_handler import ClingoMessageHandler, LogLevel
 from pyclingo.solve_result import (
-    RefinementMode,
+    SearchMode,
     convert_predicate_to_symbol,
     convert_symbol_to_predicate,
 )
@@ -85,7 +85,7 @@ def test_refinement_over_optimizing_program_raises() -> None:
     ctl.add("base", [], "pick(1..2). #minimize{ 1,X : pick(X) }.")
     ctl.ground([("base", [])])
     handler = ClingoMessageHandler("", stop_on_level=LogLevel.CRITICAL)
-    steps = RefinementSteps(ctl, {("pick", 1): Pick}, 0, handler, [], mode=RefinementMode.CAUTIOUS)
+    steps = RefinementSteps(ctl, {("pick", 1): Pick}, 0, handler, [], mode=SearchMode.CAUTIOUS)
     with pytest.raises(ValueError, match="cost-descent path"):
         list(steps)
 
@@ -177,8 +177,10 @@ def test_first_on_unsatisfiable_raises_teaching() -> None:
     P = Predicate.define("p_first_unsat", ["x"])
     program.fact(P(x=1))
     program.forbid(P(x=1))
-    with pytest.raises(UnsatisfiableError, match=r"unsatisfiable.*next\(iter\(result\), None\)"):
+    with pytest.raises(UnsatisfiableError, match=r"unsatisfiable.*next\(iter\(result\), None\)") as caught:
         program.solve().first()
+    assert caught.value.unsat_core == ()  # the evidence rides the raise, per the house UNSAT rule
+    assert caught.value.messages == ()
     # An outcome, not a mistake: NOT a ValueError (a validation except
     # clause must never absorb UNSAT), rooted at pyclingo's own base
     assert not issubclass(UnsatisfiableError, ValueError)

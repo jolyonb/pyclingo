@@ -98,6 +98,11 @@ def test_cache_can_be_cleared() -> None:
         after = Variable("CacheProbe")
         assert after is not before  # identity resets across a clear
         assert Variable("CacheProbe") is after  # caching resumes
+        # The extreme singletons are documented to SURVIVE a clear (they
+        # are held strongly, outside the weak cache): identity reads like
+        # atom["v"] is SUP depend on it
+        assert Supremum() is SUP
+        assert Infimum() is INF
     finally:
         Value._cache.clear()
         Value._cache.update(snapshot)  # pre-clear residents are canonical again

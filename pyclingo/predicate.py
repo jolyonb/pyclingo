@@ -23,7 +23,7 @@ from pyclingo.core import (
     Value,
     Variable,
 )
-from pyclingo.source_location import SourceLocation, capture_location, capture_module
+from pyclingo.source_location import SourceLocation, capture_location, capture_origin
 
 # Type aliases. PredicateField is any argument a predicate accepts, and doubles
 # as the field annotation for class-syntax predicates
@@ -375,8 +375,8 @@ class Predicate(PredicateBase, Negatable, metaclass=_PredicateMeta):
                 # Attribute to the caller, not types.new_class's frame: the
                 # location AND the module (unfixed, __module__ blames the
                 # class-creation machinery in every repr and pickle error)
-                clone._defined_at = capture_location()
-                if (module := capture_module()) is not None:
+                clone._defined_at, module = capture_origin()
+                if module is not None:
                     clone.__module__ = module
                 clones[namespace] = clone
         return cast(type[Self], clone)
@@ -459,8 +459,8 @@ class Predicate(PredicateBase, Negatable, metaclass=_PredicateMeta):
         # Attribute to the caller, not types.new_class's frame: the location
         # AND the module (unfixed, __module__ blames the class-creation
         # machinery in every repr and pickle error)
-        new_class._defined_at = capture_location()
-        if (module := capture_module()) is not None:
+        new_class._defined_at, module = capture_origin()
+        if module is not None:
             new_class.__module__ = module
         return cast(type[Self], new_class)
 

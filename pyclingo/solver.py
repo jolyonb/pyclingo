@@ -17,7 +17,6 @@ from pyclingo.program_elements import ProgramElement, RawASP, RenderedLine, Rule
 from pyclingo.scoping import validate_rule
 from pyclingo.segment import Segment, When
 from pyclingo.solve_result import (
-    OPTIMIZE,
     AtomCollection,
     BraveConsequences,
     CautiousConsequences,
@@ -25,7 +24,6 @@ from pyclingo.solve_result import (
     CostedModel,
     OptimizeSteps,
     Optimum,
-    RefinementMode,
     RefinementSteps,
     Search,
     SearchMode,
@@ -363,12 +361,15 @@ class ASPProgram:
             )
         return self._segments[key]
 
+    def _segment_listing(self) -> str:
+        """The existing segment names, quoted, for KeyError messages ("none" when empty)."""
+        return ", ".join(f"'{name}'" for name in self._segments) or "none"
+
     def _existing_segment_key(self, segment: str) -> str:
         """The validated name of an existing segment; KeyError names the existing ones."""
         key = Segment.validate_name(segment)
         if key not in self._segments:
-            existing = ", ".join(f"'{name}'" for name in self._segments) or "none"
-            raise KeyError(f"Segment '{segment}' does not exist; existing segments: {existing}")
+            raise KeyError(f"Segment '{segment}' does not exist; existing segments: {self._segment_listing()}")
         return key
 
     def __getitem__(self, segment: str) -> Segment:
@@ -396,10 +397,9 @@ class ASPProgram:
                 f"names are never rebound — construct the Segment with the name you mean"
             )
         if key not in self._segments:
-            existing = ", ".join(f"'{name}'" for name in self._segments) or "none"
             raise KeyError(
                 f"Segment '{key}' does not exist, and assignment only replaces — "
-                f"create segments with add_segment(). Existing segments: {existing}"
+                f"create segments with add_segment(). Existing segments: {self._segment_listing()}"
             )
         self._segments[key] = value
 
@@ -533,7 +533,9 @@ class ASPProgram:
         with N = Predicate.define("n", []) renders "#const dir = n.".
 
         Raises:
-            ValueError: If the name is invalid or already defined.
+            TypeError: If the name or value has the wrong type.
+            ValueError: If the name is invalid or already defined, or the
+                value fails its content checks.
         """
         if not isinstance(name, str):
             raise TypeError(f"Constant name must be a string, got {type(name).__name__}")
@@ -1376,13 +1378,13 @@ class GroundedProgram:
         _validate_flag(ignore_optimization, "ignore_optimization")
         if ignore_optimization and not self._ground_levels:
             raise ValueError("Nothing to ignore: this program has no #minimize/#maximize. Call the function plainly.")
-        if self._ground_levels and mode is None and not ignore_optimization:
+        if self._ground_levels and mode is SearchMode.ENUMERATE and not ignore_optimization:
             raise ValueError(
                 "This program optimizes (#minimize/#maximize present). Solve it "
                 "with optimize(), or pass ignore_optimization=True to enumerate "
                 "answer sets as if there were no objective."
             )
-        if self._ground_levels and isinstance(mode, RefinementMode) and not ignore_optimization:
+        if self._ground_levels and mode.is_refinement and not ignore_optimization:
             raise ValueError(
                 f"{mode.value} consequences over an optimizing program are computed "
                 f"against the solver's cost-descent path, not the set of answer "
@@ -1390,7 +1392,7 @@ class GroundedProgram:
                 f"sets as if there were no objective, or remove the optimization "
                 f"directive."
             )
-        if mode == OPTIMIZE and not self._ground_levels:
+        if mode is SearchMode.OPTIMIZE and not self._ground_levels:
             raise ValueError(
                 "Nothing to optimize: this program has no #minimize/#maximize. "
                 "Add minimize()/maximize() to state an objective, or enumerate "
@@ -1408,11 +1410,11 @@ class GroundedProgram:
         # another thread. Ordering also reports the blocking problem first:
         # a bad assumption is not fixable while the previous solve is open
         converted = self._convert_assumptions(assumptions) if assumptions else None
-        self._message_handler.messages.clear()
+        self._message_handler.clear_window()
         solve_config = self._control.configuration.solve
         assert isinstance(solve_config, clingo.Configuration)
         solve_config.models = 0
-        solve_config.enum_mode = mode.value if isinstance(mode, RefinementMode) else "auto"
+        solve_config.enum_mode = mode.value if mode.is_refinement else "auto"
         if ignore_optimization:
             # Stated here; optimize_iter states its own opt_mode on every
             # entry, so an ignore never leaks into a later optimize
@@ -1469,7 +1471,7 @@ class GroundedProgram:
                 this flag raises instead of passing vacuously.
         """
         with self._solve_lock:
-            converted = self._begin_solve(None, timeout, assumptions, ignore_optimization)
+            converted = self._begin_solve(SearchMode.ENUMERATE, timeout, assumptions, ignore_optimization)
             self._active = result = SolveResult(
                 self._control,
                 self._predicate_types,
@@ -1496,7 +1498,7 @@ class GroundedProgram:
         RefinementSteps for the full contract; ignore_optimization as on
         cautious().
         """
-        return self._refine_iter(RefinementMode.CAUTIOUS, timeout, assumptions, ignore_optimization)
+        return self._refine_iter(SearchMode.CAUTIOUS, timeout, assumptions, ignore_optimization)
 
     def brave_iter(
         self,
@@ -1512,11 +1514,11 @@ class GroundedProgram:
         RefinementSteps for the full contract; ignore_optimization as on
         brave().
         """
-        return self._refine_iter(RefinementMode.BRAVE, timeout, assumptions, ignore_optimization)
+        return self._refine_iter(SearchMode.BRAVE, timeout, assumptions, ignore_optimization)
 
     def _refine_iter(
         self,
-        mode: RefinementMode,
+        mode: SearchMode,
         timeout: float = 0,
         assumptions: Sequence[Predicate | DefaultNegation] | None = None,
         ignore_optimization: bool = False,
@@ -1560,7 +1562,7 @@ class GroundedProgram:
         an objective to ignore, like solve()'s.
         """
         return self._refine_eagerly(
-            RefinementMode.CAUTIOUS, CautiousConsequences, timeout, max_iterations, assumptions, ignore_optimization
+            SearchMode.CAUTIOUS, CautiousConsequences, timeout, max_iterations, assumptions, ignore_optimization
         )
 
     def brave(
@@ -1584,7 +1586,7 @@ class GroundedProgram:
         optimizes, unless ignore_optimization=True (see cautious()).
         """
         return self._refine_eagerly(
-            RefinementMode.BRAVE, BraveConsequences, timeout, max_iterations, assumptions, ignore_optimization
+            SearchMode.BRAVE, BraveConsequences, timeout, max_iterations, assumptions, ignore_optimization
         )
 
     def optimize_iter(
@@ -1627,60 +1629,48 @@ class GroundedProgram:
         _validate_flag(all_optima, "all_optima")
         items, bound = _validate_bound(bound)
         with self._solve_lock:
-            return self._locked_optimize_iter(timeout, assumptions, strategy, all_optima, items, bound)
-
-    def _locked_optimize_iter(
-        self,
-        timeout: float,
-        assumptions: Sequence[Predicate | DefaultNegation] | None,
-        strategy: OptStrategy,
-        all_optima: bool,
-        items: Mapping[int, int] | None,
-        bound: int | Mapping[int, int] | None,
-    ) -> OptimizeSteps:
-        """The body of optimize_iter, under the sequential-solve lock."""
-        converted = self._begin_solve(OPTIMIZE, timeout, assumptions)
-        bounds: list[int] = []
-        if items is not None:
-            # A bound is a pruning hint, not a semantic constraint: the
-            # optimum is the same with or without it. So keys are applied
-            # best-effort against gringo's surviving levels — the longest
-            # leading prefix they cover (clasp bounds are positional from
-            # the highest tier) — and everything else drops silently:
-            # a key on a dead tier, a typo, or an inexpressible trailing
-            # bound costs search time, never correctness
-            for level in self._ground_levels:
-                if level not in items:
-                    break
-                bounds.append(items[level])
-        elif isinstance(bound, int):
-            # A bare int is only unambiguous when exactly one tier survived
-            if len(self._ground_levels) != 1:
-                raise ValueError(
-                    f"a bare int bound is ambiguous here (surviving tiers "
-                    f"{list(self._ground_levels)}); name the tier: bound={{priority: value}}."
-                )
-            bounds = [bound]
-        solve_config = self._control.configuration.solve
-        assert isinstance(solve_config, clingo.Configuration)
-        # Stated on every entry: optN re-emits certified optima after the
-        # proof; a bound rides along as clasp's initial cost ceiling
-        opt_mode = "optN" if all_optima else "opt"
-        if bounds:
-            opt_mode += "," + ",".join(str(b) for b in bounds)
-        solve_config.opt_mode = opt_mode
-        solver_config = self._control.configuration.solver
-        assert isinstance(solver_config, clingo.Configuration)
-        # Stated on every entry, like enum_mode: the strategy is per-solve
-        solver_config.opt_strategy = strategy.value
-        self._active = steps = OptimizeSteps(
-            self._control,
-            self._predicate_types,
-            timeout,
-            self._message_handler,
-            converted,
-            hidden_classes=self._hidden_classes,
-        )
+            converted = self._begin_solve(SearchMode.OPTIMIZE, timeout, assumptions)
+            bounds: list[int] = []
+            if items is not None:
+                # A bound is a pruning hint, not a semantic constraint: the
+                # optimum is the same with or without it. So keys are applied
+                # best-effort against gringo's surviving levels — the longest
+                # leading prefix they cover (clasp bounds are positional from
+                # the highest tier) — and everything else drops silently:
+                # a key on a dead tier, a typo, or an inexpressible trailing
+                # bound costs search time, never correctness
+                for level in self._ground_levels:
+                    if level not in items:
+                        break
+                    bounds.append(items[level])
+            elif isinstance(bound, int):
+                # A bare int is only unambiguous when exactly one tier survived
+                if len(self._ground_levels) != 1:
+                    raise ValueError(
+                        f"a bare int bound is ambiguous here (surviving tiers "
+                        f"{list(self._ground_levels)}); name the tier: bound={{priority: value}}."
+                    )
+                bounds = [bound]
+            solve_config = self._control.configuration.solve
+            assert isinstance(solve_config, clingo.Configuration)
+            # Stated on every entry: optN re-emits certified optima after the
+            # proof; a bound rides along as clasp's initial cost ceiling
+            opt_mode = "optN" if all_optima else "opt"
+            if bounds:
+                opt_mode += "," + ",".join(str(b) for b in bounds)
+            solve_config.opt_mode = opt_mode
+            solver_config = self._control.configuration.solver
+            assert isinstance(solver_config, clingo.Configuration)
+            # Stated on every entry, like enum_mode: the strategy is per-solve
+            solver_config.opt_strategy = strategy.value
+            self._active = steps = OptimizeSteps(
+                self._control,
+                self._predicate_types,
+                timeout,
+                self._message_handler,
+                converted,
+                hidden_classes=self._hidden_classes,
+            )
         return steps
 
     def optimize(
@@ -1733,9 +1723,10 @@ class GroundedProgram:
             # A timeout before any model raised from the iteration itself;
             # reaching here empty-handed means the search exhausted
             raise UnsatisfiableError(
-                "optimize() found no model: the program is unsatisfiable — or, "
-                "with bound=, nothing exists within the bound (clasp reports "
-                "the two identically).",
+                "optimize() found no model: the program is unsatisfiable."
+                if bound is None
+                else "optimize() found no model: the program is unsatisfiable — or "
+                "nothing exists within the bound (clasp reports the two identically).",
                 unsat_core=steps.unsat_core,
                 messages=steps.messages,
             )
@@ -1761,7 +1752,7 @@ class GroundedProgram:
 
     def _refine_eagerly[C: Consequences](
         self,
-        mode: RefinementMode,
+        mode: SearchMode,
         result_class: type[C],
         timeout: float,
         max_iterations: int,
@@ -1791,7 +1782,7 @@ class GroundedProgram:
             else:
                 complete = steps.exhausted
         except TimeoutError:
-            if mode is RefinementMode.CAUTIOUS and not path:
+            if mode is SearchMode.CAUTIOUS and not path:
                 raise TimeoutError(
                     "cautious refinement was interrupted before its first approximation; "
                     "with no models seen, its superset bound is every atom — nothing "

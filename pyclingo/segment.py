@@ -10,8 +10,8 @@ with exactly one closer, which adds the conditions as the rule body:
 derive (a rule head — an atom or a choice), choose (a choice head,
 named), require (a comparison the body must satisfy), forbid (extra
 body literals that must not all hold), or penalize (the same as a weak
-constraint). forbid, require, and penalize also exist as flat verbs
-with no conditions.
+constraint). choose, forbid, require, and penalize also exist as flat
+verbs, without a when() context; a flat derive is spelled fact().
 
 Some verbs are readability sugar: require(cmp) is forbid(cmp.inverse()),
 when(*conds).forbid(*extra) renders identically to flat

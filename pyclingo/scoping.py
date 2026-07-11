@@ -237,7 +237,11 @@ def _analyze_comparison(comparison: Comparison, scopes: RuleScopes) -> None:
     side_vars: list[frozenset[str]] = []
     for term in (comparison.left_term, comparison.right_term):
         if isinstance(term, Aggregate):
-            side_vars.append(frozenset(_analyze_aggregate(term, scopes)))
+            _analyze_aggregate(term, scopes)
+            # An aggregate exposes no variables globally: the empty side
+            # makes the binding edges below bind the OTHER side
+            # unconditionally
+            side_vars.append(frozenset())
         else:
             scopes.body_counts.update(_occurrences(term))
             side_vars.append(frozenset(_variables_of(term)))
@@ -250,27 +254,40 @@ def _analyze_comparison(comparison: Comparison, scopes: RuleScopes) -> None:
         scopes.equality_edges.append((side_vars[0], side_vars[1]))
 
 
-def _analyze_aggregate(aggregate: Aggregate, scopes: RuleScopes) -> set[str]:
+def _reject_anonymous_tuple_variable(target: Term, noun: str, tail: str, rule_text: Callable[[], str]) -> None:
     """
-    Analyze an aggregate's elements as local scopes. Returns the aggregate's
-    GLOBAL variables (those also occurring outside constructs are resolved
-    later; structurally, aggregates expose nothing globally themselves).
+    Reject '_' anywhere in an element-tuple term (gringo makes it unsafe).
+    noun and tail keep each caller's message byte-identical: the aggregate
+    and optimization callers add the distinctness sentence, the
+    weak-constraint caller does not.
+    """
+    if "_" in target.collect_variables():
+        raise ValueError(
+            f"The anonymous variable '_' cannot appear in {noun} (gringo makes it unsafe){tail}{rule_text()}"
+        )
+
+
+def _analyze_aggregate(aggregate: Aggregate, scopes: RuleScopes) -> None:
+    """
+    Analyze an aggregate's elements as local scopes. Structurally, an
+    aggregate exposes NO variables globally itself (element variables are
+    local; ones also occurring outside constructs are resolved later) —
+    the comparison walker relies on that invariant at its call site.
     """
     for element in aggregate.elements:
         scope = LocalScope(description=f"{aggregate._AGGREGATE_TYPE.value} element", is_aggregate_element=True)
         for target in element.targets:
-            if "_" in target.collect_variables():
-                raise ValueError(
-                    f"The anonymous variable '_' cannot appear in an aggregate tuple "
-                    f"(gringo makes it unsafe) — and the tuple defines distinctness, "
-                    f"so a don't-care there is meaningless. Name a condition variable "
-                    f"instead: {aggregate.render()}"
-                )
+            _reject_anonymous_tuple_variable(
+                target,
+                "an aggregate tuple",
+                " — and the tuple defines distinctness, so a don't-care there is "
+                "meaningless. Name a condition variable instead: ",
+                aggregate.render,
+            )
             scope.target_counts.update(_occurrences(target))
         for condition in element.conditions:
             _analyze_local_condition(condition, scope)
         scopes.local_scopes.append(scope)
-    return set()
 
 
 def _analyze_local_condition(condition: Term, scope: LocalScope) -> None:
@@ -424,12 +441,13 @@ def validate_optimization_element(
     _reject_ungrounded_pools([*element.targets, *element.conditions], "an optimization element", rule_text)
     scope = LocalScope(description="optimization element")
     for target in element.targets:
-        if "_" in target.collect_variables():
-            raise ValueError(
-                f"The anonymous variable '_' cannot appear in an optimization tuple "
-                f"(gringo makes it unsafe) — and the tuple defines distinctness, so a "
-                f"don't-care there is meaningless. Name a condition variable instead: {rule_text()}"
-            )
+        _reject_anonymous_tuple_variable(
+            target,
+            "an optimization tuple",
+            " — and the tuple defines distinctness, so a don't-care there is "
+            "meaningless. Name a condition variable instead: ",
+            rule_text,
+        )
         scope.target_counts.update(_occurrences(target))
     for condition in element.conditions:
         _analyze_local_condition(condition, scope)
@@ -555,11 +573,7 @@ def validate_weak_constraint(
     _reject_ungrounded_pools([*targets, *conditions], "a weak constraint", rule_text)
     scopes = analyze(None, conditions)
     for target in targets:
-        if "_" in target.collect_variables():
-            raise ValueError(
-                f"The anonymous variable '_' cannot appear in a weak-constraint "
-                f"tuple (gringo makes it unsafe): {rule_text()}"
-            )
+        _reject_anonymous_tuple_variable(target, "a weak-constraint tuple", ": ", rule_text)
         scopes.head_counts.update(_occurrences(target))
     _resolve_localities(scopes)
     _check_scopes(scopes, "weak constraint", rule_text, check_singletons)

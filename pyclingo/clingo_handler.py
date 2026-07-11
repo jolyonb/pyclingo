@@ -63,6 +63,15 @@ class ClingoMessageHandler:
         self._line_origins: Mapping[int, SourceLocation] = line_origins or {}
         self._highest_level: LogLevel | None = None
 
+    def clear_window(self) -> None:
+        """
+        Start a fresh message window (each solve clears the shared handler):
+        the list AND the running highest level reset together, so the
+        handler never reports a level no current message carries.
+        """
+        self.messages.clear()
+        self._highest_level = None
+
     def on_message(self, code: clingo.MessageCode, message: str) -> None:
         """Callback for Clingo messages."""
         # Location spans may be single-line (L:C-C) or multi-line (L:C-L:C).

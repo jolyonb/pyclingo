@@ -52,6 +52,20 @@ class FreezableBuilder:
             )
 
 
+def carries_aggregate_comparison(term: Term) -> bool:
+    """
+    Whether the term is a comparison with an aggregate side, however deep
+    under default negation — the one shape clingo cannot parse in condition
+    or conditional-literal-head position.
+    """
+    inner: Term = term
+    while isinstance(inner, DefaultNegation):
+        inner = inner.term
+    return isinstance(inner, Comparison) and any(
+        isinstance(side, AggregateBase) for side in (inner.left_term, inner.right_term)
+    )
+
+
 class ConditionedElement:
     """One "target(s) : conditions" element; immutable once constructed."""
 
@@ -81,12 +95,7 @@ class ConditionedElement:
                     f"A {construct} condition must be a Predicate, DefaultNegation, or Comparison, "
                     f"got {type(cond).__name__}"
                 )
-            inner: Term = cond
-            while isinstance(inner, DefaultNegation):
-                inner = inner.term
-            if isinstance(inner, Comparison) and any(
-                isinstance(term, AggregateBase) for term in (inner.left_term, inner.right_term)
-            ):
+            if carries_aggregate_comparison(cond):
                 raise ValueError(
                     f"Aggregates cannot appear inside {construct} conditions (clingo syntax "
                     f"error); compute the aggregate in a separate rule"

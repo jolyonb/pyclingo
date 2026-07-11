@@ -80,11 +80,24 @@ def test_ignore_optimization_requires_an_objective() -> None:
         program.ground().solve(ignore_optimization=True)
 
 
-def test_optimize_unsat_raises() -> None:
+def test_optimize_unsat_raises_with_evidence() -> None:
     program = build_knapsack()
     program.forbid(Pick(x=ANY))  # picking is mandatory and forbidden
-    with pytest.raises(UnsatisfiableError, match=r"optimize\(\) found no model"):
+    with pytest.raises(UnsatisfiableError, match=r"optimize\(\) found no model") as caught:
         program.optimize()
+    assert caught.value.unsat_core == ()  # no assumptions were needed
+    assert caught.value.messages == ()
+    # No bound was passed, so the message must not hedge about one
+    assert "bound" not in str(caught.value)
+
+
+def test_optimize_unsat_under_assumptions_carries_the_core() -> None:
+    grounded = build_knapsack().ground()
+    with pytest.raises(UnsatisfiableError) as caught:
+        grounded.optimize(assumptions=[Pick(x=1), ~Pick(x=1)])  # jointly impossible
+    core = caught.value.unsat_core
+    assert core is not None
+    assert {atom.render() for atom in core} == {"pick(1)", "not pick(1)"}
 
 
 def test_optimize_max_iterations_returns_best_so_far() -> None:

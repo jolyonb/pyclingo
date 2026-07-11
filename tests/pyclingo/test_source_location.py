@@ -23,7 +23,7 @@ from pyclingo import (
     register_skip_package,
 )
 from pyclingo import source_location as source_location_module
-from pyclingo.source_location import capture_location, capture_module
+from pyclingo.source_location import capture_location, capture_origin
 
 P = Predicate.define("p_loc", ["x"])
 
@@ -109,31 +109,32 @@ def test_capture_returns_none_when_every_frame_is_skipped(monkeypatch: pytest.Mo
     assert capture_location() is None
 
 
-def test_capture_module_names_the_calling_module() -> None:
-    # The module companion to capture_location: define()/in_namespace()
-    # stamp runtime-built classes with the first user frame's module
-    assert capture_module() == __name__
+def test_capture_origin_names_the_calling_module() -> None:
+    # One stack walk serves runtime class creation both halves: the
+    # location of the calling line and the module the class should claim
+    location, module = capture_origin()
+    assert module == __name__
+    assert location is not None and location.filename == __file__
 
 
-def test_capture_module_returns_none_when_every_frame_is_skipped(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_capture_origin_returns_nones_when_every_frame_is_skipped(monkeypatch: pytest.MonkeyPatch) -> None:
     packages: set[str] = {"pyclingo"}
     frame: FrameType | None = sys._getframe()
     while frame is not None:
         packages.add(frame.f_globals.get("__name__", "").partition(".")[0])
         frame = frame.f_back
     monkeypatch.setattr(source_location_module, "_skip_prefixes", packages)
-    assert capture_module() is None
+    location, module = capture_origin()
+    assert location is None and module is None
 
 
-def test_capture_module_without_a_module_name_returns_none() -> None:
-    # exec with hand-built globals lacking __name__: the frame counts as
-    # user code (nothing identifies it as plumbing) but names no module
-    result: list[str | None] = []
-    exec("result.append(capture_module())", {"capture_module": capture_module, "result": result})
-    assert result == [None]
-
-
-# ---- register_skip_package ----
+def test_capture_origin_without_a_module_name_returns_none_module() -> None:
+    # exec with hand-built globals: no usable __name__, but the location half still lands
+    result: list[tuple[object, object]] = []
+    exec("result.append(capture_origin())", {"capture_origin": capture_origin, "result": result})
+    location, module = result[0]
+    assert module is None
+    assert location is not None  # the location half still landed (the exec'd line)
 
 
 def test_register_skip_package_rejects_malformed_paths() -> None:

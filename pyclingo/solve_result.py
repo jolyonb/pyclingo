@@ -44,7 +44,7 @@ from collections.abc import Generator, Iterator, Sequence
 from contextlib import suppress
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any, Literal, Self, cast, overload
+from typing import Any, Self, cast, overload
 
 import clingo
 
@@ -59,22 +59,24 @@ from pyclingo.statistics import format_statistics_clingo_style
 type PredicateTypes = dict[tuple[str, int], type[Predicate]]
 
 
-# The search generator's full mode range: None enumerates models, a
-# RefinementMode refines consequences, OPTIMIZE descends a cost
-type SearchMode = RefinementMode | Literal["optimize"] | None
-OPTIMIZE: Literal["optimize"] = "optimize"
-
-
-class RefinementMode(StrEnum):
+class SearchMode(StrEnum):
     """
-    The two consequence refinements: BRAVE grows toward the union (atoms
-    true in at least one answer set), CAUTIOUS shrinks toward the
-    intersection (atoms true in every answer set). Values match clingo's
-    enum_mode configuration spellings.
+    The search generator's full mode range: ENUMERATE streams models,
+    BRAVE/CAUTIOUS refine consequences — BRAVE grows toward the union
+    (atoms true in at least one answer set), CAUTIOUS shrinks toward the
+    intersection (atoms true in every answer set) — and OPTIMIZE descends
+    a cost. The refinement values are clingo's enum_mode configuration
+    spellings.
     """
 
+    ENUMERATE = "auto"
     BRAVE = "brave"
     CAUTIOUS = "cautious"
+    OPTIMIZE = "optimize"
+
+    @property
+    def is_refinement(self) -> bool:
+        return self in (SearchMode.BRAVE, SearchMode.CAUTIOUS)
 
 
 class AtomCollection:
@@ -603,7 +605,13 @@ class SolveResult(Search):
         hidden_classes: frozenset[type[Predicate]] = frozenset(),
     ) -> None:
         super().__init__(
-            control, predicate_types, timeout, message_handler, assumptions, mode=None, hidden_classes=hidden_classes
+            control,
+            predicate_types,
+            timeout,
+            message_handler,
+            assumptions,
+            mode=SearchMode.ENUMERATE,
+            hidden_classes=hidden_classes,
         )
 
     @property
@@ -618,7 +626,7 @@ class SolveResult(Search):
 
     def __iter__(self) -> Iterator[Model]:
         self._guard_consumed("call solve() again for a fresh search")
-        # mode=None (enumeration) makes every emission a Model; the generator
+        # ENUMERATE mode makes every emission a Model; the generator
         # is typed by the shared element type, so this cast is the one honest seam
         return cast(Iterator[Model], self._iterator)
 
@@ -723,7 +731,7 @@ class OptimizeSteps(Search):
             timeout,
             message_handler,
             assumptions,
-            mode=OPTIMIZE,
+            mode=SearchMode.OPTIMIZE,
             hidden_classes=hidden_classes,
         )
 
@@ -763,8 +771,8 @@ def _search_generator(
     A free function rather than a handle method so that its frame never
     references the handle (see the module docstring).
     """
-    refining = isinstance(mode, RefinementMode)
-    optimizing = mode == OPTIMIZE
+    refining = mode.is_refinement
+    optimizing = mode is SearchMode.OPTIMIZE
     # The timeout clock starts here — at first iteration — not at the
     # originating call: time between constructing the handle and consuming
     # it belongs to the caller, and clingo does no work until we resume
@@ -912,7 +920,7 @@ def _search_generator(
             )
         raise TimeoutError(
             f"{mode} refinement did not finish within {timeout}s; approximations yielded "
-            f"so far form a {'superset' if mode is RefinementMode.CAUTIOUS else 'subset'} "
+            f"so far form a {'superset' if mode is SearchMode.CAUTIOUS else 'subset'} "
             f"bound on the true answer, not the answer."
         )
     if timed_out and state.emission_count == 0:

@@ -157,16 +157,20 @@ def capture_location() -> SourceLocation | None:
     return SourceLocation(frame.f_code.co_filename, frame.f_lineno) if frame is not None else None
 
 
-def capture_module() -> str | None:
+def capture_origin() -> tuple[SourceLocation | None, str | None]:
     """
-    The __name__ of the first non-plumbing stack frame outward, or None
-    when every frame is plumbing or the frame has no usable __name__ —
-    the module a runtime-built class should claim as its own, matching
-    where capture_location points. location_override() does not apply:
-    it carries a location, not a module.
+    The location AND the module __name__ of the first non-plumbing frame,
+    from ONE stack walk — for runtime class creation, which wants both of
+    the same frame (the module is what a runtime-built class claims as its
+    own, matching where the location points). The location honors
+    location_override(); the module never does (an override carries a
+    location, not a module). Either half is None when every frame is
+    plumbing or the frame has no usable __name__.
     """
     frame = _first_user_frame(sys._getframe(1))
-    if frame is None:
-        return None
-    name = frame.f_globals.get("__name__")
-    return name if isinstance(name, str) else None
+    override = _override.get()
+    location = override
+    if location is None and frame is not None:
+        location = SourceLocation(frame.f_code.co_filename, frame.f_lineno)
+    name = frame.f_globals.get("__name__") if frame is not None else None
+    return location, name if isinstance(name, str) else None

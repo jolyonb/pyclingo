@@ -355,13 +355,27 @@ def test_check_pending_raises_for_unclosed_when() -> None:
         program.render()
 
 
-def test_when_completing_twice_raises() -> None:
+@pytest.mark.parametrize("closer", ["derive", "choose", "require", "forbid", "penalize"])
+def test_when_completing_twice_raises(closer: str) -> None:
+    # Every closer must individually run the completed guard BEFORE building
+    # its element: one that lost the call would silently append a second
+    # statement while the segment stays green
     program = ASPProgram()
     X = Variable("X")
     w = program.when(P(x=X))
     w.derive(P(x=X))
+    (segment,) = program.segments
+    recorded = len(segment)
+    second_act = {
+        "derive": lambda: w.derive(P(x=X)),
+        "choose": lambda: w.choose(Choice(P(x=X))),
+        "require": lambda: w.require(X == 1),
+        "forbid": lambda: w.forbid(P(x=X)),
+        "penalize": lambda: w.penalize(P(x=X)),
+    }[closer]
     with pytest.raises(RuntimeError, match=r"already completed with \.derive\(\)"):
-        w.derive(P(x=X))
+        second_act()
+    assert len(segment) == recorded  # nothing was appended
 
 
 def test_when_derive_rejects_non_term_head() -> None:

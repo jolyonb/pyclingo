@@ -283,9 +283,9 @@ def test_expression_validate_in_context_raises() -> None:
 
 
 def test_default_negation_rejected_in_head() -> None:
-    """Default negation is body-only and raises when placed in a rule head."""
+    """A negated head is gringo sugar for a constraint; the error teaches the forbid spelling."""
     P = Predicate.define("p", ["a"])
-    with pytest.raises(ValueError, match="cannot be used in rule heads"):
+    with pytest.raises(ValueError, match=r"does not model negated heads.*forbid\(\*body, p\)"):
         Not(P(a=1)).validate_in_context(True)
 
 
