@@ -37,7 +37,7 @@ def test_runtime_built_classes_claim_the_callers_module() -> None:
 
 def test_runtime_built_atoms_refuse_pickle_with_teaching() -> None:
     # A define()/in_namespace() class cannot be found by name on import;
-    # its atoms wall loudly, teaching render()-based transport
+    # its atoms refuse loudly, teaching render()-based transport
     defined = Predicate.define("p_pkl", ["x"])
     with pytest.raises(TypeError, match=r"do not pickle.*render\(\)"):
         pickle.dumps(defined(x=1))

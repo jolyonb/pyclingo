@@ -2,6 +2,7 @@
 Tests for raw_asp: the verbatim-ASP escape hatch and its predicate seatbelt.
 """
 
+import clingo
 import pytest
 
 from pyclingo import ASPProgram, Predicate
@@ -296,7 +297,7 @@ def test_script_end_matches_gringo_token_grammar() -> None:
     # line comments, and block comments may sit between (probed: each
     # variant's error span ends exactly at the dot). The scanner must agree,
     # or a whitespace-terminated script swallows the rest of the block and
-    # #program/#include/#external smuggle past the wall.
+    # #program/#include/#external smuggle past the check.
     P = Predicate.define("p_endgram", ["x"])
     for end in ["#end.", "#end .", "#end\t.", "#end\n.", "#end %c\n.", "#end %* c *% ."]:
         program = ASPProgram()
@@ -329,3 +330,32 @@ def test_annotate_notes_resume_after_whitespace_terminated_script() -> None:
     annotated = program.render(annotate=True)
     (fact_line,) = [line for line in annotated.split("\n") if line.startswith("p_endnote(1).")]
     assert "% " in fact_line and ":" in fact_line  # the note survived
+
+
+class _Doubler:
+    @staticmethod
+    def double(x: clingo.Symbol) -> clingo.Symbol:
+        return clingo.Number(x.number * 2)
+
+
+def test_sugar_verbs_forward_the_grounding_context() -> None:
+    # @-functions used to lock users out of the whole sugar tier: only
+    # ground(context=...) accepted the context object
+    P = Predicate.define("p_ctx", ["x"])
+    program = ASPProgram()
+    program.raw_asp("p_ctx(@double(3)).", predicates=[P])
+    model = next(iter(program.solve(context=_Doubler())))
+    assert model.atoms(P) == [P(x=6)]
+    forced = program.cautious(context=_Doubler())
+    assert forced.atoms(P) == [P(x=6)]
+
+
+def test_const_rejected_in_raw_text_with_teaching() -> None:
+    # define_constant() is the ONE door for constants: a raw #const would
+    # bypass the const-vs-atom collision checks silently (split-brain probed
+    # in the round-5 audit), so the scanner rejects it like #program
+    program = ASPProgram()
+    with pytest.raises(ValueError, match=r"#const.*define_constant\(\)"):
+        program.raw_asp("#const n = 5.\nq(n).")
+    # ...but only as a DIRECTIVE: the token inside comments and strings is text
+    program.raw_asp('% #const in a comment is fine\np_rawconst("#const").', predicates=[])

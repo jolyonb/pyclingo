@@ -132,7 +132,7 @@ def _script_end(text: str, start: int) -> int | None:
 def _scan_asp_text(text: str) -> tuple[str | None, list[tuple[int, int]]]:
     """
     One character-level scan of ASP text, two products: the first
-    #program/#include/#external directive (or None), and the [start, end)
+    #program/#include/#external/#const directive (or None), and the [start, end)
     span of every #script block — both judged outside string literals and
     comments. The first two directives restructure the program itself
     (parts, files), which a single-base-part grounding cannot honor;
@@ -189,13 +189,16 @@ def _scan_asp_text(text: str) -> tuple[str | None, list[tuple[int, int]]]:
         elif directive is None and text.startswith("#external", i):
             directive = "#external"
             i += len("#external")
+        elif directive is None and text.startswith("#const", i):
+            directive = "#const"
+            i += len("#const")
         else:
             i += 1
     return directive, spans
 
 
 def _find_unsupported_directive(text: str) -> str | None:
-    """The first #program/#include/#external directive outside strings, comments, and #script blocks — or None."""
+    """The first #program/#include/#external/#const directive outside strings, comments, and #script blocks."""
     return _scan_asp_text(text)[0]
 
 
@@ -219,7 +222,9 @@ class RawASP(ProgramElement):
     one raises, naming hide() as the remedy. If a model contains
     an atom whose signature was never declared anywhere, solving fails
     loudly at that model. Constants registered via define_constant() are
-    always emitted, so raw text may use them freely.
+    always emitted, so raw text may use them freely — and registration is
+    the ONLY door: #const in raw text is rejected (the collision checks see
+    registered constants only).
 
     A declared class covers both signs for round-trip and the name-collision
     check, but emits only "#show p/n." for the positive sign. If the block
@@ -238,6 +243,12 @@ class RawASP(ProgramElement):
                 "raw_asp() text cannot contain NUL: clingo silently truncates the program at the first NUL byte"
             )
         if directive := _find_unsupported_directive(self.text):
+            if directive == "#const":
+                raise ValueError(
+                    "raw_asp() text contains #const — register it with define_constant() "
+                    "instead: registered constants are emitted for raw text to use, and the "
+                    "const-vs-atom collision checks only see registered ones."
+                )
             if directive == "#external":
                 raise ValueError(
                     "raw_asp() text contains #external, which pyclingo cannot honor: an "

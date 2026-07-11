@@ -100,7 +100,7 @@ def test_clingo_evaluates_rendered_tree_identically(
 
 def test_abs_builtin_builds_the_abs_expression() -> None:
     # abs(X) is |X|, exactly Abs(X) — the one Python spelling that was a
-    # stone wall while every sibling worked or taught
+    # hard stop while every sibling worked or taught
     X = Variable("X")
     assert abs(X).render() == "|X|"
     assert abs(X + 1).render() == "|X + 1|"
@@ -336,7 +336,7 @@ def test_deep_expression_chain_rejected_at_construction() -> None:
 
 
 def test_true_division_teaches_floordiv() -> None:
-    # / is the first division a Python user tries; the wall points at //
+    # / is the first division a Python user tries; the error points at //
     X = Variable("X")
     with pytest.raises(TypeError, match="clingo has no true division"):
         X / 2  # type: ignore[operator]

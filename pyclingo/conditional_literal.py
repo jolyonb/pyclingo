@@ -36,7 +36,7 @@ class ConditionalLiteral(Term):
         if isinstance(innermost, Comparison) and any(
             isinstance(side, AggregateBase) for side in (innermost.left_term, innermost.right_term)
         ):
-            # The same wall ConditionedElement raises for conditions
+            # The same rejection ConditionedElement raises for conditions
             raise ValueError(
                 "Aggregates cannot appear inside conditional literal heads (clingo "
                 "syntax error); compute the aggregate in a separate rule"

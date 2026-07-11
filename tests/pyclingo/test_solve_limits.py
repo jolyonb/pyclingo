@@ -291,8 +291,22 @@ def test_scalar_knobs_reject_lookalike_types() -> None:
         optimizing.ground().optimize(max_iterations=True)
 
 
+def test_bound_type_errors_fire_before_grounding() -> None:
+    # The program below cannot even render (dangling when); the bound's
+    # type/range checks must report first, like every other cheap knob
+    program = ASPProgram()
+    P = Predicate.define("p_cheap_bound", ["x"])
+    program.choose(Choice(P(x=1)))
+    program.minimize(1, condition=P(x=1))
+    program.when(P(x=1))  # deliberately left unclosed
+    with pytest.raises(TypeError, match="bound must be an int"):
+        program.optimize(bound="5")  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="64-bit cost range"):
+        program.optimize(bound=2**63)
+
+
 def test_enum_and_flag_knobs_reject_lookalikes() -> None:
-    # The same wall family for the non-scalar knobs: a str that happens to
+    # The same check family for the non-scalar knobs: a str that happens to
     # spell an enum value, a magic int threshold, and truthy non-bools all
     # crashed later (or silently worked) instead of teaching here
     program = make_choice_program(1)

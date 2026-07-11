@@ -5,7 +5,7 @@ analysis would otherwise never be caught), and every bad() case declares
 gringo's own verdict on the raw text — True pins the over-approximation
 contract (a safety rejection is a certain gringo rejection), False records
 a deliberate pyclingo-only rejection (the singleton lint, the
-aggregate-tuple-sharing lint, teaching walls on meaningless spellings, and
+aggregate-tuple-sharing lint, teaching errors on meaningless spellings, and
 the unbound-conditional-literal-head case, where gringo is laxer).
 """
 
@@ -384,7 +384,7 @@ def test_local_equality_edge_binds_aggregate_target() -> None:
 
 
 def test_anonymous_in_comparison_head_is_rejected() -> None:
-    # '_' inside a compound head operand still reaches the scoping wall;
+    # '_' inside a compound head operand still reaches the scoping check;
     # a BARE '_' operand never gets that far (rejected at construction)
     bad(X == R2(x=X, y=ANY), [Q(x=X)], "anonymous", gringo_rejects=True)
     with pytest.raises(ValueError, match="cannot be a comparison operand"):

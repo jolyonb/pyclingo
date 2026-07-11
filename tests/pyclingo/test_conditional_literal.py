@@ -81,7 +81,7 @@ def test_head_rejection_signposts_disjunction() -> None:
 
 
 def test_aggregate_bearing_comparison_heads_rejected() -> None:
-    # The same category error the condition slot already walls: gringo
+    # The same category error the condition slot already rejects: gringo
     # answers "#count{...} > 2 : q(Y)" with a bare "unexpected :" parse
     # error, so the head refuses at construction — Not-wrapped included
     P = Predicate.define("p_aggh", ["x"])

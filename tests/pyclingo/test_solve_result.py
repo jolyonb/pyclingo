@@ -249,7 +249,7 @@ def test_show_override_makes_a_hidden_class_readable() -> None:
 
 
 def test_hide_override_teaches_like_show_false() -> None:
-    # hide() of a default-shown class enters the same teaching wall
+    # hide() of a default-shown class enters the same teaching error
     P = Predicate.define("p_vis_hidden", ["x"])
     program = ASPProgram()
     program.fact(P(x=1))

@@ -498,8 +498,9 @@ class Search(ABC):
             raise RuntimeError(
                 f"Only a suspended search can be stopped, but this "
                 f"{type(self).__name__} is executing right now (in another "
-                f"thread). Interrupt it with .control.interrupt(), or give "
-                f"the solve a timeout."
+                f"thread). Interrupt it via the GroundedProgram's "
+                f".control.interrupt() (a one-shot solve() exposes no "
+                f"Control — give it a timeout instead)."
             ) from e
         # Closing a never-started generator skips its finally, so mark
         # finished here as well

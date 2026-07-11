@@ -196,7 +196,7 @@ def test_optimizing_grounding_refuses_every_non_optimize_verb() -> None:
     with pytest.raises(ValueError, match="cost-descent"):
         grounded.brave()
     with pytest.raises(ValueError, match=r"cost-descent.*ignore_optimization=True"):
-        grounded.brave_iter()  # the wall names the flag that lifts it
+        grounded.brave_iter()  # the error names the flag that lifts it
     with pytest.raises(ValueError, match=r"optimize\(\)"):
         grounded.solve()
 

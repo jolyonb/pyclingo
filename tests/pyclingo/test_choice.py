@@ -264,7 +264,7 @@ def test_when_choose_is_the_conditional_choice_spelling() -> None:
 
 def test_anonymous_cardinality_bound_rejected_with_receipt() -> None:
     # '_' as a bound binds nothing: certain gringo rejection ('#Anon0' is
-    # unsafe), walled at construction with the author's line
+    # unsafe), rejected at construction with the author's line
     P = Predicate.define("p_anon_card", ["x"])
     Q = Predicate.define("q_anon_card", ["x"])
     X = Variable("X")

@@ -49,9 +49,9 @@ def test_nul_rejected_in_comment_text() -> None:
 
 
 def test_clingo_truncates_at_nul_receipt() -> None:
-    # The hazard every NUL wall exists for: Control.add drops everything
+    # The hazard every NUL check exists for: Control.add drops everything
     # after the first NUL byte with zero diagnostics. If this receipt ever
-    # fails, clingo has started rejecting NUL and the walls can come down.
+    # fails, clingo has started rejecting NUL and the checks can come out.
     messages: list[str] = []
     control = clingo.Control(logger=lambda code, message: messages.append(message))
     control.add("base", [], "a.\x00 b.")

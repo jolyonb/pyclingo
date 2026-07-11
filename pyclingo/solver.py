@@ -13,7 +13,7 @@ from pyclingo.core import Comparison, DefaultNegation, DefinedConstant, Pool, Pr
 from pyclingo.exceptions import GroundingError, UnsatisfiableError
 from pyclingo.optimization import OptStrategy, TupleTermType, WeakConstraint
 from pyclingo.predicate import NegatedSignature, Predicate
-from pyclingo.program_elements import RawASP, RenderedLine, Rule, script_spans
+from pyclingo.program_elements import ProgramElement, RawASP, RenderedLine, Rule, script_spans
 from pyclingo.scoping import validate_rule
 from pyclingo.segment import Segment, When
 from pyclingo.solve_result import (
@@ -139,8 +139,39 @@ def _validate_strategy(strategy: OptStrategy) -> None:
         raise TypeError(f"strategy is an OptStrategy (e.g. OptStrategy.USC), got {type(strategy).__name__}")
 
 
+def _validate_bound(
+    bound: int | Mapping[int, int] | None,
+) -> tuple[dict[int, int] | None, int | Mapping[int, int] | None]:
+    """
+    The type/range half of bound validation, cheap enough to run before
+    grounding is paid for; returns (items, bound) with the empty-mapping
+    case normalized to None. The tiers-dependent check (bare int with
+    multiple surviving priorities) necessarily stays post-ground.
+    """
+    items: dict[int, int] | None = None
+    if bound is not None and isinstance(bound, Mapping):
+        items = dict(bound)
+        if not items:
+            # An empty mapping states "no bounds", exactly like None
+            items = None
+            bound = None
+        elif not all(isinstance(v, int) and not isinstance(v, bool) for pair in items.items() for v in pair):
+            raise TypeError(f"priority-keyed bounds must map int priorities to int bounds, got {bound!r}")
+    elif bound is not None and (isinstance(bound, bool) or not isinstance(bound, int)):
+        # Positional lists are deliberately unsupported: their meaning
+        # silently shifts when a declared tier grounds empty
+        raise TypeError(f"bound must be an int (single-tier programs) or a {{priority: bound}} mapping, got {bound!r}")
+    candidates = list(items.values()) if items is not None else ([bound] if isinstance(bound, int) else [])
+    for b in candidates:
+        if not -(2**63) <= b < 2**63:
+            raise ValueError(
+                f"bound value {b} is outside clasp's 64-bit cost range [-9223372036854775808, 9223372036854775807]"
+            )
+    return items, bound
+
+
 def _validate_flag(value: bool, name: str) -> None:
-    """The boolean knobs take real bools, matching the timeout/max_iterations lookalike walls."""
+    """The boolean knobs take real bools, matching the timeout/max_iterations lookalike checks."""
     if not isinstance(value, bool):
         raise TypeError(f"{name} is a bool, got {type(value).__name__}")
 
@@ -749,7 +780,7 @@ class ASPProgram:
             | set(self._show_overrides)
             # Atom-valued #const definitions: their classes join the walk so
             # solution atoms carrying the symbol reconstruct typed, and the
-            # name-collision walls see them
+            # name-collision checks see them
             | {
                 cls
                 for value in self._defined_constants.values()
@@ -770,11 +801,11 @@ class ASPProgram:
         # render is the guarantee; ordinals stay stable across renders while
         # the program only appends (deleting or replacing a segment shifts
         # later ordinals).
-        weak_discriminators: dict[int, int] = {}
+        weak_discriminators: dict[ProgramElement, int] = {}
         for segment in self._segments.values():
             for element in segment:
                 if isinstance(element, WeakConstraint) and element.auto_tuple:
-                    weak_discriminators[id(element)] = len(weak_discriminators)
+                    weak_discriminators[element] = len(weak_discriminators)
 
         # 1. Header comments
         lines: list[str] = []
@@ -1019,6 +1050,7 @@ class ASPProgram:
         assumptions: Sequence[Predicate | DefaultNegation] | None = None,
         stop_on_log_level: LogLevel = LogLevel.INFO,
         ignore_optimization: bool = False,
+        context: object = None,
     ) -> SolveResult:
         """
         Solve the ASP program, returning a SolveResult that yields Models lazily.
@@ -1047,6 +1079,8 @@ class ASPProgram:
             ignore_optimization: Enumerate answer sets as if the program had
                 no #minimize/#maximize (clasp's opt_mode=ignore); see
                 GroundedProgram.solve(). Requires an objective to ignore.
+            context: clingo's grounding context for @-function calls in
+                raw_asp() text; forwarded to ground() verbatim.
 
         Returns:
             A SolveResult: iterate it for Models (each with typed atoms() access);
@@ -1065,7 +1099,7 @@ class ASPProgram:
             so repeated solves on one program never interfere.
         """
         _validate_timeout(timeout)  # before grounding is paid for
-        return self.ground(stop_on_log_level=stop_on_log_level).solve(
+        return self.ground(stop_on_log_level=stop_on_log_level, context=context).solve(
             timeout=timeout, assumptions=assumptions, ignore_optimization=ignore_optimization
         )
 
@@ -1076,6 +1110,7 @@ class ASPProgram:
         assumptions: Sequence[Predicate | DefaultNegation] | None = None,
         stop_on_log_level: LogLevel = LogLevel.INFO,
         ignore_optimization: bool = False,
+        context: object = None,
     ) -> CautiousConsequences:
         """
         The atoms true in every answer set; sugar for ground().cautious().
@@ -1085,7 +1120,7 @@ class ASPProgram:
         """
         _validate_timeout(timeout)  # before grounding is paid for
         _validate_max_iterations(max_iterations)
-        return self.ground(stop_on_log_level=stop_on_log_level).cautious(
+        return self.ground(stop_on_log_level=stop_on_log_level, context=context).cautious(
             timeout=timeout,
             max_iterations=max_iterations,
             assumptions=assumptions,
@@ -1099,6 +1134,7 @@ class ASPProgram:
         assumptions: Sequence[Predicate | DefaultNegation] | None = None,
         stop_on_log_level: LogLevel = LogLevel.INFO,
         ignore_optimization: bool = False,
+        context: object = None,
     ) -> BraveConsequences:
         """
         The atoms true in at least one answer set; sugar for
@@ -1108,7 +1144,7 @@ class ASPProgram:
         """
         _validate_timeout(timeout)  # before grounding is paid for
         _validate_max_iterations(max_iterations)
-        return self.ground(stop_on_log_level=stop_on_log_level).brave(
+        return self.ground(stop_on_log_level=stop_on_log_level, context=context).brave(
             timeout=timeout,
             max_iterations=max_iterations,
             assumptions=assumptions,
@@ -1124,6 +1160,7 @@ class ASPProgram:
         bound: int | Mapping[int, int] | None = None,
         assumptions: Sequence[Predicate | DefaultNegation] | None = None,
         stop_on_log_level: LogLevel = LogLevel.INFO,
+        context: object = None,
     ) -> Optimum:
         """
         The best answer set by the objectives; sugar for
@@ -1135,7 +1172,8 @@ class ASPProgram:
         _validate_max_iterations(max_iterations)
         _validate_strategy(strategy)
         _validate_flag(all_optima, "all_optima")
-        return self.ground(stop_on_log_level=stop_on_log_level).optimize(
+        _validate_bound(bound)
+        return self.ground(stop_on_log_level=stop_on_log_level, context=context).optimize(
             timeout=timeout,
             max_iterations=max_iterations,
             strategy=strategy,
@@ -1587,27 +1625,7 @@ class GroundedProgram:
         """
         _validate_strategy(strategy)
         _validate_flag(all_optima, "all_optima")
-        items: dict[int, int] | None = None
-        if bound is not None and isinstance(bound, Mapping):
-            items = dict(bound)
-            if not items:
-                # An empty mapping states "no bounds", exactly like None
-                items = None
-                bound = None
-            elif not all(isinstance(v, int) and not isinstance(v, bool) for pair in items.items() for v in pair):
-                raise TypeError(f"priority-keyed bounds must map int priorities to int bounds, got {bound!r}")
-        elif bound is not None and (isinstance(bound, bool) or not isinstance(bound, int)):
-            # Positional lists are deliberately unsupported: their meaning
-            # silently shifts when a declared tier grounds empty
-            raise TypeError(
-                f"bound must be an int (single-tier programs) or a {{priority: bound}} mapping, got {bound!r}"
-            )
-        candidates = list(items.values()) if items is not None else ([bound] if isinstance(bound, int) else [])
-        for b in candidates:
-            if not -(2**63) <= b < 2**63:
-                raise ValueError(
-                    f"bound value {b} is outside clasp's 64-bit cost range [-9223372036854775808, 9223372036854775807]"
-                )
+        items, bound = _validate_bound(bound)
         with self._solve_lock:
             return self._locked_optimize_iter(timeout, assumptions, strategy, all_optima, items, bound)
 

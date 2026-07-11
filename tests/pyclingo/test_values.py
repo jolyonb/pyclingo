@@ -308,7 +308,7 @@ def test_pool_helper_rejects_bad_elements() -> None:
 
 def test_pool_accepts_variables_and_expressions() -> None:
     # Ungrounded pools construct freely (legal in rule-head arguments —
-    # rule assembly walls the other positions); grounded stays grounded
+    # rule assembly rejects the other positions); grounded stays grounded
     X = Variable("X")
     neighbors = pool([X - 1, X + 1])
     assert neighbors.render() == "(X - 1; X + 1)"

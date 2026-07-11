@@ -9,7 +9,7 @@ import re
 
 import pytest
 
-from pyclingo import ASPProgram, Choice, Predicate, RangePool, Segment, SourceLocation, Variable
+from pyclingo import ASPProgram, Choice, Predicate, RangePool, Segment, SourceLocation, Variable, When
 from pyclingo.program_elements import BlankLine, Comment, Rule
 
 P = Predicate.define("p_seg", ["x"])
@@ -540,3 +540,15 @@ def test_bool_conditions_teach_the_predicate_equality_trap() -> None:
         program.when(Cell(x=1) == Cell(x=2)).derive(Cell(x=3))  # type: ignore[arg-type]
     with pytest.raises(TypeError, match="Bind one side to a Variable"):
         program.forbid(Cell(x=1) == Cell(x=1))  # type: ignore[arg-type]
+
+
+def test_when_direct_construction_gets_the_walls() -> None:
+    # When is exported for annotations; hand construction must hit the same
+    # teaching as segment.when(), not a deep AttributeError at the closer
+    with pytest.raises(TypeError, match=r"constructed by segment\.when\(\)"):
+        When("not a segment", (P(x=1),))  # type: ignore[arg-type]
+    segment = Segment("w")
+    with pytest.raises(TypeError, match="when\\(\\) conditions must be Terms"):
+        When(segment, ("junk",))  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match="when\\(\\) conditions must be Terms"):
+        segment.when("junk")  # type: ignore[arg-type]  # the verb delegates to the same check

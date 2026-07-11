@@ -192,10 +192,7 @@ class Segment:
             raise ValueError(
                 "when() requires at least one condition; for unconditional statements use fact() or require() directly"
             )
-        for condition in conditions:
-            if not isinstance(condition, Term):
-                raise _non_term_error("when() conditions", condition)
-        return When(self, conditions)
+        return When(self, conditions)  # the constructor owns the per-condition type check
 
     def forbid(self, *conditions: Term) -> None:
         """Forbid the combination: no answer set may satisfy all conditions."""
@@ -362,14 +359,14 @@ class Segment:
         return "\n".join(line.text for line in self.render_lines(with_header))
 
     def render_lines(
-        self, with_header: bool, weak_discriminators: Mapping[int, int] | None = None
+        self, with_header: bool, weak_discriminators: Mapping[ProgramElement, int] | None = None
     ) -> list[RenderedLine]:
         """
         The segment's rendered lines, each carrying the element that
         produced it (framing lines carry None) — a multi-line element
         claims every one of its lines. render() joins the text column; the
         program builds its line-provenance map from the element column.
-        weak_discriminators (id(element) -> ordinal) is the program
+        weak_discriminators (element -> ordinal; elements hash by identity) is the program
         render's per-statement tags for auto-tupled weak constraints;
         standalone renders pass none and render bare tuples. Raises if any
         when() in this segment was never completed.
@@ -378,7 +375,7 @@ class Segment:
         lines: list[RenderedLine] = []
         for element in self._elements:
             if isinstance(element, WeakConstraint) and weak_discriminators is not None:
-                rendered = element.render(discriminator=weak_discriminators.get(id(element)))
+                rendered = element.render(discriminator=weak_discriminators.get(element))
             else:
                 rendered = element.render()
             # split("\n"), not splitlines(): a trailing newline in raw text
@@ -439,6 +436,14 @@ class When:
     """
 
     def __init__(self, segment: Segment, conditions: tuple[Term, ...]) -> None:
+        # One home for the checks: segment.when() delegates here, and the
+        # export exists for annotations — hand construction gets the same
+        # teaching instead of a deep AttributeError at the closer
+        if not isinstance(segment, Segment):
+            raise TypeError(f"When is constructed by segment.when(); got {type(segment).__name__} for segment")
+        for condition in conditions:
+            if not isinstance(condition, Term):
+                raise _non_term_error("when() conditions", condition)
         self._segment = segment
         self._conditions = conditions
         self._completed_by: str | None = None

@@ -250,7 +250,7 @@ class Negatable(Term, ABC):
 class ArithmeticOps:
     """
     The arithmetic operator suite shared by Value and Expression: every
-    operator builds an Expression (or raises its teaching wall). One home —
+    operator builds an Expression (or raises its teaching error). One home —
     the two classes accept the same operand union. self is typed Any because
     a mixin cannot name its hosts' union; the only inheritors are Value and
     Expression, exactly the types Expression's operands accept.
@@ -754,8 +754,14 @@ class ExtremeConstant(ConstantBase, ABC):
     def __new__(cls) -> Self:
         instance = cls._instances.get(cls)
         if instance is None:
-            instance = super().__new__(cls)
-            cls._instances[cls] = instance
+            # Under the cache lock: an unlocked check-then-set could mint two
+            # "singletons" for a user subclass first instantiated concurrently
+            # (SUP/INF themselves are created at import, before user threads)
+            with Value._cache_lock:
+                instance = cls._instances.get(cls)
+                if instance is None:
+                    instance = super().__new__(cls)
+                    cls._instances[cls] = instance
         return cast(Self, instance)
 
     def render(
@@ -918,7 +924,7 @@ class ExplicitPool(Pool):
                 "one-string pool."
             )
         # Materialize BEFORE the emptiness check: an iterator is always
-        # truthy, so an empty generator would sail past the wall and render
+        # truthy, so an empty generator would sail past the check and render
         # p() — gringo's arity-0 atom, a silently different predicate
         elements = list(elements)
         if not elements:

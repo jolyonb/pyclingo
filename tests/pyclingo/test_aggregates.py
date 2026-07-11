@@ -182,4 +182,4 @@ def test_empty_element_tuples_rejected_with_teaching() -> None:
         with pytest.raises(ValueError, match="element tuple cannot be empty"):
             construct((), condition=P(x=X))
     with pytest.raises(ValueError, match="cannot be empty"):
-        Count(X, condition=P(x=X)).add((), P(x=X))  # add() after construction, same wall
+        Count(X, condition=P(x=X)).add((), P(x=X))  # add() after construction, same rejection

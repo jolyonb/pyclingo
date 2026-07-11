@@ -179,7 +179,7 @@ def _occurrences(term: Term) -> Counter[str]:
         # every q is greater than 3), which _analyze walks through here.
         # No other route survives: plain comparisons cannot be wrapped in
         # a negation (Not/~ build their complements at construction), and
-        # aggregate-bearing ones are walled out of condition positions.
+        # aggregate-bearing ones are rejected in condition positions.
         for side in (term.left_term, term.right_term):
             if not isinstance(side, AggregateBase):
                 counts.update(_occurrences(side))

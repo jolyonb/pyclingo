@@ -62,7 +62,7 @@ def test_ignore_optimization_enumerates_every_answer_set() -> None:
     # optimizes (opt_mode never leaks between searches)
     grounded = build_knapsack().ground()
     with pytest.raises(ValueError, match="ignore_optimization=True"):
-        grounded.solve()  # the wall names the flag
+        grounded.solve()  # the error names the flag
     models = list(grounded.solve(ignore_optimization=True))
     assert len(models) == 15
     best = grounded.optimize()

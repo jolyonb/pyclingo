@@ -32,7 +32,7 @@ class TestComparisonBool:
 
     def test_chained_comparison_error_teaches_the_remedy(self) -> None:
         # X < Y < Z is legal Python that needs a truth value halfway through
-        # ((X < Y) and (Y < Z)); the wall must name the chaining and the fix,
+        # ((X < Y) and (Y < Z)); the error must name the chaining and the fix,
         # not just the if-statement misuse
         X, Y, Z = Variable("X"), Variable("Y"), Variable("Z")
         with pytest.raises(TypeError, match=r"pass each comparison separately.*when\(X < Y, Y < Z\)"):

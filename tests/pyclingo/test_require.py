@@ -170,7 +170,7 @@ def test_require_checks_rather_than_derives() -> None:
 
 def test_require_rejects_extra_arguments_with_teaching() -> None:
     # require() takes one comparison (Python's own arity error — the
-    # signature is the wall); conditions belong in when()
+    # signature is the check); conditions belong in when()
     program = ASPProgram()
     P = Predicate.define("p11", ["x"])
     C = Variable("C")

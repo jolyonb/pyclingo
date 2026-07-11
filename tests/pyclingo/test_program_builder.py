@@ -152,7 +152,7 @@ def test_atom_valued_const_values_must_be_ground_and_plain() -> None:
 
 def test_atom_valued_const_rejects_pools() -> None:
     # Pools are not #const terms: gringo rejects '#const c = f(1; 2).' at
-    # parse, so the wall lands at define_constant with the author's line
+    # parse, so the check lands at define_constant with the author's line
     program = ASPProgram()
     P = Predicate.define("p_poolc", ["a"])
     with pytest.raises(ValueError, match="cannot contain a pool"):
@@ -164,7 +164,7 @@ def test_atom_valued_const_rejects_pools() -> None:
 
 def test_atom_valued_const_value_hits_the_collision_wall() -> None:
     # The value atom's class joins the walk, so a value whose name is
-    # itself a #const name trips the substitution wall at render
+    # itself a #const name trips the substitution check at render
     program = ASPProgram()
     program.define_constant("n_wall", 5)
     NWall = Predicate.define("n_wall", [], show=False)
@@ -204,7 +204,7 @@ def test_empty_fact_rejected() -> None:
 
 def test_empty_conditional_literal_condition_rejected() -> None:
     # A conditionless CL renders as a plain (binding) literal — a category
-    # error caught at construction; None must not slip past the empty-list wall
+    # error caught at construction; None must not slip past the empty-list check
     P = Predicate.define("p_cl", ["x"])
     X = Variable("X")
     with pytest.raises(ValueError, match="at least one condition"):

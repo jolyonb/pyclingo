@@ -8,7 +8,7 @@ same condition union, the same validation, the same rendering and walking.
 ConditionedElement owns those mechanics once; each construct validates its
 own targets and renders its own wrapper around the elements it holds.
 
-FreezableBuilder is the other shared piece: the freeze fence and its
+FreezableBuilder is the other shared piece: the freeze mechanism and its
 receipt, common to the mutable builders (Choice, Aggregate) that hold
 these elements.
 """
@@ -25,7 +25,7 @@ type ConditionType = Predicate | DefaultNegation | Comparison
 
 class FreezableBuilder:
     """
-    The freeze fence shared by the mutable builders (Choice, Aggregate): a
+    The freeze mechanism shared by the mutable builders (Choice, Aggregate): a
     builder mutates freely until a rule captures it. A frozen builder is a
     value — further rules may capture and share it — so only mutation is
     fenced, with the capturing rule's line as the receipt.
