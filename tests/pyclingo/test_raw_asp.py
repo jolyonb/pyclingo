@@ -289,3 +289,43 @@ def test_nul_rejected_in_raw_text() -> None:
     program = ASPProgram()
     with pytest.raises(ValueError, match=r"NUL.*silently truncates"):
         program.raw_asp("a.\x00")
+
+
+def test_script_end_matches_gringo_token_grammar() -> None:
+    # gringo lexes #end and the closing dot as SEPARATE tokens: whitespace,
+    # line comments, and block comments may sit between (probed: each
+    # variant's error span ends exactly at the dot). The scanner must agree,
+    # or a whitespace-terminated script swallows the rest of the block and
+    # #program/#include/#external smuggle past the wall.
+    P = Predicate.define("p_endgram", ["x"])
+    for end in ["#end.", "#end .", "#end\t.", "#end\n.", "#end %c\n.", "#end %* c *% ."]:
+        program = ASPProgram()
+        with pytest.raises(ValueError, match="#program"):
+            program.raw_asp(f"#script (python)\nx=1\n{end}\n#program other.\nq.\n", predicates=[P])
+    # A NESTED block comment between #end and the dot still terminates
+    program = ASPProgram()
+    with pytest.raises(ValueError, match="#program"):
+        program.raw_asp("#script (python)\nx=1\n#end %* a %* b *% *% .\n#program other.", predicates=[P])
+    # A bare #end inside script code is not a terminator: the real one still found
+    program = ASPProgram()
+    with pytest.raises(ValueError, match="#external"):
+        program.raw_asp("#script (python)\ns = '#end'\n#end .\n#external q.", predicates=[P])
+    # #end followed by a comment that never ends is NOT a terminator: the
+    # block is held as an unterminated script (accepted here — gringo
+    # rejects the block itself, loudly, at ground)
+    program = ASPProgram()
+    program.raw_asp("#script (python)\nx=1\n#end %never closed", predicates=[])
+    assert len(program.segments[0]) == 1  # accepted as a raw element
+
+
+def test_annotate_notes_resume_after_whitespace_terminated_script() -> None:
+    # The A19-m1 twin: statements after a "#end ." script must keep their
+    # % file:line notes (the old scanner treated the block as unterminated
+    # and swallowed everything after into the script span)
+    P = Predicate.define("p_endnote", ["x"])
+    program = ASPProgram()
+    program.raw_asp("#script (python)\nx=1\n#end .", predicates=[])
+    program.fact(P(x=1))
+    annotated = program.render(annotate=True)
+    (fact_line,) = [line for line in annotated.split("\n") if line.startswith("p_endnote(1).")]
+    assert "% " in fact_line and ":" in fact_line  # the note survived

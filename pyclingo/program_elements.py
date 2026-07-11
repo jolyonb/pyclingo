@@ -92,6 +92,46 @@ class Comment(ProgramElement):
         return f"%*\n{self.text}\n*%" if "\n" in self.text else f"% {self.text}"
 
 
+def _script_end(text: str, start: int) -> int | None:
+    """
+    The end offset (exclusive of the dot) of the first #script terminator at
+    or after start, or None. gringo lexes #end and the closing dot as
+    SEPARATE tokens: whitespace, line comments, and (nesting) block comments
+    may sit between them — probed live; each accepted variant's error span
+    ends exactly at the dot. Matching the substring "#end." alone would
+    treat "#end ." as unterminated and swallow the rest of the scan.
+    """
+    i, n = start, len(text)
+    while (i := text.find("#end", i)) != -1:
+        j = i + len("#end")
+        while j < n:
+            if text[j] in " \t\r\n":
+                j += 1
+            elif text.startswith("%*", j):
+                depth = 1
+                j += 2
+                while j < n and depth:
+                    if text.startswith("%*", j):
+                        depth += 1
+                        j += 2
+                    elif text.startswith("*%", j):
+                        depth -= 1
+                        j += 2
+                    else:
+                        j += 1
+            elif text[j] == "%":
+                newline = text.find("\n", j)
+                if newline == -1:
+                    return None  # comment runs to EOF: no dot can follow
+                j = newline + 1
+            else:
+                break
+        if j < n and text[j] == ".":
+            return j + 1
+        i += len("#end")  # a bare #end token (e.g. inside script code): keep looking
+    return None
+
+
 def _scan_asp_text(text: str) -> tuple[str | None, list[tuple[int, int]]]:
     """
     One character-level scan of ASP text, two products: the first
@@ -135,14 +175,14 @@ def _scan_asp_text(text: str) -> tuple[str | None, list[tuple[int, int]]]:
                 i += 2 if text[i] == "\\" else 1
             i += 1
         elif text.startswith("#script", i):
-            end = text.find("#end.", i)
-            if end == -1:
+            end = _script_end(text, i)
+            if end is None:
                 # Unterminated script: gringo rejects the block itself, and
                 # it swallows the rest of the scan either way
                 spans.append((i, n))
                 break
-            spans.append((i, end + len("#end.")))
-            i = end + len("#end.")
+            spans.append((i, end))
+            i = end
         elif directive is None and text.startswith("#program", i):
             directive = "#program"
             i += len("#program")

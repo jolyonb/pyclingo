@@ -286,3 +286,16 @@ def test_close_passes_through_foreign_value_errors(monkeypatch: pytest.MonkeyPat
     monkeypatch.setattr(type(result._iterator), "close", exploding_close)
     with pytest.raises(ValueError, match="finalization went sideways"):
         result.close()
+
+
+def test_executing_discriminator_ignores_lookalike_message_text() -> None:
+    # The concurrency translation matches Python's machinery message EXACTLY:
+    # a genuine ValueError whose text merely contains the phrase (a raw
+    # #show term form embedding model data) must surface as itself, not as
+    # a phantom threading diagnosis
+    P = Predicate.define("p_lookalike", ["x"])
+    program = ASPProgram()
+    program.fact(P(x=1))
+    program.raw_asp('#show "this generator is already executing" : p_lookalike(1).', predicates=[P])
+    with pytest.raises(ValueError, match="non-predicate output"):
+        next(iter(program.solve()))

@@ -408,7 +408,7 @@ class _ClosedCheckingIterator:
             self._ended = True
             raise
         except ValueError as e:
-            if "already executing" not in str(e):
+            if str(e) != "generator already executing":
                 raise  # the generator body's own ValueError (e.g. a read-back teaching error)
             # generator already executing: the third door into the room
             # close() and abandon() already teach about
@@ -492,7 +492,7 @@ class Search(ABC):
         try:
             self._iterator.close()
         except ValueError as e:
-            if "already executing" not in str(e):
+            if str(e) != "generator already executing":
                 raise  # a genuine ValueError out of the generator's finalization
             # generator.close() on an executing generator
             raise RuntimeError(

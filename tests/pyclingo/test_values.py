@@ -64,6 +64,17 @@ def test_stepped_ranges_convert_in_order() -> None:
     assert pool(range(1, 10, 4)).render() == "(1; 5; 9)"
 
 
+def test_pools_materialize_iterators_before_the_empty_wall() -> None:
+    # An iterator is always truthy: an EMPTY generator sailed past the
+    # emptiness check and rendered p() — gringo's arity-0 atom, silently a
+    # different predicate. The constructor materializes first.
+    nothing: list[int] = []
+    with pytest.raises(ValueError, match="empty pool"):
+        ExplicitPool(x for x in nothing)  # type: ignore[arg-type]
+    filled = ExplicitPool(x for x in [1, 2])  # type: ignore[arg-type]
+    assert filled.render() == "(1; 2)"  # non-empty generators keep working
+
+
 def test_empty_pools_raise_everywhere() -> None:
     with pytest.raises(ValueError, match="empty"):
         pool(range(1, 1))

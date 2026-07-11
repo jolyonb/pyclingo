@@ -171,3 +171,15 @@ def test_sum_rejects_literal_string_weights() -> None:
     # Min/Max order terms: strings and the ordering's end markers are legal there
     Max((String("a"), X), condition=P(x=X))
     Max((SUP, X), condition=P(x=X))
+
+
+def test_empty_element_tuples_rejected_with_teaching() -> None:
+    # Sum(()) died with a raw IndexError; Min/Max rendered an element gringo
+    # ignores with an info; Count(()) silently became an existence test
+    X = Variable("X")
+    P = Predicate.define("p_empty_tuple", ["x"])
+    for construct in (Count, Sum, Max):
+        with pytest.raises(ValueError, match="element tuple cannot be empty"):
+            construct((), condition=P(x=X))
+    with pytest.raises(ValueError, match="cannot be empty"):
+        Count(X, condition=P(x=X)).add((), P(x=X))  # add() after construction, same wall

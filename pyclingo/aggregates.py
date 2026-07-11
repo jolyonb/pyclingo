@@ -84,6 +84,13 @@ class Aggregate(FreezableBuilder, AggregateBase, ABC):
         """
         self._require_mutable()
         raw_tuple = element if isinstance(element, tuple) else (element,)
+        if not raw_tuple:
+            raise ValueError(
+                f"An aggregate element tuple cannot be empty: gringo ignores the element "
+                f"(#min/#max) or counts the bare empty tuple (#count gives 0/1, an existence "
+                f"test) — neither is a {self._AGGREGATE_TYPE.value} over anything. Aggregate "
+                f"over a term, e.g. {self._AGGREGATE_TYPE.value}{{ X : p(X) }}."
+            )
         element_tuple = tuple(coerce_tuple_term(item, "Aggregate") for item in raw_tuple)
 
         # Per-class: #sum/#sum+ SUM the first tuple term, so a literal String

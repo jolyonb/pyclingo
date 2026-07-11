@@ -917,6 +917,10 @@ class ExplicitPool(Pool):
                 'become ("a"; "b"; "c"). Pass a list — ExplicitPool(["abc"]) — for a '
                 "one-string pool."
             )
+        # Materialize BEFORE the emptiness check: an iterator is always
+        # truthy, so an empty generator would sail past the wall and render
+        # p() — gringo's arity-0 atom, a silently different predicate
+        elements = list(elements)
         if not elements:
             raise ValueError("Cannot create an empty pool")
 
