@@ -35,6 +35,15 @@ class Aggregate(FreezableBuilder, AggregateBase, ABC):
     rules as you like (capture may be transitive, through a comparison
     holding the aggregate). Only mutation is fenced (it would silently
     rewrite every rule that holds the builder).
+
+    BANDED tests (count between 2 and 4): write two comparisons over the
+    aggregate — Count(...) >= 2, Count(...) <= 4 — which grounds to the
+    same solver input as gringo's two-guard interval literal (verified at
+    the aspif level; the rendered text repeats the elements, the ground
+    representation does not). Do NOT bind-then-compare
+    (N == Count(...), N >= 2, N <= 4) when the band is wide: gringo
+    grounds one aggregate body per feasible N, multiplying the solver
+    input by the band width.
     """
 
     # Set by subclasses to specify which aggregate function to use

@@ -183,3 +183,36 @@ def test_empty_element_tuples_rejected_with_teaching() -> None:
             construct((), condition=P(x=X))
     with pytest.raises(ValueError, match="cannot be empty"):
         Count(X, condition=P(x=X)).add((), P(x=X))  # add() after construction, same rejection
+
+
+def _aggregate_footprint(text: str) -> int:
+    """The (literal, weight) pairs shipped to clasp across all weight rules — the banded-count cost measure."""
+
+    class _PairCounter:
+        def __init__(self) -> None:
+            self.pairs = 0
+
+        def weight_rule(self, choice: bool, head: object, lower_bound: int, body: object) -> None:
+            self.pairs += len(body)  # type: ignore[arg-type]
+
+    counter = _PairCounter()
+    control = clingo.Control(logger=lambda code, message: None)
+    control.register_observer(counter)  # type: ignore[arg-type]
+    control.add("base", [], text)
+    control.ground([("base", [])])
+    return counter.pairs
+
+
+def test_banded_count_spellings_receipt() -> None:
+    # The Aggregate docstring's guidance, pinned live: two comparisons over
+    # the aggregate ship clasp the same weight-rule footprint as gringo's
+    # two-guard interval literal, while bind-then-compare ships one
+    # aggregate body per feasible N (x band width). --text output repeats
+    # shared elements and CANNOT distinguish these — this receipt counts
+    # what clasp actually receives.
+    domain = "{ p(1..100) }.\n"
+    interval = _aggregate_footprint(domain + "ok :- 40 <= #count{ X : p(X) } <= 60.")
+    two_literals = _aggregate_footprint(domain + "ok :- #count{ X : p(X) } >= 40, #count{ X : p(X) } <= 60.")
+    bind_compare = _aggregate_footprint(domain + "ok :- N = #count{ X : p(X) }, N >= 40, N <= 60.")
+    assert two_literals == interval  # the recommended spelling is cost-identical
+    assert bind_compare >= 10 * interval  # the trap: ~x(band width), 21 bodies here
