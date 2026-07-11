@@ -1,9 +1,14 @@
 import math
+import os
+import subprocess
+import sys
+import tempfile
 import threading
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
 
 import clingo
+from clingo.application import Application, clingo_main
 
 from aspalchemy.choice import Choice
 from aspalchemy.clingo_handler import ClingoMessageHandler, LogLevel
@@ -121,6 +126,83 @@ def _validate_max_iterations(max_iterations: int) -> None:
         raise TypeError(f"max_iterations is a count, got {type(max_iterations).__name__}")
     if max_iterations < 0:
         raise ValueError(f"max_iterations must be non-negative (0 means unbounded), got {max_iterations}")
+
+
+class _GringoRun(Application):
+    """
+    A clingo application whose main() grounds OUR stored source (with the
+    stored @-function context) instead of loading files: the in-process
+    route to gringo's own output formatters (--text and aspif). Diagnostics
+    are swallowed — the original ground() already validated this source.
+    """
+
+    def __init__(self, source: str, context: object) -> None:
+        self._source = source
+        self._context = context
+
+    def main(self, control: clingo.Control, files: Sequence[str]) -> None:
+        control.add("base", [], self._source)
+        control.ground([("base", [])], context=self._context)
+        # In gringo mode solve() runs no search: it closes the step, which
+        # is what makes the app emit aspif's trailing "0" terminator
+        control.solve()
+
+    def logger(self, code: clingo.MessageCode, message: str) -> None:
+        """Swallow re-ground diagnostics (validated the first time around)."""
+
+
+# Guards the fd capture below: dup2 rebinds the PROCESS-wide fds 1 and 2,
+# so concurrent captures would interleave their output
+_gringo_capture_lock = threading.Lock()
+
+
+def _gringo_run(source: str, context: object, extra_args: list[str]) -> tuple[int, str, str]:
+    """
+    Run gringo over the source and return (exit code, stdout, stderr) —
+    gringo's exact output, never a reimplementation. Two routes, one
+    contract (the byte-identity of their outputs is receipt-pinned):
+
+    - No grounding context: a clingo subprocess. Clean by construction —
+      the child owns its own stdout/stderr, so nothing in THIS process is
+      touched.
+    - A context present: @-function callbacks live in this process and
+      cannot cross to a child, so clingo's application runs IN PROCESS
+      with fds 1 and 2 rebound for the duration (clingo prints at the C
+      level, below sys.stdout; stderr included — a raising @-function
+      makes clingo's machinery dump a traceback there). The rebinding is
+      PROCESS-GLOBAL, serialized by the module lock; the public methods
+      warn about foreign writers.
+    """
+    if context is None:
+        completed = subprocess.run(
+            [sys.executable, "-m", "clingo", "--mode=gringo", *extra_args],
+            input=source,
+            capture_output=True,
+            text=True,
+        )
+        return completed.returncode, completed.stdout, completed.stderr
+    with _gringo_capture_lock, tempfile.TemporaryFile() as out, tempfile.TemporaryFile() as err:
+        # Flush at BOTH window edges: entering, so the caller's pending
+        # Python-buffered output reaches the console instead of the capture;
+        # leaving, so Python-buffered writes from inside the window land in
+        # the capture instead of escaping to the console after restore
+        sys.stdout.flush()
+        sys.stderr.flush()
+        saved_stdout, saved_stderr = os.dup(1), os.dup(2)
+        os.dup2(out.fileno(), 1)
+        os.dup2(err.fileno(), 2)
+        try:
+            code = clingo_main(_GringoRun(source, context), ["--mode=gringo", *extra_args])
+        finally:
+            sys.stdout.flush()
+            sys.stderr.flush()
+            os.dup2(saved_stdout, 1)
+            os.dup2(saved_stderr, 2)
+            os.close(saved_stdout)
+            os.close(saved_stderr)
+        out.seek(0)
+        err.seek(0)
+        return code, out.read().decode(), err.read().decode(errors="replace")
 
 
 def _validate_stop_level(stop_on_log_level: LogLevel) -> None:
@@ -1044,6 +1126,7 @@ class ASPProgram:
             ground_levels=ground_levels,
             derivation_sites={signature: tuple(sites) for signature, sites in derivation_sites.items()},
             hidden_classes=hidden_classes,
+            grounding_context=context,
         )
 
     def solve(
@@ -1221,8 +1304,12 @@ class GroundedProgram:
         ground_levels: tuple[int, ...],
         derivation_sites: dict[tuple[str, int], tuple[SourceLocation | None, ...]],
         hidden_classes: frozenset[type[Predicate]],
+        grounding_context: object,
     ) -> None:
         self._text = text
+        # Retained for the on-demand re-grounds behind ground_text()/aspif():
+        # @-function callbacks live in this process and cannot be rebuilt
+        self._grounding_context = grounding_context
         self._control = control
         self._predicate_types = predicate_types
         self._message_handler = message_handler
@@ -1247,6 +1334,61 @@ class GroundedProgram:
     def text(self) -> str:
         """The rendered ASP program this grounding solves."""
         return self._text
+
+    def ground_text(self) -> str:
+        """
+        The GROUND program, in gringo's own --text rendering: every rule
+        instantiated, atom names intact — the programmatic twin of reading
+        a generated .pl file when debugging grounding size or content.
+
+        Generated on demand by re-grounding this handle's stored source
+        (with its stored @-function context) through clingo's application,
+        in process; each call pays a full re-ground. Deterministic for the
+        same source and constants — but a STATEFUL context whose
+        @-functions answer differently per call may diverge from the
+        original grounding.
+
+        Context-free groundings run gringo in a clingo subprocess (nothing
+        in this process is touched). THREADING, for groundings made with
+        ground(context=...) only: the callbacks live in this process, so
+        the re-ground runs in process with the stdout/stderr file
+        descriptors rebound for the duration. Do not call while other
+        threads may write to stdout or stderr: a concurrent writer's
+        output is captured into the result instead of reaching the
+        console, and the rebinding edges can crash the writer outright.
+        Concurrent calls to these methods themselves are safe (serialized
+        by a lock).
+        """
+        return self._gringo_output(["--text"])
+
+    def aspif(self) -> str:
+        """
+        The ground program in aspif — the exact statement stream clasp
+        receives (rules, weight rules, minimize statements, the output
+        table), byte-for-byte what `clingo --mode=gringo` emits. This is
+        the honest measure for grounding-size questions: pretty-printed
+        text repeats shared aggregate elements, aspif does not. Same
+        on-demand re-ground as ground_text() — including its THREADING
+        caveat for context-bearing groundings: no other thread may write
+        to stdout/stderr during such a call, or the output lands in the
+        result ("byte-for-byte" holds for what GRINGO emits, not for
+        foreign writes during an in-process capture window).
+        """
+        return self._gringo_output([])
+
+    def _gringo_output(self, extra_args: list[str]) -> str:
+        code, output, errors = _gringo_run(self._text, self._grounding_context, extra_args)
+        if code != 0:
+            # The underlying exception was consumed at clingo's C boundary
+            # (nothing to chain from); its text survives on the captured
+            # stderr, so the tail rides the error instead
+            tail = "\n".join(errors.strip().splitlines()[-3:])
+            raise RuntimeError(
+                f"re-grounding for output failed (exit {code}) although the original "
+                f"ground() succeeded — a stateful @-function context answering "
+                f"differently on the second call is the usual cause. clingo reported:\n{tail}"
+            )
+        return output
 
     @property
     def control(self) -> clingo.Control:

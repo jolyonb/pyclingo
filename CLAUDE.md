@@ -143,7 +143,10 @@ Given the project's maturity, these extensions are best accomplished by adapting
 ### ASP Program Size
 - **Grounding explosion**: Complex conditions can create enormous ground programs
 - **Mitigation**: Look at the clingo output and perform scaling analysis on the grounding size; O(N^2) is okay (N number of cells), but O(N^3) is not
-- **Debug**: Check generated `.pl` files in `solver_scripts/` for size
+- **Debug**: Check generated `.pl` files in `solver_scripts/` for size, or
+  ask the grounding directly: `grounded.ground_text()` (readable ground
+  rules) and `grounded.aspif()` (the exact solver input — the honest size
+  measure, since pretty-printed text repeats shared aggregate elements)
 
 ### Module Dependencies
 - **Predicate access triggers rule generation**: First access to cached predicate defines all rules

@@ -155,6 +155,10 @@ Key features:
 - Segment-based organization
 - Automatic show directive generation
 - Comprehensive error handling
+- Ground-program inspection: GroundedProgram.ground_text() (gringo's
+  --text rendering) and .aspif() (the exact statement stream clasp
+  receives) — generated on demand by an in-process re-ground through
+  clingo's own application, stored @-function context included
 
 #### Solve Results (`solve_result.py`)
 - **Search**: the shared lifecycle for one search on a Control
