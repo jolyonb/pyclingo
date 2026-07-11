@@ -313,7 +313,8 @@ def test_section_on_fresh_segment_adds_blank_and_title() -> None:
     seg = Segment("s")
     seg.section("Clues")
     assert len(seg) == 2
-    assert "% Clues" in seg.render(with_header=False)
+    assert "% Clues" in seg.render()  # the default render is the bare fragment
+    assert seg.render() == seg.render(with_header=False)
 
 
 def test_render_with_header_absorbs_the_sections_leading_blank() -> None:
@@ -505,9 +506,22 @@ def test_append_keeps_an_already_set_source_location() -> None:
     segment = Segment("s")
     rule = Rule(head=P(x=1))
     preset = SourceLocation("elsewhere.py", 7)
-    rule.source_location = preset
+    rule._source_location = preset  # the When machinery's private write path
     segment._append(rule)
     assert rule.source_location is preset
+
+
+def test_element_locations_are_read_only() -> None:
+    # The annotate/diagnostics reverse maps depend on these stamps: the
+    # opacity contract ("read render() and source_location off elements")
+    # is mechanical, not convention
+    program = ASPProgram()
+    program.fact(P(x=1))
+    (element,) = program["Rules"]
+    with pytest.raises(AttributeError):
+        element.source_location = SourceLocation("evil.py", 1)  # type: ignore[misc]
+    with pytest.raises(AttributeError):
+        element.closed_at = SourceLocation("evil.py", 2)  # type: ignore[misc]
 
 
 def test_append_rejects_non_elements_with_teaching() -> None:

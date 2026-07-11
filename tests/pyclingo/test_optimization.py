@@ -26,7 +26,7 @@ from pyclingo import (
     Variable,
 )
 from pyclingo.clingo_handler import ClingoMessageHandler, LogLevel
-from pyclingo.optimization import Optimization, OptimizationDirective, WeakConstraint
+from pyclingo.optimization import WeakConstraint
 
 
 def optimal_cost(program: ASPProgram) -> list[int]:
@@ -676,11 +676,10 @@ def test_penalize_condition_must_be_term() -> None:
         program.penalize("notaterm", terms=[])  # type: ignore[arg-type]
 
 
-def test_weak_constraint_priority_getter() -> None:
-    # Constructed directly: the library reads .targets/.conditions/.render()
-    # but never .priority
+def test_weak_constraint_target_getters() -> None:
+    # Constructed directly: the library's read surface is
+    # .targets/.conditions/.render()
     wc = WeakConstraint((Pick(x=Variable("X")),), 1, (Variable("X"),), 3)
-    assert wc.priority == 3
     assert wc.targets == (Number(1), Variable("X"))  # weight Number(1), then the tuple term
     assert wc.conditions == [Pick(x=Variable("X"))]
 
@@ -694,14 +693,6 @@ def test_optimization_directive_tuple_terms_coerce_and_reject() -> None:
     other = ASPProgram()
     with pytest.raises(TypeError, match="got bool"):
         other.minimize(1, True, condition=Pick(x=ANY))  # type: ignore[arg-type]
-
-
-def test_optimization_directive_getters() -> None:
-    # Constructed directly: segment.py reads only .element, never
-    # .optimization or .priority
-    d = OptimizationDirective(Optimization.MINIMIZE, 1, (Variable("X"),), Pick(x=Variable("X")), 2)
-    assert d.optimization == Optimization.MINIMIZE
-    assert d.priority == 2
 
 
 def test_anonymous_variable_rejected_in_optimization_tuples() -> None:

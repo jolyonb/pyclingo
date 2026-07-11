@@ -95,7 +95,7 @@ class WeakConstraint(ProgramElement):
         self,
         conditions: tuple[Term, ...],
         weight: int | OptimizationTermType,
-        tuple_terms: tuple[OptimizationTermType, ...] | None,
+        terms: tuple[OptimizationTermType, ...] | None,
         priority: int,
     ) -> None:
         weight = _validated_weight(weight, "Weak-constraint")
@@ -117,8 +117,8 @@ class WeakConstraint(ProgramElement):
         # completes it with a per-statement discriminator (see the class
         # docstring), passed into render() — never stored, so rendering
         # stays pure and programs sharing this element cannot interfere.
-        self._auto_tuple = tuple_terms is None
-        if tuple_terms is None:
+        self._auto_tuple = terms is None
+        if terms is None:
             # Per-match charging by default: the tuple gets the conditions'
             # global variables, spelled out in the render. gringo's bare
             # tuple collapses every match to ONE charge (the ASP-Core-2
@@ -126,8 +126,8 @@ class WeakConstraint(ProgramElement):
             # so we write it explicitly). Pass terms=[] to collapse on
             # purpose.
             names = sorted(body_global_variables(list(conditions)))
-            tuple_terms = tuple(Variable(name) for name in names)
-        tuple_terms = tuple(coerce_tuple_term(term, "Weak-constraint") for term in tuple_terms)
+            terms = tuple(Variable(name) for name in names)
+        terms = tuple(coerce_tuple_term(term, "Weak-constraint") for term in terms)
         _validate_priority(priority, "Weak-constraint")
         if not conditions:
             raise ValueError("A weak constraint requires at least one condition")
@@ -140,7 +140,7 @@ class WeakConstraint(ProgramElement):
             cond.validate_in_context(is_in_head=False)
 
         self._priority = priority
-        self._targets: tuple[Value | Expression | Predicate, ...] = (weight, *tuple_terms)
+        self._targets: tuple[Value | Expression | Predicate, ...] = (weight, *terms)
         self._conditions = list(conditions)
 
     @property
@@ -152,10 +152,6 @@ class WeakConstraint(ProgramElement):
     def auto_tuple(self) -> bool:
         """Whether the tuple was auto-built (terms omitted), so the program render adds a discriminator."""
         return self._auto_tuple
-
-    @property
-    def priority(self) -> int:
-        return self._priority
 
     @property
     def conditions(self) -> list[Term]:
@@ -233,25 +229,17 @@ class OptimizationDirective(ProgramElement):
         self,
         optimization: Optimization,
         weight: int | OptimizationTermType,
-        tuple_terms: tuple[OptimizationTermType, ...],
+        terms: tuple[OptimizationTermType, ...],
         condition: ConditionType | list[ConditionType] | None,
         priority: int,
     ) -> None:
         weight = _validated_weight(weight, "Optimization")
-        coerced = tuple(coerce_tuple_term(term, "Optimization") for term in tuple_terms)
+        coerced = tuple(coerce_tuple_term(term, "Optimization") for term in terms)
         _validate_priority(priority, "Optimization")
 
         self._optimization = optimization
         self._priority = priority
         self._element = ConditionedElement((weight, *coerced), condition, "optimization")
-
-    @property
-    def optimization(self) -> Optimization:
-        return self._optimization
-
-    @property
-    def priority(self) -> int:
-        return self._priority
 
     @property
     def element(self) -> ConditionedElement:

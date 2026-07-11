@@ -1015,6 +1015,9 @@ def convert_symbol_to_predicate(symbol: clingo.Symbol, predicate_types: Predicat
         # kept — a type mismatch stays a TypeError.
         raise type(e)(
             f"Model atom {symbol} cannot be read back as {pred_class.__name__} "
-            f"({pred_name}/{len(symbol.arguments)}): {e}"
+            f"({pred_name}/{len(symbol.arguments)}): {e} (One unreadable atom "
+            f"fails the whole model read: hide() the class to keep the rest "
+            f"readable, or keep such values out of raw text and @-functions — "
+            f"pyclingo has no escaping support.)"
         ) from e
     return -instance if symbol.negative else instance

@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
 from pyclingo.conditional_literal import ConditionalLiteral
 from pyclingo.core import PredicateOccurrence, Term
@@ -16,17 +16,30 @@ if TYPE_CHECKING:
 class ProgramElement(ABC):
     """Base class for any element in an ASP program."""
 
-    # Stamped by Segment.append() when location capture is on: the line of
+    # Stamped by Segment._append() when location capture is on: the line of
     # user code that authored this element. For a when()-built element whose
     # closer sat on a different line, source_location is the when() site and
-    # closed_at is the closer's.
-    source_location: SourceLocation | None = None
-    closed_at: SourceLocation | None = None
+    # closed_at is the closer's. Read-only properties: the annotate and
+    # diagnostics reverse maps depend on these, so only the library writes
+    # them (through the private slots).
+    _source_location: SourceLocation | None = None
+    _closed_at: SourceLocation | None = None
+
+    @property
+    def source_location(self) -> SourceLocation | None:
+        """The user line that authored this element (None when capture was off)."""
+        return self._source_location
+
+    @property
+    def closed_at(self) -> SourceLocation | None:
+        """For a when()-built element, the closer's line when it differs from the when() site."""
+        return self._closed_at
 
     # Whether this element gets a source location at all; formatting
     # elements (comments, blank lines) opt out — no diagnostic can ever
-    # point at them, so stamping would be a wasted stack walk
-    locatable: bool = True
+    # point at them, so stamping would be a wasted stack walk. A ClassVar:
+    # per-class trait, never per-instance state
+    _locatable: ClassVar[bool] = True
 
     @abstractmethod
     def render(self) -> str:
@@ -41,10 +54,6 @@ class ProgramElement(ABC):
         """Collects (class, negated, is_atom) occurrences; empty by default. See Term.collect_predicate_occurrences."""
         return set()
 
-    def collect_predicates(self) -> set[PredicateClassType]:
-        """All Predicate classes used in this element (both signs, any position)."""
-        return {predicate for predicate, _negated, _is_atom in self.collect_predicate_occurrences(as_argument=False)}
-
 
 @dataclass(frozen=True)
 class RenderedLine:
@@ -57,7 +66,7 @@ class RenderedLine:
 class Comment(ProgramElement):
     """Represents a comment in an ASP program."""
 
-    locatable = False
+    _locatable = False
 
     def __init__(self, text: str):
         """text may be multi-line."""
@@ -168,7 +177,9 @@ class RawASP(ProgramElement):
     visibility per class (show= at definition, or program show()/hide()) —
     declaration means existence, the show config means visibility, exactly
     as for walked predicates. Declared classes round-trip into typed
-    instances and participate in name-collision checks. If a model contains
+    instances and participate in name-collision checks — except atoms
+    carrying escaped strings (pyclingo has no escaping support): reading
+    one raises, naming hide() as the remedy. If a model contains
     an atom whose signature was never declared anywhere, solving fails
     loudly at that model. Constants registered via define_constant() are
     always emitted, so raw text may use them freely.
@@ -238,7 +249,7 @@ class RawASP(ProgramElement):
 class BlankLine(ProgramElement):
     """Represents a blank line in an ASP program for formatting."""
 
-    locatable = False
+    _locatable = False
 
     def render(self) -> str:
         return ""

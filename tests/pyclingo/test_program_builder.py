@@ -338,12 +338,6 @@ def test_optimize_rejects_negative_max_iterations() -> None:
         program.optimize(max_iterations=-1)
 
 
-def test_rule_collect_predicates_returns_the_classes() -> None:
-    P = Predicate.define("p_cp", ["x"])
-    rule = Rule(head=P(x=1))
-    assert rule.collect_predicates() == {P}
-
-
 def test_comment_rejects_non_string_text() -> None:
     with pytest.raises(TypeError, match="Comment text must be a string"):
         Comment(42)  # type: ignore[arg-type]

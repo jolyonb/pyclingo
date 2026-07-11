@@ -418,22 +418,22 @@ class ASPProgram:
     def minimize(
         self,
         weight: int | OptimizationTermType,
-        *tuple_terms: OptimizationTermType,
+        *terms: OptimizationTermType,
         condition: ConditionType | list[ConditionType] | None = None,
         priority: int = 0,
     ) -> None:
         """Add a #minimize statement to the default segment; see Segment.minimize()."""
-        self._default_segment().minimize(weight, *tuple_terms, condition=condition, priority=priority)
+        self._default_segment().minimize(weight, *terms, condition=condition, priority=priority)
 
     def maximize(
         self,
         weight: int | OptimizationTermType,
-        *tuple_terms: OptimizationTermType,
+        *terms: OptimizationTermType,
         condition: ConditionType | list[ConditionType] | None = None,
         priority: int = 0,
     ) -> None:
         """Add a #maximize statement to the default segment; see Segment.maximize()."""
-        self._default_segment().maximize(weight, *tuple_terms, condition=condition, priority=priority)
+        self._default_segment().maximize(weight, *terms, condition=condition, priority=priority)
 
     def penalize(
         self,

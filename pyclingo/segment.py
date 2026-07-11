@@ -115,7 +115,7 @@ class Segment:
         Add an element to the end of the segment. Every statement verb ends
         here, so this is also where the element is stamped with the user
         line that authored it (unless the When machinery already did).
-        Formatting elements (locatable=False) are never stamped.
+        Formatting elements (_locatable=False) are never stamped.
 
         Private: elements are internal records — the statement verbs are
         the writing surface, raw_asp() the escape hatch.
@@ -124,8 +124,8 @@ class Segment:
             raise TypeError(
                 f"_append() takes a ProgramElement, got {type(element).__name__}; for verbatim ASP text use raw_asp()"
             )
-        if self._capture_locations and element.locatable and element.source_location is None:
-            element.source_location = capture_location()
+        if self._capture_locations and element._locatable and element.source_location is None:
+            element._source_location = capture_location()
         self._elements.append(element)
 
     def __len__(self) -> int:
@@ -250,7 +250,7 @@ class Segment:
     def minimize(
         self,
         weight: int | OptimizationTermType,
-        *tuple_terms: OptimizationTermType,
+        *terms: OptimizationTermType,
         condition: ConditionType | list[ConditionType] | None = None,
         priority: int = 0,
     ) -> None:
@@ -273,12 +273,12 @@ class Segment:
         directive has no rule body. Optimization changes how the program
         must be solved; see optimize().
         """
-        self._add_optimization(Optimization.MINIMIZE, weight, tuple_terms, condition, priority)
+        self._add_optimization(Optimization.MINIMIZE, weight, terms, condition, priority)
 
     def maximize(
         self,
         weight: int | OptimizationTermType,
-        *tuple_terms: OptimizationTermType,
+        *terms: OptimizationTermType,
         condition: ConditionType | list[ConditionType] | None = None,
         priority: int = 0,
     ) -> None:
@@ -288,17 +288,17 @@ class Segment:
         (clingo reports the cost of a maximization as a negated sum). See
         minimize() for the tuple-distinctness and priority rules.
         """
-        self._add_optimization(Optimization.MAXIMIZE, weight, tuple_terms, condition, priority)
+        self._add_optimization(Optimization.MAXIMIZE, weight, terms, condition, priority)
 
     def _add_optimization(
         self,
         sense: Optimization,
         weight: int | OptimizationTermType,
-        tuple_terms: tuple[OptimizationTermType, ...],
+        terms: tuple[OptimizationTermType, ...],
         condition: ConditionType | list[ConditionType] | None,
         priority: int,
     ) -> None:
-        directive = OptimizationDirective(sense, weight, tuple_terms, condition, priority)
+        directive = OptimizationDirective(sense, weight, terms, condition, priority)
         validate_optimization_element(directive.element, directive.render(), check_singletons=self._check_singletons)
         directive.element.freeze()
         self._append(directive)
@@ -309,7 +309,9 @@ class Segment:
         pyclingo does not model.
 
         Declare any predicates the block produces via predicates so that show
-        directives cover them and solutions round-trip into typed instances.
+        directives cover them and solutions round-trip into typed instances
+        (atoms carrying escaped strings are the exception — pyclingo has no
+        escaping support; hide() such classes).
         Declaring the class P covers round-trip and the collision check for
         both signs, and emits "#show p/n."; if the block also derives
         classically negated atoms, declare -P as well to emit "#show -p/n."
@@ -347,7 +349,7 @@ class Segment:
 
     # ---- rendering and walking ----
 
-    def render(self, with_header: bool) -> str:
+    def render(self, with_header: bool = False) -> str:
         """
         Render the segment's elements, one per line. With with_header, the
         elements are framed by a blank line, a "% ===== name =====" section
@@ -468,10 +470,10 @@ class When:
         # The element anchors at the when() line; a closer on a different
         # line is recorded too — a fluent chain's halves can sit far apart
         if self._location is not None:
-            element.source_location = self._location
+            element._source_location = self._location
             closed = capture_location()
             if closed is not None and closed != self._location:
-                element.closed_at = closed
+                element._closed_at = closed
         self._segment._append(element)
 
     def _guard(self) -> None:

@@ -258,14 +258,31 @@ def test_predicates_entries_validated_at_the_call() -> None:
 
 
 def test_unrepresentable_string_values_diagnose_the_atom() -> None:
-    # gringo handles escaped strings fine; pyclingo's String does not model
-    # them, and the read-side failure must name the atom it was reading —
-    # not just String's construction rule
+    # gringo handles escaped strings fine; pyclingo has no escaping support,
+    # and the read-side failure must name the atom it was reading — not just
+    # String's construction rule — and teach the remedies (one unreadable
+    # atom fails the whole model read)
     P = Predicate.define("p_esc", ["x"])
     program = ASPProgram()
     program.raw_asp('p_esc("a\\"b").', predicates=[P])
-    with pytest.raises(ValueError, match=r'p_esc\("a\\"b"\) cannot be read back as p_esc.*double quotes'):
+    with pytest.raises(
+        ValueError,
+        match=r'p_esc\("a\\"b"\) cannot be read back as p_esc.*double quotes.*hide\(\) the class.*no escaping support',
+    ):
         list(program.solve())
+
+
+def test_hiding_the_class_is_the_taught_remedy_and_works() -> None:
+    # The remedy the read-back error names, verified: hidden escaped-string
+    # atoms never get read, so the rest of the model stays reachable
+    P = Predicate.define("p_esc_hide", ["x"])
+    Q = Predicate.define("q_esc_hide", ["x"])
+    program = ASPProgram()
+    program.raw_asp('p_esc_hide("a\\"b").', predicates=[P])
+    program.fact(Q(x=1))
+    program.hide(P)
+    model = next(iter(program.solve()))
+    assert model.atoms(Q) == [Q(x=1)]  # the readable part of the model, intact
 
 
 def test_nul_rejected_in_raw_text() -> None:
