@@ -33,6 +33,7 @@ from pyclingo.core import (
     Value,
     Variable,
     negated_literal_value,
+    require_int32,
 )
 from pyclingo.predicate import Predicate, coerce_tuple_term
 from pyclingo.program_elements import ProgramElement, render_body_terms
@@ -59,12 +60,7 @@ def _validate_priority(priority: int, noun: str) -> None:
     """The priority rules both constructs share."""
     if not isinstance(priority, int) or isinstance(priority, bool):
         raise TypeError(f"{noun} priority must be an int, got {type(priority).__name__}")
-    if not -(2**31) <= priority < 2**31:
-        raise ValueError(
-            f"{noun} priority {priority} is outside clingo's integer range "
-            f"[-2147483648, 2147483647]; clingo would silently wrap it, merging or "
-            f"reordering objective tiers"
-        )
+    require_int32(priority, f"{noun} priority", extra=", merging or reordering objective tiers")
 
 
 def _weight_at_priority(weight: Term, priority: int) -> str:
@@ -124,7 +120,11 @@ class WeakConstraint(ProgramElement):
             # tuple collapses every match to ONE charge (the ASP-Core-2
             # standard specifies this implicit extension; gringo omits it,
             # so we write it explicitly). Pass terms=[] to collapse on
-            # purpose.
+            # purpose. This analysis pass is SEPARATE from validation's by
+            # design, not duplication: derivation must exclude the targets
+            # (they don't exist yet), while validation includes them in
+            # locality resolution (a target promotes its aggregate-local
+            # twin to global, tripping the sharing lint).
             names = sorted(body_global_variables(list(conditions)))
             terms = tuple(Variable(name) for name in names)
         terms = tuple(coerce_tuple_term(term, "Weak-constraint") for term in terms)

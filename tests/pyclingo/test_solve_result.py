@@ -269,3 +269,20 @@ def test_underived_shown_class_still_reads_empty() -> None:
     program.when(P(x=2)).derive(Q(x=2))  # body never true: no q atoms
     model = program.solve().first()
     assert model.atoms(Q) == []
+
+
+def test_close_passes_through_foreign_value_errors(monkeypatch: pytest.MonkeyPatch) -> None:
+    # close() translates only the generator-machinery "already executing"
+    # ValueError; a genuine ValueError out of the generator's finalization
+    # must surface as itself, never relabeled as a concurrency problem
+    program = ASPProgram()
+    P = Predicate.define("p_close_passthrough", ["x"])
+    program.fact(P(x=1))
+    result = program.solve()
+
+    def exploding_close(self: object) -> None:
+        raise ValueError("finalization went sideways")
+
+    monkeypatch.setattr(type(result._iterator), "close", exploding_close)
+    with pytest.raises(ValueError, match="finalization went sideways"):
+        result.close()

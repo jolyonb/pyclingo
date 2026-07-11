@@ -192,7 +192,7 @@ class RawASP(ProgramElement):
 
     def __init__(self, text: str, predicates: Sequence[PredicateClassType | NegatedSignature] = ()):
         if not isinstance(text, str):
-            raise TypeError(f"RawASP text must be a string, got {type(text).__name__}")
+            raise TypeError(f"raw_asp() text must be a string, got {type(text).__name__}")
         # A subclass converts to its natural plain str first: what the scan
         # below inspects is exactly what will render
         self.text = str(text)

@@ -291,6 +291,38 @@ def test_scalar_knobs_reject_lookalike_types() -> None:
         optimizing.ground().optimize(max_iterations=True)
 
 
+def test_enum_and_flag_knobs_reject_lookalikes() -> None:
+    # The same wall family for the non-scalar knobs: a str that happens to
+    # spell an enum value, a magic int threshold, and truthy non-bools all
+    # crashed later (or silently worked) instead of teaching here
+    program = make_choice_program(1)
+    with pytest.raises(TypeError, match=r"stop_on_log_level is a LogLevel"):
+        program.ground(stop_on_log_level="warning")  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match=r"stop_on_log_level is a LogLevel"):
+        program.ground(stop_on_log_level=20)  # type: ignore[arg-type]
+    grounded = make_choice_program(1).ground()
+    with pytest.raises(TypeError, match=r"ignore_optimization is a bool"):
+        grounded.solve(ignore_optimization="yes")  # type: ignore[arg-type]
+    optimizing = ASPProgram()
+    B = Predicate.define("b_knob2", ["x"])
+    optimizing.choose(Choice(B(x=RangePool(1, 2))).at_least(1))
+    optimizing.minimize(1, Variable("X"), condition=B(x=Variable("X")))
+    opt_grounded = optimizing.ground()
+    with pytest.raises(TypeError, match=r"strategy is an OptStrategy"):
+        opt_grounded.optimize(strategy="usc")  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match=r"all_optima is a bool"):
+        opt_grounded.optimize(all_optima="yes")  # type: ignore[arg-type]
+
+
+def test_single_atom_assumptions_teach_the_list_wrapper() -> None:
+    # A bare atom iterates via the legacy sequence protocol and died deep
+    # in __getitem__ with KeyError "no field named '0'"
+    grounded = make_choice_program(1).ground()
+    A = Predicate.define("a_assume_wrap", ["value"])
+    with pytest.raises(TypeError, match=r"wrap the atom in a list: \[a_assume_wrap"):
+        grounded.solve(assumptions=A(value=1))  # type: ignore[arg-type]
+
+
 def test_scalar_knobs_fail_before_grounding_is_paid_for() -> None:
     # The program below cannot even render (dangling when); a bad timeout
     # or count must be reported first — cheap checks precede grounding
@@ -346,4 +378,8 @@ def test_finished_publishes_only_after_finalization(monkeypatch: pytest.MonkeyPa
     assert not worker.is_alive()
     assert result.finished is True
     assert result.statistics is not None  # finalization completed before publication
+    # Exactly one patched call: if the generator ever gains an earlier
+    # perf_counter call, the held window re-aims silently and this pin
+    # stops guarding the publish-after-finalize order — fail loudly instead
+    assert calls["n"] == 1
     grounded.solve().close()  # and the grounding is free again

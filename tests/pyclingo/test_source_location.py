@@ -333,6 +333,13 @@ def test_display_escapes_newlines() -> None:
     assert SourceLocation("evil\x00tail", 3).display() == "evil\\x00tail:3"
 
 
+def test_display_handles_an_empty_filename() -> None:
+    # A frame compiled with co_filename "" is real (exec(compile(src, "", ...)));
+    # os.path.relpath("") raises ValueError on POSIX too, and display() keeps
+    # the name verbatim instead of crashing
+    assert SourceLocation("", 3).display() == ":3"
+
+
 def test_registration_rebinds_instead_of_mutating(skip_registry: None) -> None:
     # Copy-on-write: a walker iterating the registry on another thread sees
     # the old set or the new one, never a mutating one

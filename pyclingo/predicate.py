@@ -477,6 +477,12 @@ class Predicate(PredicateBase, Negatable, metaclass=_PredicateMeta):
                 object.__setattr__(self, field_info.name, Number(value))
             elif isinstance(value, str):
                 object.__setattr__(self, field_info.name, String(value))
+            elif isinstance(value, tuple):
+                # The read side teaches the same idiom for clingo tuples
+                raise TypeError(
+                    f"Predicate argument {field_info.name} is the tuple {value!r}, which pyclingo "
+                    f"does not model — wrap it in a named predicate (pair(1, 2) instead of (1, 2))."
+                )
             elif not isinstance(value, (Value, Predicate, Expression, Pool)):
                 raise TypeError(
                     f"Predicate argument {field_info.name} must be a Value, Predicate, Expression, Pool, int or str, "

@@ -8,11 +8,11 @@ one whole side once the other side is fully bound, regardless of the
 expression's shape. Every UNSAFE-VARIABLE rejection is therefore a certain
 gringo rejection (no false positives); the cost is a few false negatives
 (e.g. X**2 = 9, which gringo cannot invert) that fall back to clingo's own
-grounding error. Three further checks are deliberate lints BEYOND gringo,
+grounding error. Four further checks are deliberate lints BEYOND gringo,
 which accepts what they reject: singleton variables (gringo is silent;
 switchable via ASPProgram(allow_singletons=True)), aggregate tuples
 sharing a rule-global variable (gringo emits only an info, with collapsed
-semantics), and a conditional-literal head variable absent from its own
+semantics), a conditional-literal head variable absent from its own
 condition (gringo quietly treats it as local to the literal), and an
 ungrounded explicit pool anywhere but a plain predicate head's arguments
 (gringo multiplies the rule per element and judges each copy separately;
@@ -48,8 +48,9 @@ from pyclingo.core import (
 from pyclingo.predicate import Predicate
 
 if TYPE_CHECKING:
-    # Annotation-only upward reference: program_elements imports validate_rule
-    # from here, so scoping cannot import Rule at runtime
+    # Annotation-only upward references: program_elements and optimization
+    # import validators from here, so scoping cannot import these at runtime
+    from pyclingo.optimization import OptimizationDirective, WeakConstraint
     from pyclingo.program_elements import Rule
 
 # An equality edge: if every variable on one side is bound, the other side
@@ -404,21 +405,30 @@ def _resolve_localities(scopes: RuleScopes) -> None:
                     scopes.cl_head_promotions.add(name)
 
 
-def validate_optimization_element(element: ConditionedElement, rule_text: str, check_singletons: bool = True) -> None:
+def validate_optimization_element(
+    element: ConditionedElement, rule: str | OptimizationDirective, *, check_singletons: bool
+) -> None:
     """
     Validate an optimization directive's element: the weight and tuple
     terms must be bound by the element's own conditions (a directive has
     no rule body to bind from), with the same local-scope treatment as an
     aggregate element.
+
+    `rule` provides the text for error messages: pass the directive itself,
+    rendered only when an error needs it — the happy path never pays.
     """
-    _reject_ungrounded_pools([*element.targets, *element.conditions], "an optimization element", lambda: rule_text)
+
+    def rule_text() -> str:
+        return rule if isinstance(rule, str) else rule.render()
+
+    _reject_ungrounded_pools([*element.targets, *element.conditions], "an optimization element", rule_text)
     scope = LocalScope(description="optimization element")
     for target in element.targets:
         if "_" in target.collect_variables():
             raise ValueError(
                 f"The anonymous variable '_' cannot appear in an optimization tuple "
                 f"(gringo makes it unsafe) — and the tuple defines distinctness, so a "
-                f"don't-care there is meaningless. Name a condition variable instead: {rule_text}"
+                f"don't-care there is meaningless. Name a condition variable instead: {rule_text()}"
             )
         scope.target_counts.update(_occurrences(target))
     for condition in element.conditions:
@@ -428,7 +438,7 @@ def validate_optimization_element(element: ConditionedElement, rule_text: str, c
     if unsafe:
         names = ", ".join(unsafe)
         raise ValueError(
-            f"Unsafe variable(s) {names} in optimization element: {rule_text}\n"
+            f"Unsafe variable(s) {names} in optimization element: {rule_text()}\n"
             f"Every variable must be bound by a positive condition inside the element "
             f"(a directive has no rule body)."
         )
@@ -438,7 +448,7 @@ def validate_optimization_element(element: ConditionedElement, rule_text: str, c
     if singletons:
         names = ", ".join(singletons)
         raise ValueError(
-            f"Singleton variable(s) {names} in optimization element: {rule_text}\n"
+            f"Singleton variable(s) {names} in optimization element: {rule_text()}\n"
             f"A variable used exactly once is usually a typo; use ANY for an "
             f"intentional don't-care."
         )
@@ -527,28 +537,35 @@ def _check_scopes(scopes: RuleScopes, kind: str, rule_text: Callable[[], str], c
 
 
 def validate_weak_constraint(
-    targets: tuple[Term, ...], conditions: list[Term], rule_text: str, check_singletons: bool = True
+    targets: tuple[Term, ...], conditions: list[Term], rule: str | WeakConstraint, *, check_singletons: bool
 ) -> None:
     """
     Validate a weak constraint with EXACTLY a rule's checks: the body binds
     as a rule body does (aggregate comparisons and conditional literals
     included), the weight and tuple terms must be bound by it exactly as a
     head must be, and the aggregate-tuple/local/singleton checks all apply.
+
+    `rule` provides the text for error messages: pass the constraint itself,
+    rendered only when an error needs it — the happy path never pays.
     """
-    _reject_ungrounded_pools([*targets, *conditions], "a weak constraint", lambda: rule_text)
+
+    def rule_text() -> str:
+        return rule if isinstance(rule, str) else rule.render()
+
+    _reject_ungrounded_pools([*targets, *conditions], "a weak constraint", rule_text)
     scopes = analyze(None, conditions)
     for target in targets:
         if "_" in target.collect_variables():
             raise ValueError(
                 f"The anonymous variable '_' cannot appear in a weak-constraint "
-                f"tuple (gringo makes it unsafe): {rule_text}"
+                f"tuple (gringo makes it unsafe): {rule_text()}"
             )
         scopes.head_counts.update(_occurrences(target))
     _resolve_localities(scopes)
-    _check_scopes(scopes, "weak constraint", lambda: rule_text, check_singletons)
+    _check_scopes(scopes, "weak constraint", rule_text, check_singletons)
 
 
-def validate_rule(head: Term | None, body: list[Term], rule: str | Rule, check_singletons: bool = True) -> None:
+def validate_rule(head: Term | None, body: list[Term], rule: str | Rule, *, check_singletons: bool) -> None:
     """
     Raise ValueError for unsafe or singleton variables, at rule construction
     time — the traceback lands on the line that built the bad rule.

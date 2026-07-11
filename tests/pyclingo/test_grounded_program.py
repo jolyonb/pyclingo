@@ -7,6 +7,7 @@ import inspect
 import threading
 import time
 from itertools import islice
+from typing import Any
 
 import clingo
 import pytest
@@ -266,11 +267,12 @@ def test_racing_solves_admit_exactly_one() -> None:
     # The sequential guard is locked: of two threads racing solve() on one
     # grounding, exactly one wins and the other hits the teaching error —
     # never two searches silently sharing one Control (the unlocked
-    # check-then-set admitted both in 93/500 trials)
+    # check-then-set admitted both in 93/500 trials — at that 18.6% rate,
+    # 100 trials miss a regression with odds below 1e-8; each is ~ms)
     program = ASPProgram()
     P = Predicate.define("p_race_seq", ["x"])
     program.choose(Choice(P(x=RangePool(1, 3))))
-    for _ in range(20):
+    for _ in range(100):
         grounded = program.ground()
         outcomes: list[str] = []
         barrier = threading.Barrier(2)
@@ -427,11 +429,11 @@ def test_comparison_head_rules_ground_and_analyze() -> None:
     assert "p_cmp/1: 2 atoms" in report  # body signatures still reported; no head row
 
 
-def test_executing_solve_refuses_abandon_and_close_and_teaches() -> None:
+def test_executing_solve_refuses_abandon_close_and_next_and_teaches() -> None:
     # A solve blocked inside clasp on another thread cannot be injected
-    # into: abandon() and close() must both name the remedies rather than
-    # leak generator internals — and abandon() must still free the
-    # grounding once the search ends
+    # into: abandon(), close(), and a racing next() must all name their
+    # remedies rather than leak generator internals — and abandon() must
+    # still free the grounding once the search ends
     Pigeon = Predicate.define("pigeon_ab", ["p"], show=False)
     Assign = Predicate.define("assign_ab", ["p", "h"])
     program = ASPProgram()
@@ -441,14 +443,24 @@ def test_executing_solve_refuses_abandon_and_close_and_teaches() -> None:
     program.forbid(Assign(p=P, h=H), Assign(p=P2, h=H), P < P2)  # 14/13: a long UNSAT proof
     grounded = program.ground()
     result = grounded.solve()
-    worker = threading.Thread(target=lambda: next(iter(result), None))
+    iterator = iter(result)
+    worker = threading.Thread(target=lambda: next(iterator, None))
     worker.start()
-    time.sleep(0.3)  # let the worker get blocked inside clasp's search
     try:
+        # Poll until the worker is observably inside the generator (a fixed
+        # sleep is a bet a starved CI runner loses); gi_running flips the
+        # moment the frame is entered and stays up while clasp searches
+        generator: Any = result._iterator._generator
+        deadline = time.monotonic() + 10
+        while not generator.gi_running and time.monotonic() < deadline:
+            time.sleep(0.005)
+        assert generator.gi_running, "worker never entered the search"
         with pytest.raises(RuntimeError, match=r"executing right now.*control\.interrupt"):
             grounded.abandon()
         with pytest.raises(RuntimeError, match=r"Only a suspended search can be stopped.*control\.interrupt"):
             result.close()
+        with pytest.raises(RuntimeError, match=r"executing right now.*One consumer at a time"):
+            next(iterator)
     finally:
         grounded.control.interrupt()
         worker.join(timeout=30)

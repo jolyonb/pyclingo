@@ -31,7 +31,7 @@ from pyclingo.optimization import (
     OptimizationTermType,
     WeakConstraint,
 )
-from pyclingo.predicate import NegatedSignature, Predicate, PredicateClassType
+from pyclingo.predicate import NegatedSignature, Predicate
 from pyclingo.program_elements import BlankLine, Comment, ProgramElement, RawASP, RenderedLine, Rule
 from pyclingo.scoping import validate_optimization_element, validate_weak_constraint
 from pyclingo.source_location import SourceLocation, capture_location
@@ -46,7 +46,7 @@ def _build_weak_constraint(
 ) -> WeakConstraint:
     """The one assembly path both penalize() spellings share: build, validate, freeze."""
     weak = WeakConstraint(conditions, weight, tuple(terms) if terms is not None else None, priority)
-    validate_weak_constraint(weak.targets, list(weak.conditions), weak.render(), check_singletons=check_singletons)
+    validate_weak_constraint(weak.targets, list(weak.conditions), weak, check_singletons=check_singletons)
     weak.freeze()
     return weak
 
@@ -300,11 +300,11 @@ class Segment:
         priority: int,
     ) -> None:
         directive = OptimizationDirective(sense, weight, terms, condition, priority)
-        validate_optimization_element(directive.element, directive.render(), check_singletons=self._check_singletons)
+        validate_optimization_element(directive.element, directive, check_singletons=self._check_singletons)
         directive.element.freeze()
         self._append(directive)
 
-    def raw_asp(self, text: str, predicates: Sequence[PredicateClassType | NegatedSignature] = ()) -> None:
+    def raw_asp(self, text: str, predicates: Sequence[type[Predicate] | NegatedSignature] = ()) -> None:
         """
         Add a verbatim block of ASP text: the escape hatch for constructs
         pyclingo does not model.
@@ -331,8 +331,6 @@ class Segment:
         Set the knob through the control escape hatch between ground() and
         the solve, or the directive quietly changes nothing.
         """
-        if not isinstance(text, str):
-            raise TypeError(f"raw_asp() text must be a string, got {type(text).__name__}")
         self._append(RawASP(text, predicates))
 
     def comment(self, text: str) -> None:

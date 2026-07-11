@@ -51,11 +51,15 @@ def _gringo_grounds(head: Term | None, body: Sequence[Term]) -> bool:
     aggregate (p(N) :- #count{ X : p(X) } = N) would otherwise grow its
     value set forever during grounding. A PARSE failure fails the test
     outright — the probe's question is safety, never syntax, so a rendering
-    regression must not impersonate a safety rejection.
+    regression must not impersonate a safety rejection — and a ground-time
+    rejection only counts as a receipt when gringo's own diagnosis says
+    "unsafe": any other grounding error would vacuously satisfy a
+    gringo_rejects=True pin while proving nothing about safety.
     """
     head_str = "" if head is None else head.render()
     guarded_body = render_body_terms([*body, _ProbeGuard()])
-    control = clingo.Control(logger=lambda code, message: None)
+    messages: list[str] = []
+    control = clingo.Control(logger=lambda code, message: messages.append(message))
     try:
         control.add("base", [], f"{head_str} :- {guarded_body}.")
     except RuntimeError:
@@ -63,6 +67,10 @@ def _gringo_grounds(head: Term | None, body: Sequence[Term]) -> bool:
     try:
         control.ground([("base", [])])
     except RuntimeError:
+        diagnosis = "\n".join(messages)
+        assert "unsafe" in diagnosis, (
+            f"gringo rejected {_rule_text(head, body)} but not for safety — the receipt proves nothing:\n{diagnosis}"
+        )
         return False
     return True
 
@@ -74,7 +82,7 @@ def _rule_text(head: Term | None, body: Sequence[Term]) -> str:
 
 def ok(head: Term | None, body: Sequence[Term]) -> None:
     """Accepted by validate_rule AND grounded by gringo — the pin holds both ways, live."""
-    validate_rule(head, list(body), "<test rule>")
+    validate_rule(head, list(body), "<test rule>", check_singletons=True)
     assert _gringo_grounds(head, body), f"pyclingo accepted a rule gringo rejects: {_rule_text(head, body)}"
 
 
@@ -85,7 +93,7 @@ def bad(head: Term | None, body: Sequence[Term], match: str, *, gringo_rejects: 
     a deliberate pyclingo-only rejection of text gringo grounds.
     """
     with pytest.raises(ValueError, match=match):
-        validate_rule(head, list(body), "<test rule>")
+        validate_rule(head, list(body), "<test rule>", check_singletons=True)
     if gringo_rejects:
         assert not _gringo_grounds(head, body), f"gringo accepts a rule we reject as unsafe: {_rule_text(head, body)}"
     else:
@@ -440,6 +448,6 @@ def test_body_pool_with_variables_is_rejected_even_where_gringo_accepts() -> Non
 
 def test_choice_and_comparison_heads_refuse_ungrounded_pools() -> None:
     with pytest.raises(ValueError, match="rule-HEAD arguments"):
-        validate_rule(Choice(P(x=pool([X, X + 1])), condition=Q(x=X)), [Q(x=X)], "<test rule>")
+        validate_rule(Choice(P(x=pool([X, X + 1])), condition=Q(x=X)), [Q(x=X)], "<test rule>", check_singletons=True)
     with pytest.raises(ValueError, match="rule-HEAD arguments"):
-        validate_rule(X == R2(x=X, y=pool([X, X + 1])), [Q(x=X)], "<test rule>")
+        validate_rule(X == R2(x=X, y=pool([X, X + 1])), [Q(x=X)], "<test rule>", check_singletons=True)

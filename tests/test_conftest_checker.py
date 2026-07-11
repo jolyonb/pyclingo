@@ -12,6 +12,7 @@ from pyclingo import (
     Number,
     Predicate,
     RangePool,
+    Segment,
     String,
     Variable,
 )
@@ -29,6 +30,7 @@ def test_checker_rejects_invalid_programs() -> None:
 
 def test_checker_is_active_by_default() -> None:
     assert ASPProgram.render.__name__ == "checked_program_render"
+    assert Segment.render.__name__ == "checked_segment_render"  # segment fragments are covered too
 
 
 @pytest.mark.allow_invalid_render
@@ -66,6 +68,20 @@ def test_every_term_host_family_resolves_to_the_checked_render() -> None:
     for term_class, _host in _TERM_HOSTS:
         if "render" in term_class.__dict__:
             assert term_class.render.__name__ in ("checked_render", "checked_program_render"), term_class.__name__
+
+
+def test_segment_fragment_renders_are_parse_checked() -> None:
+    # Direct segment-render assertions are the one rendered text the program
+    # patch never sees; the Segment patch must catch an invalid fragment
+    program = ASPProgram()
+    P = Predicate.define("p_segchk", ["x"])
+    program.fact(P(x=1))
+    (segment,) = program.segments
+    assert "p_segchk(1)." in segment.render()  # a valid fragment passes through
+    bad = Segment("bad_fragment")
+    bad.raw_asp("p_segchk(1) :-")  # legal to hold (raw text is unparsed)...
+    with pytest.raises(pytest.fail.Exception, match="not valid clingo"):
+        bad.render()  # ...but a rendered fragment must parse
 
 
 def test_nested_renders_do_not_multiply_checks() -> None:

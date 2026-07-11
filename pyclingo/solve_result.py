@@ -407,6 +407,16 @@ class _ClosedCheckingIterator:
         except StopIteration:
             self._ended = True
             raise
+        except ValueError as e:
+            if "already executing" not in str(e):
+                raise  # the generator body's own ValueError (e.g. a read-back teaching error)
+            # generator already executing: the third door into the room
+            # close() and abandon() already teach about
+            raise RuntimeError(
+                "Only a suspended search can be resumed, but this search is "
+                "executing right now (in another thread). One consumer at a "
+                "time: hand the iterator off, don't share it."
+            ) from e
 
     def close(self) -> None:
         self._generator.close()
@@ -482,6 +492,8 @@ class Search(ABC):
         try:
             self._iterator.close()
         except ValueError as e:
+            if "already executing" not in str(e):
+                raise  # a genuine ValueError out of the generator's finalization
             # generator.close() on an executing generator
             raise RuntimeError(
                 f"Only a suspended search can be stopped, but this "
@@ -738,7 +750,7 @@ def _search_generator(
     message_handler: ClingoMessageHandler,
     assumptions: list[tuple[clingo.Symbol, bool]],
     mode: SearchMode,
-    hidden_classes: frozenset[type[Predicate]] = frozenset(),
+    hidden_classes: frozenset[type[Predicate]],
 ) -> Generator[AtomCollection]:
     """
     One loop for every search mode, finalizing bookkeeping on every exit

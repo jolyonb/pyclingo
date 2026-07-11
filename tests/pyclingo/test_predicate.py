@@ -270,3 +270,11 @@ def test_disjunction_attempt_teaches_the_modeled_spellings() -> None:
     Q = Predicate.define("q_disj", ["x"])
     with pytest.raises(TypeError, match=r"disjunctive heads.*Choice\(\.\.\.\)\.at_least\(1\)"):
         P(x=1) | Q(x=1)  # type: ignore[operator]
+
+
+def test_tuple_arguments_teach_the_named_predicate_idiom() -> None:
+    # The read side already taught this for model atoms; the write side
+    # speaks the same sentence
+    P = Predicate.define("p_tuple_arg", ["x"])
+    with pytest.raises(TypeError, match=r"the tuple \(1, 2\).*wrap it in a named predicate"):
+        P(x=(1, 2))  # type: ignore[arg-type]

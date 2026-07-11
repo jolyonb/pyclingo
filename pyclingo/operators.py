@@ -6,7 +6,9 @@ class Operation(Enum):
     The mathematical operations in ASP.
 
     Each member notes the Python operator that builds it; where Python and ASP
-    notation differ, both are given. Values hold the rendered ASP text.
+    notation differ, both are given. Binary members' values hold the rendered
+    ASP text; the unary members (UNARY_MINUS, ABS) are identifying labels only
+    — rendering spells them itself (-x, |x|).
     """
 
     ADD = "+"  # Python: +

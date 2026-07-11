@@ -57,6 +57,13 @@ def test_range_bounds_must_be_integer_valued() -> None:
         RangePool(String("a"), 5)  # type: ignore[arg-type]
 
 
+def test_stepped_ranges_convert_in_order() -> None:
+    # pool(range(...)) enumerates the range's own order: a descending or
+    # stepped range keeps its sequence, never normalized or re-sorted
+    assert pool(range(3, 0, -1)).render() == "(3; 2; 1)"
+    assert pool(range(1, 10, 4)).render() == "(1; 5; 9)"
+
+
 def test_empty_pools_raise_everywhere() -> None:
     with pytest.raises(ValueError, match="empty"):
         pool(range(1, 1))
@@ -67,16 +74,23 @@ def test_empty_pools_raise_everywhere() -> None:
 
 
 def test_cache_can_be_cleared() -> None:
-    # This clears the PROCESS-GLOBAL intern cache: anything running later
-    # that held a pre-clear Value would see equal-but-not-identical twins.
-    # Nothing in the suite does (asserted intents are all name/value-based),
-    # but reorder with care.
+    # clear_cache() resets the PROCESS-GLOBAL intern cache. The probe
+    # restores the prior contents afterwards as a MECHANISM (not a comment):
+    # values other tests hold (module-level atoms' arguments) stay canonical
+    # whatever the suite order, so no one can see equal-but-not-identical
+    # twins from here
     before = Variable("CacheProbe")
-    assert Variable("CacheProbe") is before
-    Value.clear_cache()
-    after = Variable("CacheProbe")
-    assert after is not before  # identity resets across a clear
-    assert Variable("CacheProbe") is after  # caching resumes
+    snapshot = dict(Value._cache)  # strong refs to every pre-clear resident
+    try:
+        assert Variable("CacheProbe") is before
+        Value.clear_cache()
+        after = Variable("CacheProbe")
+        assert after is not before  # identity resets across a clear
+        assert Variable("CacheProbe") is after  # caching resumes
+    finally:
+        Value._cache.clear()
+        Value._cache.update(snapshot)  # pre-clear residents are canonical again
+    assert Variable("CacheProbe") is before  # the restore reinstated the original
 
 
 def test_cache_evicts_dead_values() -> None:

@@ -27,18 +27,30 @@ BINARY_OPS = [
 ]
 
 
+def _leaf(rng: random.Random) -> tuple[Any, Any]:
+    value = rng.randint(-50, 50)
+    return Number(value), value
+
+
 def build_tree(rng: random.Random, depth: int) -> tuple[Any, Any]:
-    """Returns (pyclingo expression or Number, python int) for the same tree."""
+    """
+    Returns (pyclingo expression or Number, python int) for the same tree.
+
+    EVERY node's value is kept inside clingo's 32-bit range, intermediates
+    included: Python evaluates the reference in bignum while clingo wraps,
+    so a tree like (big*big) - (big*big) with an in-range RESULT would
+    diverge for no rendering reason. An overflowing subtree collapses to a
+    fresh leaf.
+    """
     if depth == 0 or rng.random() < 0.3:
-        value = rng.randint(-50, 50)
-        return Number(value), value
+        return _leaf(rng)
     shape = rng.random()
     if shape < 0.08:
         term, value = build_tree(rng, depth - 1)
-        return -term, -value
+        return (-term, -value) if -(2**31) <= -value < 2**31 else _leaf(rng)
     if shape < 0.16:
         term, value = build_tree(rng, depth - 1)
-        return Compl(term), ~value
+        return Compl(term), ~value  # ~ maps the 32-bit range onto itself
     if shape < 0.24:
         # ** with a small non-negative literal exponent on a positive base
         base = rng.randint(1, 6)
@@ -47,7 +59,10 @@ def build_tree(rng: random.Random, depth: int) -> tuple[Any, Any]:
     _name, op = BINARY_OPS[rng.randrange(len(BINARY_OPS))]
     left_term, left_value = build_tree(rng, depth - 1)
     right_term, right_value = build_tree(rng, depth - 1)
-    return op(left_term, right_term), op(left_value, right_value)
+    value = op(left_value, right_value)
+    if not -(2**31) <= value < 2**31:
+        return _leaf(rng)
+    return op(left_term, right_term), value
 
 
 def test_rendered_trees_evaluate_identically_seeded_fuzz() -> None:
@@ -58,8 +73,8 @@ def test_rendered_trees_evaluate_identically_seeded_fuzz() -> None:
     case = 0
     while case < 1000:
         term, value = build_tree(rng, depth=5)
-        if isinstance(term, Number) or not -(2**31) <= value < 2**31:
-            continue  # trivial, or would overflow clingo's integers
+        if isinstance(term, Number):
+            continue  # a bare leaf pins nothing (build_tree bounds every node's value)
         program.fact(Result(case=case, value=term))
         expected[case] = value
         case += 1

@@ -10,6 +10,7 @@ from pyclingo.core import (
     String,
     Term,
     Value,
+    Variable,
     negated_literal_value,
 )
 from pyclingo.predicate import Predicate
@@ -95,6 +96,11 @@ class Choice(FreezableBuilder, Term):
         # Reject string constants which don't make sense for cardinality
         if isinstance(count, String):
             raise TypeError(f"{description} cannot be a String")
+        if isinstance(count, Variable) and count.is_anonymous:
+            raise ValueError(
+                f"{description} cannot be '_': an anonymous bound binds nothing, and "
+                f"gringo rejects the rule as unsafe. Use a named Variable bound in the body."
+            )
         if isinstance(count, ExtremeConstant):
             raise TypeError(f"{description} must be integer-valued, got {count.render()}")
 
@@ -183,14 +189,9 @@ class Choice(FreezableBuilder, Term):
     @property
     def is_grounded(self) -> bool:
         """
-        A Choice rule is grounded if all its elements and conditions are grounded.
-
-        Note: This property strictly checks all variables, including those that would be
-        considered "local" to the choice in ASP semantics. For example, in
-        {X : p(X)}, the variable X is local to the choice but this property
-        will still report False because X is ungrounded. This approach ensures
-        consistency with how other Term classes handle groundedness.
-        We may later add a separate property to check that no global variables are used if needed.
+        Grounded means NO variables anywhere, construct-local ones included:
+        {X : p(X)} reports False even though X is local in ASP semantics —
+        the same strict reading every Term uses.
         """
         for element in self._elements:
             if not element.is_grounded:

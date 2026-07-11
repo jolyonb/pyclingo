@@ -41,6 +41,19 @@ type ExpressionFieldType = Value | Expression | int
 type ValueExpressionType = Value | Expression
 
 
+def require_int32(value: int, noun: str, extra: str = "") -> None:
+    """
+    Reject ints outside clingo's 32-bit range, which clingo silently wraps.
+    One home for the bounds; noun and extra keep each caller's message
+    byte-identical to its historical wording.
+    """
+    if not -(2**31) <= value < 2**31:
+        raise ValueError(
+            f"{noun} {value} is outside clingo's integer range [-2147483648, 2147483647]; "
+            f"clingo would silently wrap it{extra}"
+        )
+
+
 class RenderingContext(Enum):
     """
     Enum for defining rendering contexts where predicates may need to know to surround themselves in parentheses.
@@ -604,11 +617,7 @@ class Number(ConstantBase):
         # A subclass converts to its natural plain int first, so the checks
         # below (and rendering) see exactly that value
         value = int(value)
-        if not -(2**31) <= value < 2**31:
-            raise ValueError(
-                f"Number value {value} is outside clingo's integer range "
-                f"[-2147483648, 2147483647]; clingo would silently wrap it"
-            )
+        require_int32(value, "Number value")
         self._value = value
 
     @property
@@ -909,7 +918,7 @@ class ExplicitPool(Pool):
                 "one-string pool."
             )
         if not elements:
-            raise ValueError("ExplicitPool cannot be empty")
+            raise ValueError("Cannot create an empty pool")
 
         self._elements = []
 
@@ -1010,9 +1019,7 @@ def pool(elements: range | Sequence[int | str | BasicTerm | Expression] | Pool) 
         return ExplicitPool([Number(x) for x in elements])
 
     if isinstance(elements, (list, tuple)):
-        if not elements:
-            raise ValueError("Cannot create an empty pool")
-        # ExplicitPool validates and coerces every element itself
+        # ExplicitPool validates and coerces every element itself, empty included
         return ExplicitPool(elements)
 
     raise TypeError(f"Expected Pool, list, tuple, or range, got {type(elements).__name__}")

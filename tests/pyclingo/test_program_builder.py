@@ -22,6 +22,7 @@ from pyclingo import (
     RangePool,
     SourceLocation,
     Variable,
+    pool,
 )
 from pyclingo.program_elements import BlankLine, Comment, RawASP, Rule
 from pyclingo.segment import Segment
@@ -147,6 +148,18 @@ def test_atom_valued_const_values_must_be_ground_and_plain() -> None:
         program.define_constant("dir", P(x=other))
     with pytest.raises(TypeError, match="integer, a string, or a grounded predicate atom"):
         program.define_constant("dir", 1.5)  # type: ignore[arg-type]
+
+
+def test_atom_valued_const_rejects_pools() -> None:
+    # Pools are not #const terms: gringo rejects '#const c = f(1; 2).' at
+    # parse, so the wall lands at define_constant with the author's line
+    program = ASPProgram()
+    P = Predicate.define("p_poolc", ["a"])
+    with pytest.raises(ValueError, match="cannot contain a pool"):
+        program.define_constant("c_pool", P(a=pool([1, 2])))
+    Nested = Predicate.define("n_poolc", ["inner"])
+    with pytest.raises(ValueError, match="cannot contain a pool"):
+        program.define_constant("c_pool", Nested(inner=P(a=pool([1, 2]))))
 
 
 def test_atom_valued_const_value_hits_the_collision_wall() -> None:
@@ -344,7 +357,9 @@ def test_comment_rejects_non_string_text() -> None:
 
 
 def test_rawasp_rejects_non_string_text() -> None:
-    with pytest.raises(TypeError, match="RawASP text must be a string"):
+    # One check, one wording: the constructor speaks in the public verb's
+    # voice (Segment.raw_asp no longer pre-checks)
+    with pytest.raises(TypeError, match=r"raw_asp\(\) text must be a string"):
         RawASP(42)  # type: ignore[arg-type]
 
 

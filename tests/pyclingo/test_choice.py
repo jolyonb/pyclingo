@@ -5,9 +5,10 @@ Tests for Choice construction guards.
 import inspect
 import re
 
+import clingo
 import pytest
 
-from pyclingo import SUP, ASPProgram, Choice, Count, Not, Number, Predicate, SourceLocation, String, Variable
+from pyclingo import ANY, SUP, ASPProgram, Choice, Count, Not, Number, Predicate, SourceLocation, String, Variable
 
 
 def test_impossible_cardinality_rejected() -> None:
@@ -259,3 +260,18 @@ def test_when_choose_is_the_conditional_choice_spelling() -> None:
     assert named.render() == general.render()
     with pytest.raises(TypeError, match=r"choose\(\) takes a Choice, got p_wc.*\.derive\(\)"):
         ASPProgram().when(Q(x=1)).choose(P(x=1))  # type: ignore[arg-type]
+
+
+def test_anonymous_cardinality_bound_rejected_with_receipt() -> None:
+    # '_' as a bound binds nothing: certain gringo rejection ('#Anon0' is
+    # unsafe), walled at construction with the author's line
+    P = Predicate.define("p_anon_card", ["x"])
+    Q = Predicate.define("q_anon_card", ["x"])
+    X = Variable("X")
+    with pytest.raises(ValueError, match="cannot be '_'"):
+        Choice(P(x=X), condition=Q(x=X)).at_most(ANY)
+    # gringo's live verdict on the equivalent text
+    receipt = clingo.Control(logger=lambda code, message: None)
+    receipt.add("base", [], "q_anon_card(1). { p_anon_card(X) : q_anon_card(X) } _.")
+    with pytest.raises(RuntimeError):
+        receipt.ground([("base", [])])

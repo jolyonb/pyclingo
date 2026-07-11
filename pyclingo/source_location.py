@@ -38,7 +38,7 @@ class SourceLocation:
         """
         try:
             relative = os.path.relpath(self.filename)
-        except ValueError:  # pragma: no cover — only Windows raises here (path on a different drive)
+        except ValueError:
             relative = self.filename
         path = self.filename if relative.startswith("..") else relative
         path = path.replace("\r", "\\r").replace("\n", "\\n").replace("\x00", "\\x00")

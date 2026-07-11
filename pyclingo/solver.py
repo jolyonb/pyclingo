@@ -9,7 +9,7 @@ from pyclingo.choice import Choice
 from pyclingo.clingo_handler import ClingoMessageHandler, LogLevel
 from pyclingo.conditional_literal import ConditionalLiteral
 from pyclingo.conditioned_element import ConditionType
-from pyclingo.core import Comparison, DefaultNegation, DefinedConstant, PredicateOccurrence, Term
+from pyclingo.core import Comparison, DefaultNegation, DefinedConstant, Pool, PredicateOccurrence, Term, require_int32
 from pyclingo.exceptions import GroundingError, UnsatisfiableError
 from pyclingo.optimization import OptimizationTermType, OptStrategy, WeakConstraint
 from pyclingo.predicate import NegatedSignature, Predicate
@@ -52,6 +52,17 @@ class _MinimizeLevelObserver(clingo.Observer):
 
     def minimize(self, priority: int, literals: Sequence[tuple[int, int]]) -> None:
         self.priorities.add(priority)
+
+
+def _contains_pool(atom: Predicate) -> bool:
+    """Whether any argument slot, at any depth, holds a Pool (Expressions cannot hold pools)."""
+    for field_name in atom.field_names():
+        value = atom.read_as_term(field_name)
+        if isinstance(value, Pool):
+            return True
+        if isinstance(value, Predicate) and _contains_pool(value):
+            return True
+    return False
 
 
 def _require_predicate_class(candidate: object, verb: str) -> None:
@@ -112,6 +123,26 @@ def _validate_max_iterations(max_iterations: int) -> None:
         raise TypeError(f"max_iterations is a count, got {type(max_iterations).__name__}")
     if max_iterations < 0:
         raise ValueError(f"max_iterations must be non-negative (0 means unbounded), got {max_iterations}")
+
+
+def _validate_stop_level(stop_on_log_level: LogLevel) -> None:
+    """stop_on_log_level is a threshold: a LogLevel exactly (a str or magic int compares wrongly or crashes later)."""
+    if not isinstance(stop_on_log_level, LogLevel):
+        raise TypeError(
+            f"stop_on_log_level is a LogLevel (e.g. LogLevel.WARNING), got {type(stop_on_log_level).__name__}"
+        )
+
+
+def _validate_strategy(strategy: OptStrategy) -> None:
+    """strategy is an OptStrategy member exactly — its .value reaches clasp verbatim."""
+    if not isinstance(strategy, OptStrategy):
+        raise TypeError(f"strategy is an OptStrategy (e.g. OptStrategy.USC), got {type(strategy).__name__}")
+
+
+def _validate_flag(value: bool, name: str) -> None:
+    """The boolean knobs take real bools, matching the timeout/max_iterations lookalike walls."""
+    if not isinstance(value, bool):
+        raise TypeError(f"{name} is a bool, got {type(value).__name__}")
 
 
 def _annotate_lines(lines: list[RenderedLine]) -> list[RenderedLine]:
@@ -476,11 +507,8 @@ class ASPProgram:
         if not isinstance(name, str):
             raise TypeError(f"Constant name must be a string, got {type(name).__name__}")
         name = str(name)  # a subclass's natural plain form: the checks below see what renders
-        if isinstance(value, int) and not isinstance(value, bool) and not -(2**31) <= value < 2**31:
-            raise ValueError(
-                f"Constant value {value} is outside clingo's integer range "
-                f"[-2147483648, 2147483647]; clingo would silently wrap it"
-            )
+        if isinstance(value, int) and not isinstance(value, bool):
+            require_int32(value, "Constant value")
         constant = DefinedConstant(name)  # the one home for constant-name rules
         if name in self._defined_constants:
             raise ValueError(f"Defined constant '{name}' is already registered")
@@ -502,6 +530,12 @@ class ASPProgram:
                     f"A #const value cannot reference other defined constants "
                     f"({', '.join(sorted(referenced))} in {value.render()}): register the "
                     f"plain value directly"
+                )
+            if _contains_pool(value):
+                raise ValueError(
+                    f"A #const value cannot contain a pool ({value.render()}): pools are "
+                    f"not #const terms — gringo rejects the directive at parse. Define one "
+                    f"constant per value."
                 )
         else:
             # A subclass converts to its natural plain form first, so the check
@@ -863,6 +897,7 @@ class ASPProgram:
             GroundingError: If an error occurs during parsing or grounding,
                 or the log level threshold is exceeded
         """
+        _validate_stop_level(stop_on_log_level)
         asp_source, line_origins, all_classes, has_raw = self._render_with_origins()
 
         message_handler = ClingoMessageHandler(asp_source, stop_on_level=stop_on_log_level, line_origins=line_origins)
@@ -1098,6 +1133,8 @@ class ASPProgram:
         """
         _validate_timeout(timeout)  # before grounding is paid for
         _validate_max_iterations(max_iterations)
+        _validate_strategy(strategy)
+        _validate_flag(all_optima, "all_optima")
         return self.ground(stop_on_log_level=stop_on_log_level).optimize(
             timeout=timeout,
             max_iterations=max_iterations,
@@ -1244,6 +1281,10 @@ class GroundedProgram:
         self, assumptions: Sequence[Predicate | DefaultNegation]
     ) -> list[tuple[clingo.Symbol, bool]]:
         """Convert assumption literals to (symbol, truth) pairs, existence-checked."""
+        if isinstance(assumptions, (Predicate, DefaultNegation)):
+            # A bare atom iterates via the legacy sequence protocol and dies
+            # deep in __getitem__ with a baffling KeyError
+            raise TypeError(f"assumptions is a sequence — wrap the atom in a list: [{assumptions.render()}]")
         converted: list[tuple[clingo.Symbol, bool]] = []
         for literal in assumptions:
             if isinstance(literal, DefaultNegation):
@@ -1294,6 +1335,7 @@ class GroundedProgram:
         assumptions.
         """
         _validate_timeout(timeout)
+        _validate_flag(ignore_optimization, "ignore_optimization")
         if ignore_optimization and not self._ground_levels:
             raise ValueError("Nothing to ignore: this program has no #minimize/#maximize. Call the function plainly.")
         if self._ground_levels and mode is None and not ignore_optimization:
@@ -1316,13 +1358,18 @@ class GroundedProgram:
                 "Add minimize()/maximize() to state an objective, or enumerate "
                 "with solve()."
             )
-        converted = self._convert_assumptions(assumptions) if assumptions else None
         if self._active is not None and not self._active.finished:
             raise RuntimeError(
                 "The previous solve on this grounding is still open; a Control cannot run "
                 "overlapping searches. Consume the previous result, close() it, leave "
                 "its with-block, or call abandon() on this grounding."
             )
+        # Conversion runs AFTER the guard: it makes native calls on the
+        # shared Control (symbolic_atoms lookups), and the sequential guard
+        # is what makes native access safe against a search executing in
+        # another thread. Ordering also reports the blocking problem first:
+        # a bad assumption is not fixable while the previous solve is open
+        converted = self._convert_assumptions(assumptions) if assumptions else None
         self._message_handler.messages.clear()
         solve_config = self._control.configuration.solve
         assert isinstance(solve_config, clingo.Configuration)
@@ -1538,6 +1585,8 @@ class GroundedProgram:
         like everything else about its cost: to accept totals of at
         least 9, pass bound=-9.
         """
+        _validate_strategy(strategy)
+        _validate_flag(all_optima, "all_optima")
         items: dict[int, int] | None = None
         if bound is not None and isinstance(bound, Mapping):
             items = dict(bound)

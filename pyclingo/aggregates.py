@@ -120,14 +120,9 @@ class Aggregate(FreezableBuilder, AggregateBase, ABC):
     @property
     def is_grounded(self) -> bool:
         """
-        An aggregate is grounded if all its elements and conditions are grounded.
-
-        Note: This property strictly checks all variables, including those that would be
-        considered "local" to the aggregate in ASP semantics. For example, in
-        #count{ X : p(X) }, the variable X is local to the aggregate but this property
-        will still report False because X is ungrounded. This approach ensures
-        consistency with how other Term classes handle groundedness.
-        We may later add a separate property to check that no global variables are used if needed.
+        Grounded means NO variables anywhere, construct-local ones included:
+        #count{ X : p(X) } reports False even though X is local in ASP
+        semantics — the same strict reading every Term uses.
         """
         return all(element.is_grounded for element in self._elements)
 
