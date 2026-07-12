@@ -40,9 +40,16 @@ policy: genuinely unexecutable lines are excluded centrally in
 
 ## Building & Publishing
 
+Releases are published by CI via PyPI Trusted Publishing (no tokens):
+bump the version in `pyproject.toml`, update `CHANGELOG.md`, commit, then
+tag and push — `.github/workflows/publish.yml` verifies the tag matches
+the version, runs the gauntlet, and uploads.
+
 ```bash
-uv build                             # sdist + wheel into dist/
-uv publish                           # upload to PyPI (needs a token)
+git tag -a v1.x.y -m "..."
+git push origin v1.x.y               # this is the release trigger
+
+uv build                             # local build: sdist + wheel into dist/
 ```
 
 - The version in `pyproject.toml` is the single source of truth;
