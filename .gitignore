@@ -11,3 +11,10 @@ temp/
 .coverage.*
 htmlcov/
 coverage.xml
+
+# Local Jekyll preview of the docs site (see docs/Gemfile)
+docs/vendor/
+docs/.bundle/
+docs/_site/
+docs/.jekyll-cache/
+docs/Gemfile.lock

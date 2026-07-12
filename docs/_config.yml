@@ -1,3 +1,13 @@
 title: ASPAlchemy
 description: A Python ORM for clingo
 theme: jekyll-theme-primer
+
+# These match the plugins GitHub Pages enables by default, so the local
+# preview (see Gemfile) behaves like the real build.
+plugins:
+  - jekyll-seo-tag
+  - jekyll-github-metadata
+  - jekyll-optional-front-matter
+  - jekyll-readme-index
+  - jekyll-relative-links
+  - jekyll-default-layout

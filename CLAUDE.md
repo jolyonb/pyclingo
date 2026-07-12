@@ -19,7 +19,9 @@ and reconstructs answer sets back into typed Python values.
 - `src/aspalchemy/` — the package.
 - `tests/` — unit suite + module doctests. Line coverage of `aspalchemy` is 
   gated at 100%.
-- `docs/` — user-facing documentation. Python code blocks are executed by
+- `docs/` — user-facing documentation, published to
+  [jolyonb.github.io/aspalchemy](https://jolyonb.github.io/aspalchemy/) via
+  GitHub Pages (see "Docs Site" below). Python code blocks are executed by
   `tests/aspalchemy/test_readme.py` to keep them runnable.
 - `pyproject.toml` — packaging (uv_build, src layout), strict mypy/pyright,
   ruff.
@@ -46,6 +48,29 @@ policy: genuinely unexecutable lines are excluded centrally in
 `uv run pre-commit run --all-files`) on every push to main and on every
 pull request. CI and the local hooks are deliberately identical: if it
 passed locally, it passes CI.
+
+## Docs Site
+
+GitHub Pages serves `docs/` from main (Settings → Pages → deploy from
+branch), rendering the markdown with Jekyll's Primer theme. The shared
+nav header lives in `docs/_layouts/default.html` — add new pages to the
+`<nav>` there, not to individual markdown files. `docs/_config.yml` lists
+the plugins Pages enables by default, so local and production builds match.
+
+Preview locally before pushing (needs Homebrew Ruby — the `github-pages`
+gem itself requires an EOL Ruby, so the Gemfile uses Jekyll 4 with the
+same plugin set):
+
+```bash
+cd docs
+PATH="/opt/homebrew/opt/ruby/bin:$PATH" BUNDLE_PATH=vendor/bundle \
+  bundle install                   # first time only
+PATH="/opt/homebrew/opt/ruby/bin:$PATH" BUNDLE_PATH=vendor/bundle \
+  bundle exec jekyll serve         # http://localhost:4000, rebuilds on edit
+```
+
+The generated litter (`vendor/`, `_site/`, `.jekyll-cache/`,
+`Gemfile.lock`) is gitignored; only `docs/Gemfile` is tracked.
 
 ## Building & Publishing
 
