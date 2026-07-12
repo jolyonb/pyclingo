@@ -1,9 +1,10 @@
 [project]
 name = "aspalchemy"
 version = "0.3.0"
-description = "Object-oriented Python interface for building and solving clingo ASP programs"
-license = { text = "MIT" }
-readme = "aspalchemy/README.md"
+description = "A Python ORM interface for building and solving clingo ASP programs"
+license = "MIT"
+license-files = ["LICENSE.txt"]
+readme = "docs/README.md"
 requires-python = ">=3.14"
 authors = [{ name = "Jolyon Bloomfield", email = "jkb84@cornell.edu" }]
 dependencies = ["clingo>=5.8.0,<6"]
@@ -24,9 +25,8 @@ requires = ["uv_build>=0.11,<0.13"]
 build-backend = "uv_build"
 
 [tool.uv.build-backend]
-module-root = ""
 # Internal docs and OS litter must not ship in the wheel
-source-exclude = ["aspalchemy/CLAUDE.md", "**/.DS_Store"]
+source-exclude = ["src/aspalchemy/CLAUDE.md", "**/.DS_Store"]
 
 [tool.mypy]
 python_version = "3.14"
@@ -38,10 +38,10 @@ check_untyped_defs = true
 disallow_untyped_decorators = true
 no_implicit_optional = true
 strict_optional = true
-files = ["aspalchemy", "tests"]
+files = ["src", "tests"]
 
 [tool.pyright]
-include = ["aspalchemy", "tests"]
+include = ["src", "tests"]
 
 [tool.ruff]
 line-length = 120
@@ -60,7 +60,7 @@ known-first-party = ["aspalchemy"]
 section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests", "aspalchemy"]
+testpaths = ["tests", "src/aspalchemy"]
 addopts = "--doctest-modules"
 markers = [
     "allow_invalid_render: opt this test out of the suite-wide render parse-check (for tests exercising invalid-program error handling)",

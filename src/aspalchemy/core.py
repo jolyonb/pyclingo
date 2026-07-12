@@ -403,7 +403,7 @@ class Value(BasicTerm, ComparableTerm, ArithmeticOps, ABC, metaclass=_ValueMeta)
     The cache is weak (dead values are evicted, not hoarded); copy/deepcopy
     return the object itself, and unpickling re-interns through this cache,
     so the guarantee survives copying and pickling alike. (See "Copying,
-    Pickling, and Identity" in aspalchemy/CLAUDE.md for the whole story.)
+    Pickling, and Identity" in src/aspalchemy/CLAUDE.md for the whole story.)
     """
 
     _cache: ClassVar[weakref.WeakValueDictionary[tuple[type, Any], Value]] = weakref.WeakValueDictionary()

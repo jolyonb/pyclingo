@@ -693,7 +693,7 @@ class Predicate(PredicateBase, Negatable, metaclass=_PredicateMeta):
         found — its __module__ names the caller, but no module attribute
         holds it — so its atoms refuse loudly; the gate applies to nested
         atoms too, when pickle reaches them. The whole story: "Copying,
-        Pickling, and Identity" in aspalchemy/CLAUDE.md.
+        Pickling, and Identity" in src/aspalchemy/CLAUDE.md.
         """
         cls = type(self)
         resolved: object = sys.modules.get(cls.__module__)

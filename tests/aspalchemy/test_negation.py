@@ -5,7 +5,7 @@ aggregate carve-out that keeps the "not" wrapper. Semantics are asserted
 by solving where possible; the binding behavior of normalized
 comparisons additionally carries live gringo receipts in
 test_scoping.py. The whole design is documented on Not() and in
-aspalchemy/CLAUDE.md.
+src/aspalchemy/CLAUDE.md.
 """
 
 import pytest

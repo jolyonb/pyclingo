@@ -4,8 +4,6 @@
 .claude/
 .venv/
 dist/
-
-# Working notes, audit reports, triage docs — never committed
 temp/
 
 # Coverage

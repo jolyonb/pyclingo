@@ -26,14 +26,17 @@ construct in this library.
 
 ## Repo Layout
 
-- `aspalchemy/` — the package. `aspalchemy/CLAUDE.md` documents the
+- `src/aspalchemy/` — the package. `src/aspalchemy/CLAUDE.md` documents the
   internals: the term hierarchy (Variable, Predicate, Expression, Choice,
   Aggregate, …), the program builder, and solver integration. The
   `ASPProgram` class coordinates everything.
 - `tests/` — unit suite + module doctests; see `tests/CLAUDE.md`. Line
   coverage of `aspalchemy` is gated at 100%.
-- `pyproject.toml` — packaging (uv_build; the package readme is
-  `aspalchemy/README.md`), strict mypy/pyright, ruff.
+- `docs/` — user-facing documentation: `docs/README.md` (the PyPI readme)
+  and `docs/MATH.md`. Their python code blocks are executed by
+  `tests/aspalchemy/test_readme.py` to keep them runnable.
+- `pyproject.toml` — packaging (uv_build, src layout), strict mypy/pyright,
+  ruff.
 - `.pre-commit-config.yaml` — the full quality gauntlet (see below).
 
 ## Tooling

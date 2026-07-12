@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-DOCS_DIR = Path(__file__).parent.parent.parent / "aspalchemy"
+DOCS_DIR = Path(__file__).parent.parent.parent / "docs"
 DOCUMENTS = ["README.md", "MATH.md"]
 
 
