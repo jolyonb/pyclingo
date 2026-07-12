@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="{{ site.lang | default: "en-US" }}">
+  <head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    {% seo %}
+    <link rel="stylesheet" href="{{ "/assets/css/style.css?v=" | append: site.github.build_revision | relative_url }}">
+    {% include head-custom.html %}
+  </head>
+  <body>
+    <div class="container-lg px-3 my-5 markdown-body">
+      <nav>
+        <a href="{{ "/" | relative_url }}">Home</a> ·
+        <a href="{{ "/MATH.html" | relative_url }}">Arithmetic in ASP</a> ·
+        <a href="https://github.com/jolyonb/aspalchemy/blob/main/CHANGELOG.md">Changelog</a> ·
+        <a href="https://github.com/jolyonb/aspalchemy">GitHub</a> ·
+        <a href="https://pypi.org/project/aspalchemy/">PyPI</a>
+      </nav>
+      <hr>
+      {{ content }}
+    </div>
+  </body>
+</html>

@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.0.1 — 2026-07-11
+
+Documentation and packaging release — no library changes.
+
+- New PyPI readme (now the repository root README): a worked map-coloring
+  example executed by the test suite, the "Why ASPAlchemy?" story, and
+  positioning relative to clorm
+- Documentation published to
+  [jolyonb.github.io/aspalchemy](https://jolyonb.github.io/aspalchemy/) via
+  GitHub Pages, with a shared navigation header
+- Release automation: CI runs the full quality gauntlet on pushes and pull
+  requests; version tags publish to PyPI via Trusted Publishing
+
 ## 1.0.0 — 2026-07-11
 
 Initial public release.

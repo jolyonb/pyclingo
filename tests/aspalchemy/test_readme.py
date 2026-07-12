@@ -11,13 +11,13 @@ from pathlib import Path
 
 import pytest
 
-DOCS_DIR = Path(__file__).parent.parent.parent / "docs"
-DOCUMENTS = ["README.md", "MATH.md"]
+REPO_ROOT = Path(__file__).parent.parent.parent
+DOCUMENTS = ["README.md", "docs/README.md", "docs/MATH.md"]
 
 
 @pytest.mark.parametrize("doc", DOCUMENTS)
 def test_doc_code_blocks_execute(doc: str) -> None:
-    path = DOCS_DIR / doc
+    path = REPO_ROOT / doc
     text = path.read_text()
     blocks = re.findall(r"```python\n(.*?)```", text, flags=re.DOTALL)
     assert blocks, f"no python code blocks found in {doc}"
