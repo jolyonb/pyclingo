@@ -4,21 +4,84 @@
     <meta charset="UTF-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f8f4ec">
     {% seo %}
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,450..700;1,9..144,450..700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400..640;1,8..60,400..640&family=IBM+Plex+Mono:ital,wght@0,400;0,500;1,400&display=swap">
     <link rel="stylesheet" href="{{ "/assets/css/style.css?v=" | append: site.github.build_revision | relative_url }}">
     {% include head-custom.html %}
   </head>
   <body>
-    <div class="container-lg px-3 my-5 markdown-body">
-      <nav>
-        <a href="{{ "/" | relative_url }}">Home</a> ·
-        <a href="{{ "/MATH.html" | relative_url }}">Arithmetic in ASP</a> ·
-        <a href="https://github.com/jolyonb/aspalchemy/blob/main/CHANGELOG.md">Changelog</a> ·
-        <a href="https://github.com/jolyonb/aspalchemy">GitHub</a> ·
-        <a href="https://pypi.org/project/aspalchemy/">PyPI</a>
-      </nav>
-      <hr>
-      {{ content }}
+    <a class="skip" href="#content">Skip to content</a>
+    <div class="site">
+      <aside class="side">
+        <a class="wordmark" href="{{ "/" | relative_url }}"><span class="wm-asp">ASP</span><span class="wm-alchemy">Alchemy</span></a>
+        <p class="tagline">typed Python in<br>answer sets out</p>
+        <nav aria-label="Site navigation">
+          <div class="nav-group g-start">
+            <div class="group-label"><span class="orn">&#9670;</span> Start</div>
+            <ul>
+              <li><a href="{{ "/" | relative_url }}"{% if page.url == "/" or page.url == "/index.html" %} class="active" aria-current="page"{% endif %}>Home</a></li>
+              <li><a href="{{ "/getting-started.html" | relative_url }}"{% if page.url == "/getting-started.html" %} class="active" aria-current="page"{% endif %}>Your First Program</a></li>
+              <li><a href="{{ "/numberlink.html" | relative_url }}"{% if page.url == "/numberlink.html" %} class="active" aria-current="page"{% endif %}>Walkthrough: Numberlink</a></li>
+            </ul>
+          </div>
+          <div class="nav-group g-guide">
+            <div class="group-label"><span class="orn">&#9670;</span> Guide</div>
+            <ul>
+              <li><a href="{{ "/predicates.html" | relative_url }}"{% if page.url == "/predicates.html" %} class="active" aria-current="page"{% endif %}>Predicates and Data</a></li>
+              <li><a href="{{ "/rules.html" | relative_url }}"{% if page.url == "/rules.html" %} class="active" aria-current="page"{% endif %}>Rules and Terms</a></li>
+              <li><a href="{{ "/choices-and-aggregates.html" | relative_url }}"{% if page.url == "/choices-and-aggregates.html" %} class="active" aria-current="page"{% endif %}>Choices and Aggregates</a></li>
+              <li><a href="{{ "/solving.html" | relative_url }}"{% if page.url == "/solving.html" %} class="active" aria-current="page"{% endif %}>Solving and Results</a></li>
+              <li><a href="{{ "/diagnostics.html" | relative_url }}"{% if page.url == "/diagnostics.html" %} class="active" aria-current="page"{% endif %}>Diagnostics &amp; Grounding</a></li>
+              <li><a href="{{ "/math.html" | relative_url }}"{% if page.url == "/math.html" %} class="active" aria-current="page"{% endif %}>Arithmetic</a></li>
+            </ul>
+          </div>
+          <div class="nav-group g-clingo">
+            <div class="group-label"><span class="orn">&#9670;</span> For clingo users</div>
+            <ul>
+              <li><a href="{{ "/clingo-map.html" | relative_url }}"{% if page.url == "/clingo-map.html" %} class="active" aria-current="page"{% endif %}>Clingo to ASPAlchemy</a></li>
+              <li><a href="{{ "/unsupported.html" | relative_url }}"{% if page.url == "/unsupported.html" %} class="active" aria-current="page"{% endif %}>What We Don't Support</a></li>
+              <li><a href="{{ "/escape-hatches.html" | relative_url }}"{% if page.url == "/escape-hatches.html" %} class="active" aria-current="page"{% endif %}>Escape Hatches</a></li>
+            </ul>
+          </div>
+          <div class="nav-group g-appendix">
+            <div class="group-label"><span class="orn">&#9670;</span> Appendix</div>
+            <ul>
+              <li><a href="{{ "/faq.html" | relative_url }}"{% if page.url == "/faq.html" %} class="active" aria-current="page"{% endif %}>FAQ</a></li>
+              <li><a href="{{ "/reference.html" | relative_url }}"{% if page.url == "/reference.html" %} class="active" aria-current="page"{% endif %}>API Reference</a></li>
+              <li><a href="https://github.com/jolyonb/aspalchemy/blob/main/CHANGELOG.md">Changelog<span class="ext">&#8599;</span></a></li>
+              <li><a href="https://github.com/jolyonb/aspuzzle">aspuzzle<span class="ext">&#8599;</span></a></li>
+              <li><a href="https://github.com/jolyonb/aspalchemy">GitHub<span class="ext">&#8599;</span></a></li>
+              <li><a href="https://pypi.org/project/aspalchemy/">PyPI<span class="ext">&#8599;</span></a></li>
+            </ul>
+          </div>
+        </nav>
+      </aside>
+      <main class="main" id="content">
+        <article class="markdown-body">
+          {{ content }}
+        </article>
+        <footer class="colophon">
+          <p><span class="flask">&#9879;</span> Every Python code block on this site is executed by the test suite on every commit &mdash; the examples are receipts, not illustrations.</p>
+          <p><a href="https://github.com/jolyonb/aspalchemy">aspalchemy</a> &middot; MIT &middot; Jolyon Bloomfield</p>
+        </footer>
+      </main>
     </div>
+    <script>
+      /* Hover anchors on headings: kramdown already stamps the ids;
+         this just makes them clickable. Progressive enhancement only. */
+      for (const h of document.querySelectorAll(
+        ".markdown-body h2[id], .markdown-body h3[id], .markdown-body h4[id]"
+      )) {
+        const a = document.createElement("a");
+        a.className = "anchor";
+        a.href = "#" + h.id;
+        a.setAttribute("aria-label", "Link to this section");
+        a.textContent = "§";
+        h.insertBefore(a, h.firstChild);
+      }
+    </script>
   </body>
 </html>

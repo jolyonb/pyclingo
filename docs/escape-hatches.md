@@ -1,0 +1,279 @@
+# Escape Hatches
+
+*raw_asp() with its seatbelt and lexical rules, grounding contexts, solver options / grounded.control, symbol interop, incremental-ish solving today.*
+
+## When to reach for these
+
+ASPAlchemy models an opinionated subset of clingo, and sooner or later the
+subset will refuse something you genuinely need — a disjunctive head, a
+`#project` directive, a clasp flag, an `@`-function. The catalogue of what is
+excluded and why lives in [What We Don't Support](unsupported.md); this page
+is the *how*: the sanctioned exits. Each hatch is designed to give up as
+little of the typed loop as possible — raw text still round-trips into typed
+atoms, grounding errors still land on your Python line, and the solver
+handles still work — so reaching for one is a local decision, not a switch to
+a different library.
+
+## raw_asp(): verbatim clingo
+
+`raw_asp(text, predicates=())` adds a verbatim block of ASP text to the
+program. It is available on the program (which writes to the default segment)
+and on any [named segment](rules.md#organizing-output), so raw blocks slot
+into the same rendered structure as everything else. Here it carries a
+disjunctive head — a construct the typed layer deliberately does not model —
+and the solutions still come back as typed atoms:
+
+```python
+from aspalchemy import ASPProgram, Field, Predicate
+
+class Left(Predicate):
+    pass
+
+class Right(Predicate):
+    pass
+
+duo = ASPProgram()
+duo.raw_asp("left ; right.", predicates=[Left, Right])
+
+models = list(duo.solve())
+answers = {frozenset(a.render() for a in m.atoms()) for m in models}
+assert answers == {frozenset({"left"}), frozenset({"right"})}
+```
+
+The trade is explicit. Everything you build through the typed verbs is
+validated as it is constructed; a raw block's internals get no
+construction-time validation at all — a typo inside the text surfaces at
+grounding, not at the line that wrote it. You are not entirely on your own,
+though: grounding diagnostics still map back to the `raw_asp()` call's Python
+line, so even errors only gringo can catch come home to your source. See
+[Clingo's messages](diagnostics.md#clingos-messages).
+
+## The predicates= seatbelt
+
+Raw text is invisible to the program's tree walkers, so `predicates=` is how
+a raw block tells aspalchemy what it produces — and the contract is
+exhaustive, enforced at `ground()` against gringo's own signature table.
+Declaring a class does two jobs: it emits the `#show` directive that lets the
+predicate reach the model, and it gives model atoms of that signature a typed
+class to round-trip into. One wrinkle: declaring `P` covers *both* signs for
+round-trip purposes but emits only `#show p/n.` — if the block also derives
+[classically negated](predicates.md#classical-negation) atoms, declare `-P`
+as well (a `NegatedSignature`), or the `-p` atoms stay absent from output:
+
+```python
+class Status(Predicate):
+    node: Field[str]
+
+belt = ASPProgram()
+belt.raw_asp('status("a"). -status("b").', predicates=[Status, -Status])
+rendered = belt.render()
+assert "#show status/1." in rendered
+assert "#show -status/1." in rendered
+
+model = belt.solve().first()
+assert sorted(a.render() for a in model.atoms(Status)) == ['-status("b")', 'status("a")']
+```
+
+Forgetting the seatbelt is loud, not silent — an undeclared signature fails
+the ground with a teaching error naming it:
+
+```python
+mystery = ASPProgram()
+mystery.raw_asp("hidden_gem(7).")
+try:
+    mystery.solve().first()
+    raise AssertionError("expected a ValueError")
+except ValueError as e:
+    assert "never declared" in str(e) and "hidden_gem/1" in str(e)
+```
+
+Visibility stays under your control as usual: declare the class with
+`show=False` (or `hide()` it on the program) to keep a scaffolding predicate
+out of the model. One genuine exception: atoms carrying escaped strings
+cannot round-trip — aspalchemy has no escaping support — so if a raw block
+produces them, `hide()` that class and the rest of the model stays readable.
+
+## Blocks are lexically self-contained
+
+Every raw block must be lexically self-contained: text that opens a `%*`
+block comment or a `#script` and never closes it is rejected at construction,
+even though gringo's single-stream lexer would accept a comment opened in one
+block and closed in another. The reason is soundness, learned the hard way:
+gringo reads the whole program as one stream, so an unclosed construct would
+silently swallow everything rendered after the block — and the per-block
+directive scanner (the guard in the next section) is only sound if no lexical
+state crosses block boundaries. An early version let an unterminated `%*`
+smuggle a `#const` past the guard in a later block; the rejection is the fix.
+
+```python
+scratch = ASPProgram()
+try:
+    scratch.raw_asp("%* this comment never closes")
+    raise AssertionError("expected a ValueError")
+except ValueError as e:
+    assert "lexically self-contained" in str(e)
+```
+
+The same rule means a `#script` block must open and close within ONE raw
+block — split across blocks, the second half is judged as ASP rather than
+script. Strings need no rule of their own: gringo's no-newline lexing makes
+an unterminated string fail loudly at the block boundary anyway.
+
+## Blocked directives
+
+Four directives are refused inside raw blocks, each with a redirect in its
+error message:
+
+- `#const` — register it with
+  [`define_constant()`](rules.md#constants-and-extremes) instead. Registered
+  constants are always emitted, so raw text may use them freely; registration
+  is the only door because the const-vs-atom collision checks see registered
+  constants only.
+- `#program` and `#external` — the program grounds a single `base` part, so
+  statements after a part directive would land in an unloaded part and
+  silently vanish, and no aspalchemy verb speaks `Control.assign_external`.
+  This is the [multi-shot story](unsupported.md#multi-shot-solving-a-future-design-project);
+  for a per-solve switch, state the atom with a choice and pin it with
+  `assumptions=`.
+- `#include` — it's Python; use Python. Read the file and pass its text.
+
+```python
+try:
+    scratch.raw_asp("#const width = 9.")
+    raise AssertionError("expected a ValueError")
+except ValueError as e:
+    assert "define_constant()" in str(e)
+```
+
+## Calling Python during grounding
+
+**@-functions** are supported through the hatch, not refused: an `@f(X)` term
+in `raw_asp()` text calls a method on the *grounding context*, an object you
+pass as `ground(context=obj)` — `@double(N)` calls `context.double(N)`. The
+context is passed to clingo verbatim, and the same `context=` parameter is
+threaded through `solve()`, `brave()`, `cautious()`, and `optimize()` for the
+one-shot forms:
+
+```python
+import clingo
+
+class Doubler:
+    def double(self, n: clingo.Symbol) -> clingo.Symbol:
+        return clingo.Number(n.number * 2)
+
+class Base(Predicate, show=False):
+    n: Field[int]
+
+class Doubled(Predicate):
+    n: Field[int]
+    twice: Field[int]
+
+calls = ASPProgram()
+calls.fact(Base(n=2), Base(n=21))
+calls.raw_asp("doubled(N, @double(N)) :- base(N).", predicates=[Doubled])
+
+model = calls.ground(context=Doubler()).solve().first()
+assert {(d.n, d.twice) for d in model.atoms(Doubled)} == {(2, 4), (21, 42)}
+```
+
+Honest caveats. This is raw-clingo territory: aspalchemy does not model
+`@`-terms, so the text and the context must agree on their own — context
+methods take and return `clingo.Symbol` values, with no typed layer between.
+And the [ground-program views](diagnostics.md#seeing-the-ground-program)
+(`ground_text()`, `aspif()`) work by re-grounding the stored source with the
+stored context, in process: a *stateful* context whose `@`-functions answer
+differently per call may make those views silently diverge from the original
+grounding — no detection is promised. If the re-ground fails outright, the
+error names a stateful context as the usual cause. If you prefer the Python to live
+inside the ASP text itself, a self-contained `#script` block within one raw
+block is also accepted — same territory, same caveats.
+
+## Solver options and the raw Control
+
+`grounded.control` is the general clingo-API exit: the underlying
+`clingo.Control`, exposing configuration, externals, theory atoms, and
+observers — at your own risk. ASPAlchemy's guarantees stop here: direct
+mutations bypass the sequential-solve guard and the per-solve settings the
+verbs restate on every entry. Reconfigure between solves, never during one,
+and prefer the aspalchemy verbs where they exist.
+
+This is where a daily clingo user's command-line questions land. `-t 4`,
+`--seed`, `--configuration=jumpy`: set the matching key on
+`grounded.control.configuration` between
+[`ground()`](solving.md#ground-once-solve-many) and the solve (clingo's own
+documentation is the option inventory — we deliberately don't mirror it).
+`--time-limit`: modeled directly as `solve(timeout=)` and
+`optimize(timeout=)`, so no hatch needed. The
+[clingo-map](clingo-map.md#solving-modes) has the full row.
+
+The worked example is the pair of directives that ground *silently inert*
+under the aspalchemy verbs: `#project` does nothing until the solve actually
+projects, and `#heuristic` does nothing until the Domain heuristic is on.
+Set the knob through the control, or the directive quietly changes nothing:
+
+```python
+from aspalchemy import Choice
+
+class Pick(Predicate):
+    x: Field[int]
+
+class Audited(Predicate):
+    pass
+
+projected = ASPProgram()
+projected.choose(Choice(Pick(x=1)).add(Pick(x=2)))
+projected.choose(Choice(Audited()))
+projected.raw_asp("#project pick/1.")
+
+grounded = projected.ground()
+assert len(list(grounded.solve())) == 8  # audited doubles every pick set: inert
+
+grounded.control.configuration.solve.project = "project"
+assert len(list(grounded.solve())) == 4  # one model per pick set
+
+grounded.control.configuration.solver.heuristic = "Domain"  # the #heuristic knob
+```
+
+Eight models collapse to four: with projection on, models that differ only in
+the unprojected `audited` atom count as one. Both knob paths are exactly as
+written above — this page executes in CI, so if clingo ever renames them,
+this section breaks before you do.
+
+## Clingo symbol interop
+
+When you drive the clingo API directly — externals through the raw Control,
+your own `on_model` callbacks, a foreign clingo library — you cross between
+typed atoms and `clingo.Symbol` objects. `convert_predicate_to_symbol` and
+`convert_symbol_to_predicate` are the public crossing, recursive in both
+directions, with the classical-negation sign mapped to the symbol's sign:
+
+```python
+from aspalchemy import convert_predicate_to_symbol, convert_symbol_to_predicate
+
+class Cell(Predicate):
+    row: Field[int]
+    col: Field[int]
+
+sym = convert_predicate_to_symbol(-Cell(row=1, col=2))
+assert isinstance(sym, clingo.Symbol)
+assert str(sym) == "-cell(1,2)"
+
+back = convert_symbol_to_predicate(sym, {("cell", 2): Cell})
+assert back == -Cell(row=1, col=2)
+assert back.negated and back.row == 1
+```
+
+The reverse direction takes a `(name, arity) -> class` mapping and returns a
+fully typed instance — the same machinery model reads use. On why there is no
+Symbol type on the aspalchemy side at all, see
+[the one-text-type design](predicates.md#bare-atoms-and-the-one-text-type-design).
+
+## Incremental-ish solving today
+
+The supported way to ask many questions of one program is
+[`ground()` plus assumptions](solving.md#ground-once-solve-many): pay the
+grounding once, then parameterize each solve with the atoms you want pinned
+true or false. True multi-shot solving — `#program` parts grounded
+incrementally onto one Control — is honestly a
+[future design project](unsupported.md#multi-shot-solving-a-future-design-project),
+not a hidden feature of this page.

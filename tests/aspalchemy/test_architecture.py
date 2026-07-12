@@ -11,6 +11,11 @@ import at runtime).
 
 Test modules in tests/aspalchemy are held to the same standard: all imports at
 module top, of any module, not just intra-package ones.
+
+Also home to the docs drift tripwire (see "Docs conventions" in the repo
+CLAUDE.md): every ``__all__`` symbol must appear in docs/reference.md, and
+that page's ``##`` sections must mirror the ``__all__`` category comments
+(matched on each comment's first clause) in name and order.
 """
 
 import ast
@@ -20,8 +25,9 @@ from pathlib import Path
 
 import aspalchemy
 
-PACKAGE_DIR = Path(__file__).resolve().parents[2] / "aspalchemy"
+PACKAGE_DIR = Path(aspalchemy.__file__).resolve().parent
 TESTS_DIR = Path(__file__).resolve().parent
+DOCS_DIR = Path(__file__).resolve().parents[2] / "docs"
 
 
 def _dep_of(node: ast.AST) -> str | None:
@@ -165,6 +171,71 @@ def test_public_signatures_speak_exported_names() -> None:
                 check_function(path.stem, node)
 
     assert not violations, "unexported types in public signatures:\n" + "\n".join(sorted(set(violations)))
+
+
+# The __all__ categories are deliberate; docs/reference.md mirrors them as its
+# ## sections. These are the exact expected first clauses of the category
+# comments in __init__.py — change a category and this test names every place
+# that must move in the same commit.
+EXPECTED_ALL_CATEGORIES = (
+    "The program and its results",
+    "Source locations",
+    "Declaring predicates",
+    "Rule-building objects",
+    "Aggregates",
+    "Rule-building utilities",
+    "Hierarchy types",
+    "Interop with raw clingo symbols",
+    "Metadata",
+)
+
+
+def _all_category_first_clauses() -> list[str]:
+    """First clause of each category comment in the ``__all__`` block, in order.
+
+    A category comment is the first line of each run of consecutive comment
+    lines inside the ``__all__`` list; its first clause is everything before
+    a ``:`` or ``(`` (two comments are multi-clause or multi-line).
+    """
+    source = (PACKAGE_DIR / "__init__.py").read_text()
+    match = re.search(r"^__all__ = \[.*?\n(.*?)^\]", source, flags=re.MULTILINE | re.DOTALL)
+    assert match is not None, "could not locate the __all__ block in __init__.py"
+    clauses: list[str] = []
+    previous_was_comment = False
+    for line in match.group(1).splitlines():
+        stripped = line.strip()
+        if stripped.startswith("#"):
+            if not previous_was_comment:
+                clauses.append(re.split(r"[:(]", stripped.lstrip("# "))[0].strip())
+            previous_was_comment = True
+        else:
+            previous_was_comment = False
+    return clauses
+
+
+def test_reference_page_covers_every_export() -> None:
+    # Drift tripwire (ARCHITECTURE.md §6): reference.md is the curated mirror
+    # of __all__ — a new export that never lands on the page is drift.
+    # A symbol counts as present when it appears as a code span, callables
+    # optionally with trailing parens/decorator sugar: `pool`, `pool(...)`.
+    text = (DOCS_DIR / "reference.md").read_text()
+    missing = [name for name in aspalchemy.__all__ if not re.search(rf"`@?{re.escape(name)}[`(]", text)]
+    assert not missing, "exported but absent from docs/reference.md: " + ", ".join(missing)
+
+
+def test_reference_sections_mirror_all_categories() -> None:
+    # Drift tripwire (ARCHITECTURE.md §6): both sides are pinned to the exact
+    # expected strings above — the __init__.py category comments (by first
+    # clause) and reference.md's ## sections, which must mirror them in name
+    # and order after the opening "API stability" section.
+    assert tuple(_all_category_first_clauses()) == EXPECTED_ALL_CATEGORIES, (
+        "__all__ category comments drifted from the expected first clauses"
+    )
+    headings = re.findall(r"^## (.+)$", (DOCS_DIR / "reference.md").read_text(), flags=re.MULTILINE)
+    assert headings and headings[0] == "API stability", "reference.md must open with the API stability section"
+    assert tuple(headings[1:]) == EXPECTED_ALL_CATEGORIES, (
+        "docs/reference.md ## sections drifted from the __all__ categories"
+    )
 
 
 def test_the_old_package_name_is_gone() -> None:

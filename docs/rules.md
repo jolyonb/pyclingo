@@ -1,0 +1,434 @@
+# Rules and Terms
+
+*The rule-building surface: the verbs, variables, comparisons, negation,
+conditional literals, pools, constants, segments.*
+
+## The verbs
+
+Every statement enters a program through a small set of verbs: `fact()`
+asserts data, `when(...).derive(...)` builds rules, `forbid()` and `require()`
+state constraints. (Choices get their own verb, `choose()`, and preferences
+get `penalize()` — those are taught in
+[Choices and Aggregates](choices-and-aggregates.md) and
+[Solving and Results](solving.md#optimization); the full inventory is in the
+[API reference](reference.md#the-program-and-its-results).) Everything else on
+this page — variables, comparisons, negation, pools — is vocabulary for the
+terms those verbs accept.
+
+The examples on this page share one small domain:
+
+```python
+from aspalchemy import Predicate, PredicateField
+
+class Person(Predicate):
+    name: PredicateField
+    age: PredicateField
+
+john = Person(name="john", age=30)
+mary = Person(name="mary", age=25)
+```
+
+The core verbs in action:
+
+```python
+from aspalchemy import ANY, ASPProgram, Variable
+
+program = ASPProgram()
+X, Y = Variable("X"), Variable("Y")
+Adult = Predicate.define("adult", ["name"])
+
+# Facts
+program.fact(john)
+program.fact(mary)
+
+# Rules
+program.when(Person(name=X, age=Y), Y >= 18).derive(Adult(name=X))
+
+# Constraints
+program.forbid(Person(name=ANY, age=Y), Y < 0)
+```
+
+`program.render()` shows the clingo these statements became (header and
+`#show` block trimmed):
+
+```text
+person("john", 30).
+person("mary", 25).
+adult(X) :- person(X, Y), Y >= 18.
+:- person(_, Y), Y < 0.
+```
+
+```python
+rendered = program.render()
+assert 'adult(X) :- person(X, Y), Y >= 18.' in rendered
+assert ':- person(_, Y), Y < 0.' in rendered
+```
+
+### Facts
+
+`fact(*atoms)` asserts atoms unconditionally — it takes any number of
+**ground** atoms (no variables), which makes it the natural landing point for
+Python data: unpack a generator over your input structures and the facts write
+themselves. An atom containing a variable is not data, and `fact()` says so at
+the offending line:
+
+```python
+people = [("sam", 41), ("ada", 12)]
+program.fact(*(Person(name=n, age=a) for n, a in people))
+
+try:
+    program.fact(Person(name=X, age=30))
+    raise AssertionError("fact() should have refused a variable")
+except ValueError as e:
+    assert "requires grounded predicates" in str(e)
+```
+
+### Rules: when().derive()
+
+`when(*conditions)` holds a rule body; `.derive(head)` closes it, producing
+`head :- conditions.` — read `:-` as "if". The two halves are one statement:
+a `when()` that never gets its closer fails at render, and the report names
+the Python line where it was opened (every statement is stamped with the line
+that authored it — see [source locations](diagnostics.md#source-locations)):
+
+```python
+Named = Predicate.define("named", ["name"], show=False)
+
+pending = program.when(Person(name=X, age=ANY))
+try:
+    program.render()
+    raise AssertionError("render should have refused the open when()")
+except ValueError as e:
+    assert "incomplete when() statements" in str(e)
+pending.derive(Named(name=X))  # closed; the program renders again
+```
+
+`derive()` is one of five closers. The others: `.choose(choice)` puts a
+[choice rule](choices-and-aggregates.md#choice-rules) under the conditions;
+`.require(comparison)` demands a comparison hold whenever the conditions do;
+`.forbid(*violation)` forbids extra literals in the situation the conditions
+describe; `.penalize(*violation)` charges a cost instead of forbidding
+([optimization](solving.md#optimization)). Exactly one closer completes each
+`when()` — closing it twice is an error too.
+
+### Constraints: forbid() and require()
+
+`forbid(*conditions)` bans a combination outright: no answer set may satisfy
+all the conditions together. It renders as a headless rule — `:- conditions.`
+— which is exactly how clingo spells "this situation must not happen".
+
+`require(comparison)` is the positive spelling for a comparison that must
+hold; it takes exactly one comparison and renders as a `forbid()` of its
+inverse. Only comparisons can be required — to make an *atom* hold, derive
+it — and the error says so:
+
+```python
+program.when(Person(name=ANY, age=Y)).require(Y < 150)
+assert ':- person(_, Y), Y >= 150.' in program.render()
+
+try:
+    program.require(john)
+    raise AssertionError("require() should have refused an atom")
+except TypeError as e:
+    assert "takes a Comparison" in str(e)
+```
+
+## Variables
+
+`Variable("X")` is an ASP variable — during solving it ranges over all ground
+terms: numbers, strings, and compound atoms alike. Names must start with an
+uppercase letter. Two shorthands cover the common cases: the module-level `V`
+(a ready-made `Vars` instance) mints variables by attribute access — `V.Room`
+is `Variable("Room")`, no declaration preamble — and `ANY` is the anonymous
+variable `_` for a
+don't-care position, as in the `Edge(a=N, b=ANY)` rules of
+[the tutorial](getting-started.md#derive-rules). gringo — clingo's grounder,
+the component that instantiates rules — accepts `_X`-style don't-warn names;
+aspalchemy deliberately refuses them: one underscore means anonymous,
+full stop — use `ANY`.
+
+```python
+from aspalchemy import V
+
+assert V.Room.render() == "Room"
+assert ANY.render() == "_"
+```
+
+A variable used exactly once in a rule is usually a typo, so aspalchemy
+rejects it — a lint gringo does not perform (gringo is silent about
+singletons; this is one of the library's
+[deliberate strictnesses](unsupported.md#deliberate-strictness)). The fix is
+either the variable you actually meant, or `ANY` to say the don't-care out
+loud. The lint is switchable when you disagree:
+
+```python
+Reading = Predicate.define("reading", ["sensor", "value"], show=False)
+
+strict = ASPProgram()
+try:
+    strict.forbid(Reading(sensor=X, value=Y), X > 0)  # Y used exactly once
+    raise AssertionError("the singleton lint should have fired")
+except ValueError as e:
+    assert "Singleton variable" in str(e)
+
+loose = ASPProgram(allow_singletons=True)
+loose.forbid(Reading(sensor=X, value=Y), X > 0)  # accepted as written
+```
+
+Unsafe variables — a variable in a rule head or negative condition that no
+positive condition binds — are rejected the same way, at the Python line that
+built the rule. Unlike the singleton lint, this check is not switchable and
+not an opinion: every rejection is a rule gringo itself would refuse, caught
+before clingo ever runs.
+
+## Comparisons
+
+The Python comparison operators — `==`, `!=`, `<`, `<=`, `>`, `>=` — on
+variables, numbers, expressions, and aggregates build **Comparison terms**,
+which go into rule bodies like any other condition; `Y >= 18` above is one.
+Arithmetic composes underneath (`X + 1 < Y * 2` is a comparison over
+expressions — operator table and clingo-vs-Python fine print in
+[Arithmetic](math.md)), and the right-hand side can be a compound atom:
+`X == Cell(row=1, col=2)` (with `Cell` a two-field predicate) compares
+against — and destructures — a nested term.
+
+The consequence of `==` building a term: a comparison has no truth value, so
+`if X == Y:` is almost certainly a bug, and aspalchemy makes it a loud one
+rather than a silent wrong branch. Chained comparisons like `X < Y < Z` land
+on the same error (Python evaluates them as `(X < Y) and (Y < Z)`, which
+needs a truth value halfway through) — pass each comparison separately:
+`when(X < Y, Y < Z)`. Atoms, by contrast, are ordinary data: `==` between two
+atoms is plain Python equality — see
+[atom identity](predicates.md#atoms-as-values).
+
+```python
+comparison = X < Y  # a term, not a bool
+assert comparison.render() == "X < Y"
+
+try:
+    if X == Y:
+        pass
+    raise AssertionError("a comparison should refuse to be a bool")
+except TypeError as e:
+    assert "no boolean value" in str(e)
+```
+
+One binding shorthand you will use constantly: `X.in_(pool_or_range)` renders
+as `X = 1..5`-style domain membership — see
+[Pools and ranges](#pools-and-ranges) below.
+
+Equality against an expression is clingo's binding assignment: `X == Y + 1`
+renders as the binding equality `X = Y + 1`, and — as in clingo — the
+equality binds `X`, so it counts as a positive condition for the
+[safety check](#variables).
+
+```python
+assert (X == (Y + 1)).render() == "X = Y + 1"
+```
+
+## Default negation
+
+`~Booked(room=R)` reads "unless the room is known to be booked". That is
+default negation — negation as failure: the condition holds when the atom is
+*not derivable*, which is how ASP says "absent from this world" rather than
+"provably false". It is the workhorse of rules like "a room with no booking
+is free":
+
+```python
+Room = Predicate.define("room", ["r"], show=False)
+Booked = Predicate.define("booked", ["room"], show=False)
+Free = Predicate.define("free", ["room"])
+R = Variable("R")
+
+hotel = ASPProgram()
+hotel.fact(Room(r=1), Room(r=2), Booked(room=2))
+hotel.when(Room(r=R), ~Booked(room=R)).derive(Free(room=R))
+assert "free(R) :- room(R), not booked(R)." in hotel.render()
+
+model = hotel.solve().first()
+assert [atom.render() for atom in model.atoms(Free)] == ["free(1)"]
+```
+
+Room 1 has no `booked` fact, so `free(1)` is derived; room 2's booking blocks
+it. One practical note: the `Booked(room=2)` fact is load-bearing. If a
+default-negated predicate is never derived *anywhere* in the program — no
+fact, no rule head — gringo flags it ("atom does not occur in any rule
+head"). Raw clingo shrugs and grounds anyway — the negation trivially holds —
+but a never-derivable atom in a body is usually a typo'd predicate name, so
+aspalchemy's default settings [make the message
+loud](diagnostics.md#clingos-messages) at solve time.
+
+`~` and the named form `Not()` are the same operation. (The *other* negation
+— the classical minus sign, which is part of the atom itself — lives in
+[Predicates and Data](predicates.md#classical-negation).)
+
+The fine print, for when you nest negations or negate comparisons — each
+claim asserted below, and each row of the
+[translation map](clingo-map.md#negation) links back here:
+
+- On atoms, a **double negation is preserved**: `not not p` is not equivalent
+  to `p` under stable-model semantics. A triple collapses to a single.
+- On a **plain comparison**, `~`/`Not()` return the *complement* instead of
+  wrapping: `Not(X != 5)` is the binding equality `X = 5`. This is gringo's
+  own normalization, performed at construction where you can see it.
+- A comparison **carrying an aggregate** keeps the `not` wrapper — a negated
+  aggregate literal is not complement-flippable.
+
+```python
+from aspalchemy import Count, Not
+
+b = Booked(room=R)
+assert Not(Not(b)).render() == "not not booked(R)"       # double survives
+assert Not(Not(Not(b))).render() == "not booked(R)"      # triple collapses
+assert Not(X != 5).render() == "X = 5"                   # complement, not wrapper
+assert Not(Count(X, condition=Booked(room=X)) > 2).render() == \
+    "not #count{ X : booked(X) } > 2"                    # aggregates keep "not"
+```
+
+## Conditional literals
+
+A conditional literal is clingo's `p(X) : q(X)` — in a rule body it means
+"for **every** X where `q(X)` holds, `p(X)` holds too". The intuition that
+makes it stick: the head is a *key* and the condition a *lock* — the literal
+holds when every lock has a matching key. Keys without locks are fine; a lock
+without a key fails.
+
+```python
+from aspalchemy import ConditionalLiteral
+
+Cell = Predicate.define("cell", ["id"], show=False)
+Covered = Predicate.define("covered", ["id"], show=False)
+AllCovered = Predicate.define("all_covered", [])
+
+board = ASPProgram()
+board.when(ConditionalLiteral(Covered(id=X), Cell(id=X))).derive(AllCovered())
+assert "all_covered :- covered(X) : cell(X)." in board.render()
+```
+
+You construct `ConditionalLiteral` directly in exactly two places: rule
+bodies (as above) and `show_when()`
+([conditional visibility](predicates.md#names-namespaces-and-visibility)).
+The other places conditional structure appears — the elements of
+[choices and aggregates](choices-and-aggregates.md) — build their own
+elements through their `add()` methods, so you never hand one to them.
+
+## Pools and ranges
+
+Pools are clingo's several-values-at-once notation: `RangePool(1, 5)` renders
+as `1..5`, `ExplicitPool([1, 3, 5])` as `(1; 3; 5)`. The `pool()` helper
+picks for you, and accepts plain Python ranges, lists, and tuples — a
+`range` with step 1 becomes a `RangePool`, everything else an
+`ExplicitPool`:
+
+```python
+from aspalchemy import pool
+
+assert pool(range(1, 6)).render() == "1..5"
+assert pool([1, 3, 5]).render() == "(1; 3; 5)"
+assert pool(["a", "b"]).render() == '("a"; "b")'
+assert pool(range(1, 10, 2)).render() == "(1; 3; 5; 7; 9)"
+```
+
+Pools appear in two positions. As a **predicate argument**, one atom expands
+to many — the whole board in one `fact()`:
+
+```python
+Slot = Predicate.define("slot", ["n"], show=False)
+
+grid = ASPProgram()
+grid.fact(Slot(n=pool(range(1, 4))))
+assert "slot(1..3)." in grid.render()
+```
+
+And on the right of a **comparison**, where `X.in_(...)` is the idiomatic
+spelling of a domain restriction:
+
+```python
+assert X.in_(range(1, 6)).render() == "X = 1..5"
+assert X.in_([2, 4, 8]).render() == "X = (2; 4; 8)"
+```
+
+Those two positions are the only legal ones. A bare pool standing alone as a
+rule element is a clingo syntax error, so aspalchemy refuses it at
+construction — along with the subtler pool shapes (negated pool comparisons,
+pools in `require()`) whose clingo reading is never what the code appears to
+say: see [better errors, not
+restrictions](unsupported.md#better-errors-not-restrictions).
+
+## Constants and extremes
+
+`define_constant(name, value)` registers a clingo `#const` definition and
+returns a `DefinedConstant` handle to use in rules — one named number (or
+string) threaded through the program, defined in exactly one place:
+
+```python
+config = ASPProgram()
+max_size = config.define_constant("max_size", 10)
+Size = Predicate.define("size", ["n"], show=False)
+N = Variable("N")
+
+config.when(Size(n=N)).require(N <= max_size)
+rendered = config.render()
+assert "#const max_size = 10." in rendered
+assert ":- size(N), N > max_size." in rendered
+```
+
+A `str` value renders as a quoted ASP string — `"n"` never equals the bare
+symbol `n`. To define a *symbolic* constant, pass a grounded atom:
+`define_constant("dir", North())` with `North = Predicate.define("n", [])`
+renders `#const dir = n.` (The `#const` directive itself is refused inside `raw_asp`
+blocks precisely because this verb exists — see the
+[translation map](clingo-map.md#directives).)
+
+The explicit value types `Number` and `String` exist but are rarely written:
+plain Python ints and strs coerce wherever a term is expected, as every
+example on this page shows. The two extremes `SUP` and `INF` render as
+clingo's `#sup` and `#inf` — the greatest and least terms of the ordering.
+Their everyday use is the empty-set answer: `Min` over no elements is `#sup`
+(and `Max` is `#inf`), so comparing against `SUP` asks "was the set empty?"
+
+```python
+from aspalchemy import INF, SUP
+
+assert SUP.render() == "#sup"
+assert INF.render() == "#inf"
+```
+
+## Organizing output
+
+The generated program is meant to be read — during review, in diagnostics,
+in these docs — so the authoring surface includes formatting verbs:
+`comment(text)` emits a `%` comment, `blank_line()` a separator, and
+`section(title)` both at once. They cost nothing at solve time and pay for
+themselves the first time you read a 200-line render.
+
+For programs big enough to have chapters, **segments** name the chapters. A
+program starts with one default segment that all program-level verbs write
+to; `add_segment("name")` creates a named one, fixing its position in the
+rendered output, and returns a handle carrying the full set of statement
+verbs. `program["name"]` reads a segment back later. Once named segments
+exist, each renders under a `% ===== name =====` banner:
+
+```python
+Wall = Predicate.define("wall", ["at"], show=False)
+
+house = ASPProgram()
+board_seg = house.add_segment("board")
+board_seg.section("Board geometry")
+board_seg.fact(Wall(at=1))
+
+house.comment("program-level verbs write to the default segment")
+house.fact(Wall(at=2))
+
+layout = house.render()
+assert "% ===== board =====" in layout
+assert "% Board geometry" in layout
+assert house["board"] is board_seg
+```
+
+Segments render in the order they were added, regardless of when statements
+land in them — so a framework can reserve a "definitions" segment up front
+and fill it as facts arrive. That is as deep as most programs need; the
+framework-author machinery (attributing generated rules to the right source
+lines across segment boundaries) lives in
+[Diagnostics and Grounding](diagnostics.md#source-locations).

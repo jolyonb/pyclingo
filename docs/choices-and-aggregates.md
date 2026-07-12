@@ -1,0 +1,340 @@
+# Choices and Aggregates
+
+*Choice rules, the five aggregates, and the empirically-pinned guard idioms.*
+
+Choice rules are how the solver gets a decision to make; aggregates are how
+your rules count, sum, and bound what it decided. This page is one runnable
+script, top to bottom — every rendered rule you see is asserted by the test
+suite in CI.
+
+## Choice rules
+
+A choice rule hands a decision to the solver: from a set of candidate atoms,
+make some subset true. `Choice(element, condition=...)` builds one — the
+element is the atom being chosen, and the condition says where the candidates
+come from (it is a [conditional literal](rules.md#conditional-literals): one
+choice element per way the condition can be satisfied). Cap the decision with
+`exactly()`, `at_least()`, or `at_most()`, and attach it to a body with
+`when(...).derive(...)`:
+
+```python
+from aspalchemy import ASPProgram, Choice, Field, Predicate, Variable
+
+class Task(Predicate, show=False):
+    name: Field[str]
+
+class Worker(Predicate, show=False):
+    name: Field[str]
+
+class Assigned(Predicate):
+    task: Field[str]
+    worker: Field[str]
+
+T, W = Variable("T"), Variable("W")
+
+program = ASPProgram()
+program.fact(*(Task(name=t) for t in ["wiring", "plumbing", "painting"]))
+program.fact(*(Worker(name=w) for w in ["ada", "grace"]))
+
+# Every task goes to exactly one worker
+program.when(Task(name=T)).derive(
+    Choice(Assigned(task=T, worker=W), condition=Worker(name=W)).exactly(1)
+)
+assert "{ assigned(T, W) : worker(W) } = 1 :- task(T)." in program.render()
+```
+
+```text
+{ assigned(T, W) : worker(W) } = 1 :- task(T).
+```
+
+For each task `T`, pick exactly one `assigned` atom, drawing `W` from the
+workers — [the tutorial reads this shape word by
+word](getting-started.md#choose-exactly-one-color) if it is new to you. The
+three cardinality methods render the way clingo spells them: `exactly(1)` is
+`{ ... } = 1`, `at_least(2).at_most(4)` is `2 { ... } 4`, and with no bounds
+at all the subset is unconstrained. A choice that needs no body goes in
+directly with `choose()`:
+
+```python
+class OnCall(Predicate):
+    worker: Field[str]
+
+banded = Choice(Assigned(task=T, worker=W), condition=Worker(name=W)).at_least(2).at_most(4)
+assert banded.render() == "2 { assigned(T, W) : worker(W) } 4"
+
+# A bare choice: no body, holds unconditionally
+standby = Choice(OnCall(worker=W), condition=Worker(name=W)).at_least(1)
+program.choose(standby)
+assert "1 { on_call(W) : worker(W) }." in program.render()
+```
+
+A choice can offer more than one kind of atom: `add(element, condition=...)`
+appends further elements, and the cardinality then bounds the whole set. Each
+element is a `Predicate` atom — that is the thing being decided — and the
+bounds are validated as you build (a negative bound, or
+`at_least(3).at_most(2)`, is refused at the Python line rather than becoming
+a silently-UNSAT program).
+
+```python
+class Approve(Predicate):
+    task: Field[str]
+
+class Defer(Predicate):
+    task: Field[str]
+
+decision = Choice(Approve(task=T)).add(Defer(task=T))
+assert decision.render() == "{ approve(T); defer(T) }"
+
+# Solve and check the choices were honored
+model = program.solve().first()
+for t in ["wiring", "plumbing", "painting"]:
+    assert sum(1 for a in model.atoms(Assigned) if a.task == t) == 1
+assert len(model.atoms(OnCall)) >= 1
+```
+
+Cardinalities are not limited to literal integers: a `Variable` or
+`Expression` bound in the rule's body works too, so the *data* can decide how
+many atoms to choose — the [Numberlink
+walkthrough](numberlink.md#choose-the-paths) turns exactly that trick into
+one rule doing the work of two.
+
+## Builders freeze
+
+`Choice` (and every aggregate below) is a mutable builder: `add()`,
+`exactly()`, `at_least()`, `at_most()` all mutate and return `self` for
+chaining. The moment a rule captures the builder, it freezes — mutating it
+afterwards would silently rewrite the recorded rule, so instead it raises,
+naming the file and line of the rule that captured it:
+
+```python
+try:
+    standby.at_most(2)  # standby was captured by program.choose() above
+    raise AssertionError("mutating a captured Choice should have raised")
+except RuntimeError as e:
+    assert "frozen" in str(e)
+    assert "Build a new Choice instead" in str(e)
+```
+
+A frozen builder is a value, not a spent cartridge: further rules may capture
+and share it, and it renders identically in each — the same choice under
+different bodies. Only mutation is fenced. The receipt in the error (the
+capturing rule's `file:line`) is part of a broader policy that [every error
+teaches](diagnostics.md#errors-that-teach).
+
+```python
+class Weekend(Predicate, show=False):
+    pass
+
+rota = ASPProgram()
+rota.fact(Worker(name="ada"), Weekend())
+cover = Choice(OnCall(worker=W), condition=Worker(name=W)).exactly(1)
+rota.choose(cover)               # captured (and frozen) here...
+rota.when(Weekend()).derive(cover)  # ...and shared here, legally
+assert "{ on_call(W) : worker(W) } = 1." in rota.render()
+assert "{ on_call(W) : worker(W) } = 1 :- weekend." in rota.render()
+```
+
+## Aggregates
+
+There are five aggregates — `Count`, `Sum`, `SumPlus`, `Min`, and `Max` —
+and they all follow the same grammar as choice elements: an element (or tuple
+of terms) with an optional condition, plus `add()` for further elements.
+
+```python
+from aspalchemy import Predicate, PredicateField
+
+class Person(Predicate):
+    name: PredicateField
+    age: PredicateField
+
+john = Person(name="john", age=30)
+mary = Person(name="mary", age=25)
+```
+
+```python
+from aspalchemy import ANY, Count, Variable
+
+X = Variable("X")
+count = Count(X, Person(name=X, age=ANY)) > 5
+```
+
+`Count` counts distinct matching tuples. The other four aggregate over the
+**first** term of each tuple: `Sum` adds it up (`SumPlus` the same, but
+negative weights count as zero), `Min` and `Max` take the extremes. So a
+tuple's leading term is its weight, and the remaining terms exist to make
+tuples distinct — `Sum((A, X), Person(name=X, age=A))` sums ages, one per
+person, even when two people share an age:
+
+```python
+from aspalchemy import Max, Sum
+
+A = Variable("A")
+total_age = Sum((A, X), Person(name=X, age=A))
+assert total_age.render() == "#sum{ A, X : person(X, A) }"
+
+oldest = Max(A, Person(name=ANY, age=A))
+assert oldest.render() == "#max{ A : person(_, A) }"
+```
+
+An aggregate never stands alone: it becomes usable by putting it in a
+comparison — the *guard* — and that comparison then goes wherever comparisons
+go (`when()` bodies, `forbid()`, `require()`). The `count` built above is
+already a full guard: `Count(...) > 5` is a `Comparison` holding the
+aggregate. Trying to use a bare aggregate as a rule head or body literal is
+refused at construction. The full surface is one import away — see the
+[reference](reference.md#aggregates).
+
+```python
+census = ASPProgram()
+census.fact(john, mary, Person(name="alan", age=41))
+census.require(Count(X, Person(name=X, age=ANY)) >= 3)  # holds: 3 people
+census.solve().first()  # would raise UnsatisfiableError if the guard failed
+```
+
+## Guards, the right way
+
+A one-sided guard is one comparison. A **band** — the count must land between
+two bounds — is *two* comparisons over the same aggregate. Build the
+aggregate once, compare it twice:
+
+```python
+# One-sided: no worker carries more than two tasks
+load = Count(T, Assigned(task=T, worker=W))
+program.forbid(Worker(name=W), load > 2)
+
+# A band: total assignments between 3 and 6 — two comparisons, same aggregate
+class Balanced(Predicate):
+    pass
+
+workload = Count((T, W), Assigned(task=T, worker=W))
+program.when(workload >= 3, workload <= 6).derive(Balanced())
+
+model = program.solve().first()
+assert model.atoms(Balanced)  # 3 tasks, one worker each: the band holds
+```
+
+```text
+:- worker(W), #count{ T : assigned(T, W) } > 2.
+balanced :- #count{ T, W : assigned(T, W) } >= 3, #count{ T, W : assigned(T, W) } <= 6.
+```
+
+The rendered band repeats the aggregate text, and that looks expensive. It
+isn't: gringo (clingo's grounder — the half that instantiates your rules
+over the actual data) recognizes the shared aggregate, and the
+two-comparison band grounds to the same solver input as its native
+two-guard interval literal (`3 <= #count{ ... } <= 6` as one body literal —
+the form aspalchemy [deliberately doesn't
+model](unsupported.md#deliberate-strictness)). Probed against clingo 5.8
+(2026-07-10): on a 100-element band, 3,858 bytes of aspif (the ground
+statement stream that clasp — the search engine consuming the ground
+program — actually receives) for the two-comparison form against 3,876 for
+the interval literal — the same weight rules, elements grounded once each;
+the interval spelling in fact carries one small auxiliary rule the
+two-comparison form skips. Two cautions from that probe: gringo's `--text`
+output re-prints the shared elements and *misleads* (an earlier "grounds
+twice" reading of this idiom was a `--text` artifact), and the honest
+measure is aspif, the stream clasp receives.
+
+The real trap is **bind-then-compare**: `N == Count(...)`, then testing `N`
+against the bounds. It reads like one aggregate, but gringo must ground one
+aggregate body *per feasible value of `N`* — 25,136 bytes of aspif on the
+same 100-element instance, the band width as a multiplier. Keep the variable
+out of it: compare the aggregate directly, once per bound.
+
+A first-class banded form is on the wishlist; until then, two comparisons
+*is* the idiom, and it costs nothing.
+
+## Verify it yourself
+
+Don't take the probe's word for it — `ground().aspif()` returns [the exact
+statement stream clasp receives](diagnostics.md#seeing-the-ground-program),
+so the claim above shrinks to a runnable comparison. Weight rules are where
+aggregate elements land in aspif, so counting them shows exactly what got
+duplicated (the asserts are comparative, never absolute byte counts — those
+are clingo-version hostages and live in the dated prose above):
+
+```python
+class Item(Predicate, show=False):
+    n: Field[int]
+
+class Picked(Predicate, show=False):
+    n: Field[int]
+
+class Ok(Predicate):
+    pass
+
+def probe_program() -> ASPProgram:
+    p = ASPProgram()
+    p.fact(*(Item(n=i) for i in range(1, 13)))
+    p.choose(Choice(Picked(n=X), condition=Item(n=X)))
+    return p
+
+def weight_rules(aspif: str) -> int:
+    """Count aspif rule statements with a weight body (body type 1)."""
+    rules = [line.split() for line in aspif.splitlines() if line.startswith("1 ")]
+    return sum(1 for parts in rules if parts[3 + int(parts[2])] == "1")
+
+# The idiom: a band as two comparisons over one aggregate
+band = probe_program()
+picked = Count(X, Picked(n=X))
+band.when(picked >= 2, picked <= 9).derive(Ok())
+band_aspif = band.ground().aspif()
+
+# The same band as gringo's native interval literal, via the escape hatch
+interval = probe_program()
+interval.raw_asp("ok :- 2 <= #count{ X : picked(X) } <= 9.", predicates=[Ok])
+interval_aspif = interval.ground().aspif()
+
+# The trap: bind-then-compare
+N = Variable("N")
+bind = probe_program()
+counted = Count(X, Picked(n=X))
+bind.when(N == counted, N >= 2, N <= 9).derive(Ok())
+bind_aspif = bind.ground().aspif()
+
+# Same weight rules as the native interval literal, and no bigger overall
+assert weight_rules(band_aspif) == weight_rules(interval_aspif)
+assert len(band_aspif) <= len(interval_aspif)
+
+# Bind-then-compare multiplies the weight rules by the band width
+assert weight_rules(bind_aspif) > 2 * weight_rules(band_aspif)
+assert len(bind_aspif) > 2 * len(band_aspif)
+```
+
+Twelve items, a band of 2–9: the two-comparison band and the interval
+literal each ground two weight rules (one per bound); bind-then-compare
+grounds two *per feasible `N`*. Widen the band or grow the domain and the
+gap grows with it.
+
+## Cardinality tests are not choices
+
+In clingo, braces in a rule *head* choose. The same braces in a rule *body* —
+`2 { p(X) } 4 :- q.` — are a different construct wearing the same syntax: a
+cardinality **test** that checks how many `p(X)` are true. Nothing is chosen.
+aspalchemy refuses a `Choice` in body position, and the error says how to
+spell what the body braces actually mean:
+
+```python
+try:
+    program.forbid(Choice(OnCall(worker=W), condition=Worker(name=W)).at_least(3))
+    raise AssertionError("a Choice in a body should have raised")
+except ValueError as e:
+    assert "cardinality TEST" in str(e)
+```
+
+The test is spelled as a `Count` guard — which is what it is — and it grounds
+identically to the body-brace form:
+
+```python
+# "At most two workers on call" — a cardinality test, spelled as one
+program.require(Count(W, OnCall(worker=W)) <= 2)
+model = program.solve().first()
+assert len(model.atoms(OnCall)) <= 2
+```
+
+A two-sided test (`2 { p(X) } 4` in a body) is the band idiom from
+[above](#guards-the-right-way): two comparisons over one `Count`. Keeping
+the body-brace syntax out is a deliberate piece of
+[strictness](unsupported.md#deliberate-strictness): one syntax should mean
+one thing, and here braces mean *choose* — which is why they only belong in
+a head.

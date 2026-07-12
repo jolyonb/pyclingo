@@ -52,10 +52,47 @@ passed locally, it passes CI.
 ## Docs Site
 
 GitHub Pages serves `docs/` from main (Settings → Pages → deploy from
-branch), rendering the markdown with Jekyll's Primer theme. The shared
-nav header lives in `docs/_layouts/default.html` — add new pages to the
-`<nav>` there, not to individual markdown files. `docs/_config.yml` lists
-the plugins Pages enables by default, so local and production builds match.
+branch), rendering the markdown with Jekyll's Primer theme plus our own
+layout and stylesheet (`docs/_layouts/default.html`,
+`docs/assets/css/style.scss`). The home page is `docs/index.md`; the
+grouped sidebar nav lives in the layout — add new pages to the `<nav>`
+there, not to individual markdown files. `docs/_config.yml` lists the
+plugins Pages enables by default, so local and production builds match.
+
+### Docs conventions
+
+The docs are executable: `tests/aspalchemy/test_readme.py` runs every
+` ```python ` fence in the repo README and each top-level `docs/*.md` —
+fences concatenate per file and exec in one shared namespace, so each
+page is one runnable script (zero-fence pages skip visibly). The rules
+that keep this honest:
+
+- The fence must be exactly ` ```python ` — variants (` ```python3 `) are
+  silently decorative. Generated ASP and expected output go in ` ```text `
+  fences, which CI never verifies: every load-bearing claim needs an
+  adjacent assert in a python fence.
+- Asserts pin properties (validity, key lines present), never exact solver
+  output (enumeration order is not stable). Refusal demos are try/except
+  asserting a short key fragment — error wording is not API. Empirical
+  asserts are comparative (A == B), never absolute byte counts; prose probe
+  claims are dated ("probed against clingo 5.8 (YYYY-MM-DD)").
+- Each topic has one home page; elsewhere link, don't re-explain. One
+  executable demo per refusal, homed where the reader first hits it.
+- No YAML front matter (the H1 is the page title, via
+  jekyll-titles-from-headings); filenames lowercase; anchors are kramdown
+  auto-ids, so renaming a linked heading means grepping `docs/` for the
+  old anchor in the same commit. Internal links are relative `.md` paths
+  (jekyll-relative-links rewrites them); CHANGELOG is not in the site —
+  link it absolutely. The docs are self-contained: never lean on the root
+  README for content (the pitch lives on `index.md`, the clorm positioning
+  on `clingo-map.md#positioning`) — the README is the PyPI/GitHub
+  storefront, so keep the two tellings in sync when either changes.
+- Drift tripwires: `docs/clingo-map.md` ends in a CI-pinned assert block,
+  and `test_architecture.py` checks that every `__all__` symbol appears in
+  `docs/reference.md` with `##` sections mirroring the `__all__`
+  categories. If a refusal is lifted or a construct ships, update
+  `docs/unsupported.md` and `docs/clingo-map.md` in the same commit (see
+  the release section below).
 
 Preview locally before pushing (needs Homebrew Ruby — the `github-pages`
 gem itself requires an EOL Ruby, so the Gemfile uses Jekyll 4 with the
@@ -80,7 +117,9 @@ authenticates to PyPI with short-lived OIDC tokens (the `pypi` environment
 PyPI), so there are no stored secrets to rotate or leak.
 
 To release: bump the version in `pyproject.toml`, update `CHANGELOG.md`,
-commit, then tag and push. `.github/workflows/publish.yml` takes it from
+commit, then tag and push. If a refusal is lifted or a new construct
+ships, update `docs/unsupported.md` and `docs/clingo-map.md` in the same
+commit. `.github/workflows/publish.yml` takes it from
 there: it fails the release if the tag doesn't match the pyproject
 version, runs the full gauntlet, and only then builds and uploads.
 

@@ -1,0 +1,335 @@
+---
+---
+@import "jekyll-theme-primer";
+
+/* ============================================================
+   ASPAlchemy — an alchemical treatise, set like a book.
+   Warm paper, ink, burnished gold, a verdigris counterpoint.
+   Fraunces display / Source Serif 4 body / IBM Plex Mono code.
+   ============================================================ */
+
+:root {
+  --paper: #f8f4ec;
+  --paper-deep: #f2ecdf;
+  --paper-well: #efe7d6;
+  --ink: #241d12;
+  --ink-soft: #6b5f4b;
+  --gold: #8a5a10;        /* links, active marks — AA on paper */
+  --gold-bright: #c08a1c; /* ornaments, hovers, the gilded edge */
+  --gold-pale: #e9d9b4;
+  --verdigris: #3e6f64;
+  --hairline: #e0d5bf;
+  --serif: "Source Serif 4", "Iowan Old Style", Georgia, serif;
+  --display: "Fraunces", "Iowan Old Style", Georgia, serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+
+body {
+  background:
+    radial-gradient(120rem 60rem at 15% -10%, #fdfaf4 0%, transparent 60%),
+    var(--paper);
+  color: var(--ink);
+  font-family: var(--serif);
+}
+
+/* The gilded edge */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0 0 auto 0;
+  height: 4px;
+  background: linear-gradient(90deg,
+    var(--verdigris) 0%, var(--gold) 30%, #e2b34a 55%, var(--gold) 80%, #7a4c0c 100%);
+  z-index: 40;
+}
+
+::selection { background: var(--gold-pale); color: var(--ink); }
+:focus-visible { outline: 2px solid var(--gold-bright); outline-offset: 2px; border-radius: 2px; }
+
+.skip {
+  position: absolute; left: -200vw; top: 0.5rem;
+  background: var(--ink); color: var(--paper); font-family: var(--mono);
+  font-size: 0.8rem; padding: 0.4rem 0.8rem; border-radius: 4px; z-index: 50;
+}
+.skip:focus { left: 0.5rem; }
+
+/* ---------- frame ---------- */
+
+.site {
+  display: grid;
+  grid-template-columns: 17rem minmax(0, 1fr);
+  max-width: 78rem;
+  margin: 0 auto;
+  min-height: 100vh;
+}
+
+.side {
+  position: sticky; top: 0;
+  align-self: start;
+  max-height: 100vh;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--hairline) transparent;
+  padding: 2.1rem 1.4rem 2rem 1.6rem;
+  border-right: 1px solid var(--hairline);
+  background: linear-gradient(180deg, var(--paper-deep) 0%, var(--paper) 26rem);
+}
+
+.main { padding: 2.9rem 3.4rem 3rem; }
+
+/* ---------- wordmark ---------- */
+
+.wordmark {
+  display: inline-flex; align-items: baseline; gap: 1px;
+  text-decoration: none !important;
+}
+.wm-asp {
+  font-family: var(--mono); font-weight: 500; font-size: 1.02rem;
+  letter-spacing: 0.12em; color: var(--gold);
+}
+.wm-alchemy {
+  font-family: var(--display); font-style: italic; font-weight: 620;
+  font-size: 1.5rem; color: var(--ink); letter-spacing: -0.01em;
+}
+.wordmark:hover .wm-asp { color: var(--gold-bright); }
+
+.tagline {
+  margin: 0.35rem 0 1.9rem;
+  font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.06em;
+  line-height: 1.55;
+  color: var(--ink-soft);
+}
+@media (max-width: 880px) {
+  .tagline br { display: none; }
+}
+
+/* ---------- navigation ---------- */
+
+.nav-group { margin-bottom: 1.45rem; }
+
+.group-label {
+  display: flex; align-items: center; gap: 0.45rem;
+  font-family: var(--mono); font-size: 0.66rem; font-weight: 500;
+  text-transform: uppercase; letter-spacing: 0.16em;
+  color: var(--ink-soft);
+  margin-bottom: 0.45rem;
+}
+.group-label::after {
+  content: ""; flex: 1; height: 1px; background: var(--hairline);
+}
+.orn { color: var(--gold-bright); font-size: 0.62rem; transform: translateY(-1px); }
+.nav-group.g-clingo .orn { color: var(--verdigris); }
+.nav-group.g-appendix .orn { color: var(--ink-soft); }
+
+.nav-group ul { list-style: none; margin: 0; padding: 0; }
+.nav-group li { margin: 0; }
+.nav-group a {
+  display: block;
+  font-size: 0.92rem; line-height: 1.3;
+  color: var(--ink-soft); text-decoration: none;
+  padding: 0.28rem 0.55rem;
+  border-left: 2px solid transparent;
+  border-radius: 0 4px 4px 0;
+  transition: color 120ms ease, background-color 120ms ease, border-color 120ms ease;
+}
+.nav-group a:hover { color: var(--ink); background: var(--paper-well); }
+.nav-group a.active {
+  color: var(--ink); font-weight: 600;
+  border-left-color: var(--gold-bright);
+  background: linear-gradient(90deg, var(--gold-pale) 0%, transparent 90%);
+}
+.nav-group.g-clingo a.active { border-left-color: var(--verdigris); }
+.nav-group a .ext { color: var(--gold-bright); font-size: 0.75em; margin-left: 0.2em; }
+
+/* ---------- content ---------- */
+
+.markdown-body {
+  font-family: var(--serif);
+  font-size: 1.05rem;
+  line-height: 1.68;
+  color: var(--ink);
+  max-width: 46rem;
+  animation: rise 0.45s ease-out both;
+}
+@keyframes rise {
+  from { opacity: 0; transform: translateY(7px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.markdown-body h1, .markdown-body h2, .markdown-body h3,
+.markdown-body h4, .markdown-body h5 {
+  font-family: var(--display);
+  color: var(--ink);
+  letter-spacing: -0.012em;
+}
+.markdown-body h1 {
+  font-size: 2.35rem; font-weight: 580; line-height: 1.12;
+  border-bottom: none; padding-bottom: 0; margin-bottom: 0.4rem;
+  font-variation-settings: "opsz" 60;
+}
+/* the first paragraph after the title reads as a deck */
+.markdown-body h1 + p > em:only-child {
+  display: block;
+  font-family: var(--display); font-style: italic;
+  font-size: 1.14rem; color: var(--ink-soft); line-height: 1.45;
+}
+.markdown-body h2 {
+  font-size: 1.55rem; font-weight: 600;
+  margin-top: 2.4rem; padding-bottom: 0.25rem;
+  border-bottom: 1px solid var(--hairline);
+}
+.markdown-body h3 { font-size: 1.18rem; font-weight: 620; margin-top: 1.9rem; }
+
+.markdown-body a {
+  color: var(--gold);
+  text-decoration: underline;
+  text-decoration-color: var(--gold-pale);
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 2.5px;
+  transition: color 120ms ease, text-decoration-color 120ms ease;
+}
+.markdown-body a:hover {
+  color: var(--gold-bright);
+  text-decoration-color: var(--gold-bright);
+}
+
+.markdown-body strong { font-weight: 640; }
+
+/* code — the other voice of the book */
+.markdown-body code, .markdown-body pre, .markdown-body tt {
+  font-family: var(--mono);
+}
+.markdown-body code { font-size: 0.84em; }
+.markdown-body :not(pre) > code {
+  background: var(--paper-well);
+  border: 1px solid rgba(138, 90, 16, 0.12);
+  border-radius: 4px;
+  padding: 0.08em 0.32em;
+  color: #4a3208;
+}
+.markdown-body pre {
+  background: #f4efe2;
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  padding: 1rem 1.15rem;
+  line-height: 1.55;
+  font-size: 0.83rem;
+}
+.markdown-body pre code { color: var(--ink); }
+.markdown-body div.highlight { background: transparent; }
+.markdown-body .highlight pre { margin-bottom: 0; }
+
+/* rendered-ASP receipts (plain text fences) get a verdigris spine */
+.markdown-body pre:not([class]),
+.markdown-body .language-text pre, .markdown-body .language-asp pre {
+  border-left: 3px solid var(--verdigris);
+}
+
+/* notes */
+.markdown-body blockquote {
+  border-left: 3px solid var(--gold-bright);
+  background: var(--paper-deep);
+  border-radius: 0 8px 8px 0;
+  padding: 0.65rem 1.1rem;
+  color: var(--ink);
+  margin-left: 0;
+}
+.markdown-body blockquote p { color: inherit; }
+
+/* tables — the clingo-map earns its keep here */
+.markdown-body table { display: block; overflow-x: auto; border-collapse: collapse; }
+.markdown-body table th {
+  font-family: var(--mono); font-weight: 500;
+  font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.09em;
+  color: var(--ink-soft);
+  background: var(--paper-deep);
+  border: 1px solid var(--hairline);
+  padding: 0.45rem 0.75rem;
+}
+.markdown-body table td {
+  border: 1px solid var(--hairline);
+  padding: 0.45rem 0.75rem;
+  background: transparent;
+}
+.markdown-body table tr { background: transparent; border-top: none; }
+.markdown-body table tr:nth-child(2n) { background: rgba(242, 236, 223, 0.55); }
+.markdown-body table tr:hover td { background: rgba(233, 217, 180, 0.28); }
+
+.markdown-body hr {
+  height: 1px; background: var(--hairline); border: 0; margin: 2.2rem 0;
+}
+
+/* notes for the GitHub-source reader only */
+.site-hide { display: none; }
+
+/* hover anchors (injected by the layout script): a section mark hung in
+   the left margin, the classical placement. Primer styles this class name
+   too (GitHub's own anchor convention); geometry restated here so the
+   design does not depend on theme internals. */
+.markdown-body .anchor {
+  float: left;
+  margin-left: -20px;
+  padding-right: 4px;
+  line-height: 1;
+  font-family: var(--mono); font-size: 0.72em;
+  color: var(--gold-bright);
+  text-decoration: none;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.markdown-body h2:hover .anchor, .markdown-body h3:hover .anchor,
+.markdown-body h4:hover .anchor, .markdown-body .anchor:focus-visible {
+  opacity: 1;
+}
+/* landing on an anchor: give the heading breathing room and a brief mark */
+.markdown-body [id] { scroll-margin-top: 1.2rem; }
+.markdown-body h2:target, .markdown-body h3:target, .markdown-body h4:target {
+  background: linear-gradient(90deg, var(--gold-pale) 0%, transparent 70%);
+  border-radius: 4px;
+}
+
+/* ---------- colophon ---------- */
+
+.colophon {
+  max-width: 46rem;
+  margin-top: 3.2rem; padding-top: 1rem;
+  border-top: 1px solid var(--hairline);
+  font-family: var(--mono); font-size: 0.7rem; line-height: 1.7;
+  color: var(--ink-soft);
+}
+.colophon .flask { color: var(--gold-bright); }
+.colophon a { color: var(--gold); text-decoration: none; }
+.colophon a:hover { color: var(--gold-bright); text-decoration: underline; }
+
+/* ---------- small screens ---------- */
+
+@media (max-width: 880px) {
+  .site { display: block; }
+  .side {
+    position: static; max-height: none; overflow: visible;
+    border-right: none; border-bottom: 1px solid var(--hairline);
+    padding: 1.3rem 1.3rem 1rem;
+    background: var(--paper-deep);
+  }
+  .tagline { margin-bottom: 1.1rem; }
+  .nav-group { margin-bottom: 0.9rem; }
+  .nav-group ul { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+  .nav-group a {
+    border: 1px solid var(--hairline); border-radius: 999px;
+    padding: 0.18rem 0.75rem; font-size: 0.85rem;
+    background: var(--paper);
+  }
+  .nav-group a.active {
+    border-color: var(--gold-bright);
+    background: var(--gold-pale);
+  }
+  .main { padding: 1.6rem 1.25rem 2.2rem; }
+  .markdown-body { font-size: 1rem; }
+  .markdown-body h1 { font-size: 1.85rem; }
+}

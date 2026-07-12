@@ -1,7 +1,13 @@
-# Arithmetic in aspalchemy
+# Arithmetic
 
-How Python operators become ASP arithmetic, and where the two languages
-disagree about what numbers mean. Everything here is pinned by executable
+*How Python operators become ASP arithmetic, and where the two languages
+disagree about what numbers mean.*
+
+Expressions here appear in rules through [comparisons](rules.md#comparisons);
+for the operator-by-operator clingo spelling, see the
+[translation map](clingo-map.md#arithmetic).
+
+Everything here is pinned by executable
 tests: the renderings below run as part of the test suite, and
 `tests/aspalchemy/test_arithmetic.py` verifies each construct against clingo's
 actual evaluation.
@@ -78,8 +84,9 @@ by clingo's rules, which differ from Python's in four places:
 4. **Division by zero deletes the ground instance.** Raw clingo drops any
    rule instance whose arithmetic is undefined, emitting only an info-level
    message. aspalchemy's default `stop_on_log_level=INFO` promotes that to a
-   RuntimeError, so a division by zero fails loudly instead of silently
-   shrinking your program.
+   GroundingError, so a division by zero fails loudly instead of silently
+   shrinking your program. See
+   [Clingo's messages](diagnostics.md#clingos-messages).
 
 The good news: bitwise operations agree with Python exactly, negatives
 included — clingo implements the same infinite-precision two's-complement
