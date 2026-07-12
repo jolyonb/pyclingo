@@ -24,6 +24,8 @@ and reconstructs answer sets back into typed Python values.
 - `pyproject.toml` — packaging (uv_build, src layout), strict mypy/pyright,
   ruff.
 - `.pre-commit-config.yaml` — the full quality gauntlet.
+- `.github/workflows/` — CI (`ci.yml`) and the release pipeline
+  (`publish.yml`); see below.
 
 ## Tooling
 
@@ -38,12 +40,24 @@ Every commit must pass the whole gauntlet. The coverage gate is a hard
 policy: genuinely unexecutable lines are excluded centrally in
 `[tool.coverage.report]` (never with scattered pragmas).
 
+## CI
+
+`.github/workflows/ci.yml` runs the same gauntlet (`uv sync` +
+`uv run pre-commit run --all-files`) on every push to main and on every
+pull request. CI and the local hooks are deliberately identical: if it
+passed locally, it passes CI.
+
 ## Building & Publishing
 
-Releases are published by CI via PyPI Trusted Publishing (no tokens):
-bump the version in `pyproject.toml`, update `CHANGELOG.md`, commit, then
-tag and push — `.github/workflows/publish.yml` verifies the tag matches
-the version, runs the gauntlet, and uploads.
+Releases are published by CI via PyPI Trusted Publishing — GitHub Actions
+authenticates to PyPI with short-lived OIDC tokens (the `pypi` environment
++ `id-token: write` in the workflow, matched by a trusted publisher on
+PyPI), so there are no stored secrets to rotate or leak.
+
+To release: bump the version in `pyproject.toml`, update `CHANGELOG.md`,
+commit, then tag and push. `.github/workflows/publish.yml` takes it from
+there: it fails the release if the tag doesn't match the pyproject
+version, runs the full gauntlet, and only then builds and uploads.
 
 ```bash
 git tag -a v1.x.y -m "..."
