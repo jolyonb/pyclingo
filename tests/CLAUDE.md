@@ -32,6 +32,15 @@ cross-cutting concern as above. The 100% line-coverage gate means every new
 library line needs an exercising test (genuinely unexecutable lines are
 excluded centrally in `pyproject.toml`, never with scattered pragmas).
 
+### Error-Message Assertions
+
+Pin the load-bearing fragment, never the prose. `pytest.raises(..., match=...)`
+takes a short distinctive substring (`"outside clingo's integer range"`) or a
+keyword-gap regex (`r"negated atom.*both signs.*show_when"`) — enough to prove
+WHICH error fired, while the surrounding teaching text stays free to be
+reworded. Full-message pinning is deliberately absent from the suite: error
+wording is not API.
+
 ## Quality Control via Pre-commit
 
 The project uses pre-commit hooks to maintain high code quality. Every commit automatically runs:

@@ -257,9 +257,9 @@ def _analyze_comparison(comparison: Comparison, scopes: RuleScopes) -> None:
 def _reject_anonymous_tuple_variable(target: Term, noun: str, tail: str, rule_text: Callable[[], str]) -> None:
     """
     Reject '_' anywhere in an element-tuple term (gringo makes it unsafe).
-    noun and tail keep each caller's message byte-identical: the aggregate
-    and optimization callers add the distinctness sentence, the
-    weak-constraint caller does not.
+    noun and tail tailor the message to each caller: the aggregate and
+    optimization callers add the distinctness sentence, the weak-constraint
+    caller does not.
     """
     if "_" in target.collect_variables():
         raise ValueError(
@@ -297,7 +297,9 @@ def _analyze_local_condition(condition: Term, scope: LocalScope) -> None:
         scope.condition_counts.update(_occurrences(condition))
     elif isinstance(condition, DefaultNegation):
         scope.condition_counts.update(_occurrences(condition))
-    elif isinstance(condition, Comparison):
+    else:
+        # Construction-time validation admits nothing else in condition position
+        assert isinstance(condition, Comparison)
         sides = []
         for term in (condition.left_term, condition.right_term):
             scope.condition_counts.update(_occurrences(term))
@@ -306,8 +308,6 @@ def _analyze_local_condition(condition: Term, scope: LocalScope) -> None:
             scope.directed_edges.append((sides[1], sides[0]))
         elif condition.is_equality:
             scope.equality_edges.append((sides[0], sides[1]))
-    else:  # pragma: no cover — construction-time validation prevents this
-        raise TypeError(f"Unknown condition type in a local scope: {type(condition).__name__}")
 
 
 def _analyze_negated_body_term(negation: DefaultNegation, scopes: RuleScopes) -> None:

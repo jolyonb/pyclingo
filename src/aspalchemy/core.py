@@ -44,8 +44,9 @@ type ValueExpressionType = Value | Expression
 def require_int32(value: int, noun: str, extra: str = "") -> None:
     """
     Reject ints outside clingo's 32-bit range, which clingo silently wraps.
-    One home for the bounds; noun and extra keep each caller's message
-    byte-identical to its historical wording.
+    One home for the bounds; noun and extra tailor the message to each
+    caller. (Tests pin short fragments of these messages, not full text —
+    the wording is not API.)
     """
     if not -(2**31) <= value < 2**31:
         raise ValueError(
@@ -1106,12 +1107,8 @@ class Expression(ComparableTerm, ArithmeticOps):
         """Coerces Python ints to Number; Values and Expressions pass through."""
         if isinstance(value, (Value, Expression)):
             return value
-
-        if isinstance(value, int):
-            return Number(value)
-
-        # Unreachable: __init__ rejects any non-Value/Expression/int operand before this runs.
-        raise TypeError(f"Cannot convert {type(value).__name__} to an ASP term")  # pragma: no cover
+        # Only int remains: __init__ rejects every other operand shape before this runs
+        return Number(value)
 
     @property
     def first_term(self) -> Value | Expression | None:

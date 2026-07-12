@@ -94,7 +94,8 @@ uv build                             # local build: sdist + wheel into dist/
 - The version in `pyproject.toml` is the single source of truth;
   `src/aspalchemy/version.py` reads the installed metadata at runtime.
 - The wheel must contain only package code: `src/aspalchemy/CLAUDE.md` is
-  kept out via `source-exclude`, the PyPI readme is `docs/README.md`, and
-  `LICENSE.txt` ships via `license-files`.
+  kept out via `source-exclude`, the PyPI readme is the root `README.md`
+  (per `readme` in `pyproject.toml`), and `LICENSE.txt` ships via
+  `license-files`.
 - Sanity-check artifacts before publishing:
   `unzip -l dist/*.whl` and `tar -tzf dist/*.tar.gz`.
