@@ -1,12 +1,12 @@
 [project]
 name = "aspalchemy"
-version = "0.3.0"
+version = "1.0.0"
 description = "A Python ORM interface for building and solving clingo ASP programs"
 license = "MIT"
 license-files = ["LICENSE.txt"]
 readme = "docs/README.md"
 requires-python = ">=3.14"
-authors = [{ name = "Jolyon Bloomfield", email = "jkb84@cornell.edu" }]
+authors = [{ name = "Jolyon Bloomfield", email = "jolyonb84@gmail.com" }]
 dependencies = ["clingo>=5.8.0,<6"]
 
 [dependency-groups]

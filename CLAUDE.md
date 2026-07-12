@@ -1,10 +1,4 @@
-# ASPAlchemy: Python-to-ASP Translation Library
-
-## Terminology
-
-Do not call aspalchemy a "DSL" (in code, comments, docs, or conversation) — it
-is a Python library that builds ASP programs. Describe it in those plain
-terms.
+# ASPAlchemy: A Python ORM for clingo
 
 ## Mental Model
 
@@ -20,24 +14,16 @@ Low Level:   clingo     - ASP solver engine
 typed Python objects, renders them to ASP source, solves via the clingo API,
 and reconstructs answer sets back into typed Python values.
 
-The main consumer is `aspuzzle` (a logic puzzle solver framework in its own
-repository, github.com/jolyonb/aspuzzle), which drives virtually every
-construct in this library.
-
 ## Repo Layout
 
-- `src/aspalchemy/` — the package. `src/aspalchemy/CLAUDE.md` documents the
-  internals: the term hierarchy (Variable, Predicate, Expression, Choice,
-  Aggregate, …), the program builder, and solver integration. The
-  `ASPProgram` class coordinates everything.
-- `tests/` — unit suite + module doctests; see `tests/CLAUDE.md`. Line
-  coverage of `aspalchemy` is gated at 100%.
-- `docs/` — user-facing documentation: `docs/README.md` (the PyPI readme)
-  and `docs/MATH.md`. Their python code blocks are executed by
+- `src/aspalchemy/` — the package.
+- `tests/` — unit suite + module doctests. Line coverage of `aspalchemy` is 
+  gated at 100%.
+- `docs/` — user-facing documentation. Python code blocks are executed by
   `tests/aspalchemy/test_readme.py` to keep them runnable.
 - `pyproject.toml` — packaging (uv_build, src layout), strict mypy/pyright,
   ruff.
-- `.pre-commit-config.yaml` — the full quality gauntlet (see below).
+- `.pre-commit-config.yaml` — the full quality gauntlet.
 
 ## Tooling
 
@@ -52,23 +38,17 @@ Every commit must pass the whole gauntlet. The coverage gate is a hard
 policy: genuinely unexecutable lines are excluded centrally in
 `[tool.coverage.report]` (never with scattered pragmas).
 
-## Debugging & Performance Workflow
+## Building & Publishing
 
-### Inspecting what the solver actually sees
-- `program.render()` — the generated ASP source
-- `grounded.ground_text()` — readable ground rules after gringo
-- `grounded.aspif()` — the exact solver input; the honest size measure,
-  since pretty-printed text repeats shared aggregate elements
+```bash
+uv build                             # sdist + wheel into dist/
+uv publish                           # upload to PyPI (needs a token)
+```
 
-### Grounding explosion
-Complex conditions can create enormous ground programs. Perform scaling
-analysis on the grounding size as the problem grows: O(N²) in the number of
-domain elements is okay, O(N³) is not. Mitigations:
-- Replace multi-variable rules with aggregates: `#count{X : condition}`
-- Use intermediate predicates to break complex conditions
-- Minimize variables in rule bodies
-
-### Fast iteration
-Render the program once, then test rule modifications directly with clingo
-(`python -m clingo program.pl -n 0`) — much faster than round-tripping
-through Python.
+- The version in `pyproject.toml` is the single source of truth;
+  `src/aspalchemy/version.py` reads the installed metadata at runtime.
+- The wheel must contain only package code: `src/aspalchemy/CLAUDE.md` is
+  kept out via `source-exclude`, the PyPI readme is `docs/README.md`, and
+  `LICENSE.txt` ships via `license-files`.
+- Sanity-check artifacts before publishing:
+  `unzip -l dist/*.whl` and `tar -tzf dist/*.tar.gz`.

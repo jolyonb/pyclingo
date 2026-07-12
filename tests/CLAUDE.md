@@ -64,4 +64,5 @@ pre-commit run --all-files
 git commit -m "Add new feature"
 ```
 
-**Note**: If any hook fails, the commit is blocked until issues are resolved. This ensures the main branch always maintains high quality standards.
+**Note**: If any hook fails, the commit is blocked until issues are resolved. This ensures the main branch always 
+maintains high quality standards.
