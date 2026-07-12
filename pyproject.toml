@@ -1,7 +1,7 @@
 [project]
 name = "aspalchemy"
 version = "0.3.0"
-description = "TODO: Fix this before publication"
+description = "Object-oriented Python interface for building and solving clingo ASP programs"
 license = { text = "MIT" }
 readme = "aspalchemy/README.md"
 requires-python = ">=3.14"
@@ -38,10 +38,10 @@ check_untyped_defs = true
 disallow_untyped_decorators = true
 no_implicit_optional = true
 strict_optional = true
-files = ["aspalchemy", "aspuzzle", "tests", "solveit.py"]
+files = ["aspalchemy", "tests"]
 
 [tool.pyright]
-include = ["aspalchemy", "aspuzzle", "tests", "solveit.py"]
+include = ["aspalchemy", "tests"]
 
 [tool.ruff]
 line-length = 120
@@ -55,12 +55,8 @@ ignore = [
 ]
 fixable = ["ALL"]
 
-[tool.ruff.lint.per-file-ignores]
-# Solver's no-op methods are optional hooks for subclasses, not forgotten abstracts
-"aspuzzle/solvers/base.py" = ["B027"]
-
 [tool.ruff.lint.isort]
-known-first-party = ["aspalchemy", "aspuzzle"]
+known-first-party = ["aspalchemy"]
 section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
 
 [tool.pytest.ini_options]

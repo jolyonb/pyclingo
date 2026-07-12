@@ -1,27 +1,11 @@
 # tests/
 
-This directory contains the testing strategy for the ASPAlchemy project, using a multi-layered approach to ensure correctness and prevent regressions.
+This directory contains the testing strategy for the ASPAlchemy project.
 
 ## Test Architecture
 
-### Integration Testing (`test_puzzles.py`)
-**Purpose**: Validates that all puzzle solvers work correctly end-to-end
-
-**How it works**:
-- **Auto-discovery**: Finds all `.json` files in `puzzles/` directory using `get_puzzle_files()`
-- **Parametrized testing**: Creates one test per puzzle file via `@pytest.mark.parametrize`
-- **Complete pipeline**: For each puzzle, tests the full solving workflow:
-  1. Load JSON configuration
-  2. Create solver with `Solver.from_config()`
-  3. Call `construct_puzzle()` and `solve()`
-  4. Verify puzzle is satisfiable
-  5. Test display/rendering code runs without errors
-  6. If puzzle has `"solutions"` field, validate against expected results using `validate_solutions()`
-
-**Key insight**: Any new puzzle added to `puzzles/` is automatically included in the test suite.
-
 ### Unit Testing (`tests/aspalchemy/`)
-**Purpose**: Tests the aspalchemy library in isolation from aspuzzle, at 100% line coverage
+**Purpose**: Tests the aspalchemy library at 100% line coverage
 
 Files are organized by construct (e.g. `test_choice.py`, `test_aggregates.py`,
 `test_arithmetic.py`, `test_values.py`) and by cross-cutting concern (e.g.
@@ -29,53 +13,24 @@ Files are organized by construct (e.g. `test_choice.py`, `test_aggregates.py`,
 `test_optimization.py` / `test_optimize_solve.py`). `test_end_to_end.py` holds
 the paved-path smoke tests: small complete programs run construct → render →
 solve → typed reconstruction. Location-sensitive tests capture expected line
-numbers at runtime (via `inspect`), never as literals. This suite carries aspalchemy's coverage on its own — the puzzle
-integration test contributes almost nothing aspalchemy-side — so it stays whole
-when aspuzzle splits into its own repo.
-
-## Validation Strategy
-
-The `puzzles/*.json` files serve dual purposes:
-1. **Test cases** for automated regression testing
-2. **Reference solutions** for development validation
-
-Expected solution format in JSON:
-```json
-{
-  "puzzle_type": "Sudoku",
-  "grid": [...],
-  "solutions": [
-    {
-      "predicate_name": ["predicate_instance_1", "predicate_instance_2", ...]
-    }
-  ]
-}
-```
+numbers at runtime (via `inspect`), never as literals.
 
 ## Running Tests
 
 ```bash
-# Run all tests
+# Run all tests (unit suite + module doctests)
 pytest
 
-# Run only puzzle integration tests
-pytest tests/test_puzzles.py
-
-# Run specific puzzle test
-pytest tests/test_puzzles.py::test_puzzle_solves[minesweeper.json]
-
-# Run with verbose output to see all puzzle names
-pytest -v tests/test_puzzles.py
-
-# Run ASPAlchemy unit tests only
-pytest tests/aspalchemy/
+# Run a single file
+pytest tests/aspalchemy/test_choice.py
 ```
 
 ## Adding Test Coverage
 
-1. **New puzzle types**: Add `.json` file to `puzzles/` directory - automatically included in tests
-2. **ASPAlchemy components**: Add unit tests in `tests/aspalchemy/`
-3. **Framework validation**: Integration tests catch issues across the entire solver pipeline
+Add unit tests in `tests/aspalchemy/`, organized by construct or
+cross-cutting concern as above. The 100% line-coverage gate means every new
+library line needs an exercising test (genuinely unexecutable lines are
+excluded centrally in `pyproject.toml`, never with scattered pragmas).
 
 ## Quality Control via Pre-commit
 
@@ -86,12 +41,9 @@ The project uses pre-commit hooks to maintain high code quality. Every commit au
 2. **ruff (formatter)**: Consistent code formatting
 3. **mypy**: Static type checking for type safety
 4. **pyright**: Additional static type checking
-5. **pytest (aspalchemy, 100% coverage gate)**: Runs the aspalchemy suite + module
-   doctests and fails under 100% line coverage (excludes `test_puzzles.py` so the
-   number reflects aspalchemy standalone)
-6. **pytest (puzzle integration)**: Solves the puzzle corpus end to end; leaves
-   with the aspuzzle repo split
-7. **config validation**: Ensures pre-commit setup stays valid
+5. **pytest (100% coverage gate)**: Runs the suite + module doctests and
+   fails under 100% line coverage of `aspalchemy`
+6. **config validation**: Ensures pre-commit setup stays valid
 
 ### Benefits
 - **Automatic quality**: No manual intervention needed
@@ -109,9 +61,7 @@ pre-commit install
 pre-commit run --all-files
 
 # Commit triggers all hooks automatically
-git commit -m "Add new solver"
+git commit -m "Add new feature"
 ```
 
 **Note**: If any hook fails, the commit is blocked until issues are resolved. This ensures the main branch always maintains high quality standards.
-
-This comprehensive quality control system, combined with the testing strategy, ensures that framework changes don't break existing solvers while maintaining code quality and providing rapid feedback during development.

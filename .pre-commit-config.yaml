@@ -37,13 +37,11 @@ repos:
         types: [python]
         pass_filenames: false
 
-      # aspalchemy standalone: the unit suite + module doctests, gated at 100%
-      # line coverage. Excludes the puzzle integration test so the number is
-      # what it will be after the aspuzzle repo split — aspalchemy alone must be
-      # fully covered, not propped up by puzzle-driven lines. (--cov needs the
-      # whole run, so no -x: a fail-fast would report misleading coverage.)
+      # The unit suite + module doctests, gated at 100% line coverage.
+      # (--cov needs the whole run, so no -x: a fail-fast would report
+      # misleading coverage.)
       - id: pytest
-        name: pytest (aspalchemy, 100% coverage gate)
+        name: pytest (100% coverage gate)
         description: "Run aspalchemy's tests and enforce 100% line coverage"
         entry: uv run pytest
         language: system
@@ -52,21 +50,10 @@ repos:
           [
             "tests/",
             "aspalchemy/",
-            "--ignore=tests/test_puzzles.py",
             "--cov=aspalchemy",
             "--cov-fail-under=100",
             "--cov-report=term-missing:skip-covered",
           ]
-
-      # Puzzle integration smoke test (exercises aspuzzle end to end). Temporary:
-      # this hook leaves with the aspuzzle repo split.
-      - id: pytest-puzzles
-        name: pytest (puzzle integration)
-        description: "Solve the puzzle corpus end to end"
-        entry: uv run pytest
-        language: system
-        pass_filenames: false
-        args: ["-x", "tests/test_puzzles.py"]
 
   # Verify that the pre-commit configuration is valid
   - repo: local

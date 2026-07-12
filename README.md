@@ -1,9 +1,17 @@
-# ASPAlchemy and ASPuzzle
+# ASPAlchemy
 
 Copyright Jolyon Bloomfield 2025
 
-This repository houses a pair of libraries:
-* `aspalchemy` is a python wrapper around clingo that generates clingo scripts in an ORM fashion
-* `aspuzzle` is a framework for defining the rules of logic puzzles in clingo, leveraging `aspalchemy` for the interface
+`aspalchemy` is a Python library for building and solving clingo ASP (Answer Set Programming) programs with a clean, object-oriented interface: constraints are expressed as typed Python objects, rendered to ASP, solved via the clingo API, and reconstructed back into typed Python values.
 
-Together, these make for a powerful declarative manner of solving logic puzzles.
+The package documentation (term hierarchy, usage examples) lives in [`aspalchemy/README.md`](aspalchemy/README.md), which is also the PyPI readme.
+
+Looking for the logic puzzle solvers? They live in the [`aspuzzle`](https://github.com/jolyonb/aspuzzle) repository, a framework built on top of this library.
+
+## Development
+
+```bash
+uv sync
+uv run pytest                        # unit suite + doctests
+uv run pre-commit run --all-files    # lint, typecheck, tests with 100% coverage gate
+```
