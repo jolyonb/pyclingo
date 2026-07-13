@@ -53,7 +53,7 @@ construct anyway.
 | clingo | aspalchemy | details |
 |--------|------------|---------|
 | `not p(X)` | `Not(P(x=X))` or `~P(x=X)` | [Default negation](rules.md#default-negation) |
-| `not not p(X)` | `~~P(x=X)` — preserved, not collapsed (stable-model semantics) | [Default negation](rules.md#default-negation) |
+| `not not p(X)` | `~~P(x=X)` — preserved, not collapsed (stable-model semantics): default negation is no involution, unlike arithmetic's `-(-x)` | [Default negation](rules.md#default-negation) |
 | `not X != Y` (negated plain comparison) | `~(X != Y)` — normalized to the complement `X = Y` at construction, gringo's own rewrite done visibly | [Default negation](rules.md#default-negation) |
 | `-p(X)` (classical negation) | `-P(x=X)` — unary minus on the atom; the sign is part of the atom | [Classical negation](predicates.md#classical-negation) |
 | `-p` in output declarations | `-P` on the class (a `NegatedSignature`), e.g. in `raw_asp(predicates=[P, -P])` | [The predicates= seatbelt](escape-hatches.md#the-predicates-seatbelt) |
@@ -92,10 +92,11 @@ precedence, overflow) live in [Arithmetic](math.md).
 | `~x` (bitwise complement) | `Compl(x)` — `~` itself is reserved for default negation | [Arithmetic](math.md#operator-table) |
 | `\|x\|` (absolute value) | `abs(x)` | [Arithmetic](math.md#operator-table) |
 | `x - 1` | `x + (-1)` — a negative right operand of `+`/`-` is normalized into the operator at construction, gringo's own tidy done visibly (`x - 1` also spells itself) | [Negative operands](math.md#negative-operands) |
+| `-(-x)`, `~(~x)`, `\|\|x\|\|` | `-(-x)`, `Compl(Compl(x))`, `abs(abs(x))` — a doubled unary operator collapses at construction (the two are involutions, abs is idempotent), so `-(-x)` IS `x`, not an expression over it. Contrast `not not p`, which is preserved | [Doubled unary operators](math.md#doubled-unary-operators) |
 
 `+`, `-`, `*`, `**`, `&`, `^`, and all six comparison operators are spelled as
-in Python and render as themselves — the sole exception being that fold, which
-is cosmetic and value-preserving.
+in Python and render as themselves — the only exceptions being the two
+normalizations in the last two rows, both cosmetic and value-preserving.
 
 ## Optimization
 
@@ -215,6 +216,12 @@ Arithmetic spellings — Python operator in, clingo operator out:
 '|X|'
 >>> (X + Number(-1)).render()  # the negative addend folds into the operator
 'X - 1'
+>>> (-(-X)).render()  # a doubled involution collapses: the term itself comes back
+'X'
+>>> Compl(Compl(X)).render()  # likewise for the complement
+'X'
+>>> abs(abs(X)).render()  # abs is idempotent: one node, not two
+'|X|'
 ```
 
 Negation, in all four of its flavors:

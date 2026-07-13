@@ -15,6 +15,8 @@ evaluations share the one tree Python built, and the renderer's job is to
 make clingo see that same tree.
 """
 
+import copy
+import pickle
 from collections.abc import Callable
 from typing import Any
 
@@ -85,7 +87,6 @@ CASES = [
     # be value-preserving, so clingo's answer still matches Python's
     ("add of negated term", lambda a, b, c: a + (-b), (5, 3, 0)),
     ("sub of negated term", lambda a, b, c: a - (-b), (5, 3, 0)),
-    ("double negated term", lambda a, b, c: a + neg(neg(b)), (5, 3, 0)),
     ("add of negative literal", lambda a, b, c: a + b, (5, -3, 0)),
     ("sub of negative literal", lambda a, b, c: a - b, (5, -3, 0)),
     ("negated negative literal", lambda a, b, c: a + (-b), (5, -3, 0)),
@@ -93,6 +94,15 @@ CASES = [
     ("negated sum folded", lambda a, b, c: a - (-(b + c)), (5, 3, 4)),
     ("folded inside product", lambda a, b, c: (a + (-b)) * c, (5, 3, 4)),
     ("folded under subtraction", lambda a, b, c: a - (b + (-c)), (5, 3, 4)),
+    # Doubled unary operators: the two involutions collapse to the inner term
+    # and abs collapses to one abs, under EVERY parent — all value-preserving,
+    # so clingo's answer still matches Python's
+    ("double negated term", lambda a, b, c: a + neg(neg(b)), (5, 3, 0)),
+    ("double negated under product", lambda a, b, c: a * neg(neg(b)), (5, 3, 0)),
+    ("double complement", lambda a, b, c: a + compl(compl(b)), (5, 3, 0)),
+    ("triple negation", lambda a, b, c: a + neg(neg(neg(b))), (5, 3, 0)),
+    ("doubled abs", lambda a, b, c: a + abs(abs(b)), (5, -3, 0)),
+    ("mixed unary stack", lambda a, b, c: a + neg(compl(compl(b))), (5, 3, 0)),
 ]
 
 
@@ -274,11 +284,13 @@ def test_negative_right_operand_folds_into_the_operator() -> None:
 
 
 def test_the_fold_repeats_to_a_fixpoint() -> None:
-    """One pass is not enough: a double negative must settle."""
-    X, Y = Variable("X"), Variable("Y")
+    """
+    One pass is not enough: unwrapping a unary minus can expose a negative
+    literal, which folds in turn. (A doubled unary minus never reaches the
+    fold — the collapse below eats it first.)
+    """
+    X = Variable("X")
 
-    assert (X + neg(neg(Y))).render() == "X + Y"
-    assert (X - neg(neg(Y))).render() == "X - Y"
     assert (X + (-Number(-1))).render() == "X + 1"  # unwrap, then fold the literal
     assert (X - (-Number(-1))).render() == "X - 1"
 
@@ -361,7 +373,6 @@ FOLD_EQUIVALENCE = [
     ("5 - -3", lambda: Number(5) - Number(-3)),
     ("5 + (-3)", lambda: Number(5) + (-Number(3))),
     ("5 - (-3)", lambda: Number(5) - (-Number(3))),
-    ("5 + (-(-3))", lambda: Number(5) + neg(neg(Number(3)))),
     ("5 + (-(4 - 9))", lambda: Number(5) + (-(Number(4) - Number(9)))),
     ("5 - (-(4 - 9))", lambda: Number(5) - (-(Number(4) - Number(9)))),
     ("5 - (4 + -3)", lambda: Number(5) - (Number(4) + Number(-3))),
@@ -388,6 +399,157 @@ def _clingo_evaluates(term_text: str) -> int:
     values = [pred["value"].value for pred in models[0].atoms(Result)]
     assert len(values) == 1
     return int(values[0])
+
+
+# --- the double-unary collapse: the involutions vanish, abs is idempotent ---
+
+
+def test_doubled_involutions_collapse_to_the_inner_term() -> None:
+    """-(-X) IS X and Compl(Compl(X)) IS X: the node is gone, not merely hidden by the renderer."""
+    X = Variable("X")
+
+    assert neg(neg(X)).render() == "X"
+    assert neg(neg(X)) is X
+    assert compl(compl(X)).render() == "X"
+    assert compl(compl(X)) is X
+    assert not isinstance(neg(neg(X)), Expression)  # a Variable comes back, not an Expression
+
+    inner = X + 1
+    assert neg(neg(inner)) is inner  # the live inner tree is handed back
+    assert neg(neg(inner)).render() == "X + 1"
+
+
+def test_abs_is_idempotent_and_keeps_its_node() -> None:
+    """||X|| parses in gringo and means |X|: abs keeps its node and adopts the inner operand."""
+    X = Variable("X")
+
+    folded = abs(abs(X))
+    assert folded.render() == "|X|"
+    assert isinstance(folded, Expression)
+    assert folded.operator is Operation.ABS
+    assert folded.second_term is X
+    assert abs(abs(abs(X))).render() == "|X|"
+
+
+def test_the_collapse_repeats_to_a_fixpoint() -> None:
+    """Every doubled pair goes, however deep the stack — one collapse can expose the next."""
+    X = Variable("X")
+
+    assert neg(neg(neg(X))).render() == "-X"
+    assert neg(neg(neg(neg(X)))).render() == "X"
+    assert compl(compl(compl(X))).render() == "~X"
+    assert neg(compl(compl(X))).render() == "-X"  # the doubled pair goes; the lone minus stays
+    assert compl(neg(neg(compl(X)))) is X  # collapsing the inner pair exposes an outer one
+    assert neg(compl(neg(compl(X)))).render() == "-(~(-(~X)))"  # alternating: nothing to collapse
+
+
+def test_the_collapse_fires_on_the_raw_constructor_too() -> None:
+    """Both doors normalize: the Python operators, and Expression(None, op, e) directly."""
+    X = Variable("X")
+
+    assert Expression(None, Operation.UNARY_MINUS, Expression(None, Operation.UNARY_MINUS, X)) is X
+    assert Expression(None, Operation.COMPLEMENT, Expression(None, Operation.COMPLEMENT, X)) is X
+    assert Expression(None, Operation.ABS, Expression(None, Operation.ABS, X)).render() == "|X|"
+
+
+def test_the_collapse_hands_back_the_inner_node_unclobbered() -> None:
+    """The returned node is the live inner one: the outer call's arguments must not overwrite it."""
+    X, Y = Variable("X"), Variable("Y")
+
+    inner = X + Y
+    returned = Expression(None, Operation.UNARY_MINUS, Expression(None, Operation.UNARY_MINUS, inner))
+    assert returned is inner
+    assert isinstance(returned, Expression)
+    assert returned.operator is Operation.ADD
+    assert returned.render() == "X + Y"
+
+
+def test_expressions_still_copy_and_pickle() -> None:
+    """The class call is the only hook — copy, deepcopy, and pickle of an Expression keep working."""
+    expression = Variable("X") + 1
+
+    assert copy.deepcopy(expression).render() == "X + 1"
+    assert copy.copy(expression).render() == "X + 1"
+    assert pickle.loads(pickle.dumps(expression)).render() == "X + 1"
+
+
+def test_the_collapse_fires_under_every_parent() -> None:
+    """The old wart: -(-X) unwrapped only under an additive parent. The collapse is unconditional."""
+    X, Y = Variable("X"), Variable("Y")
+
+    assert (Y * neg(neg(X))).render() == "Y * X"
+    assert (Y ** neg(neg(X))).render() == "Y ** X"
+    assert (Y & compl(compl(X))).render() == "Y & X"
+    assert abs(neg(neg(X))).render() == "|X|"
+    assert (Y + neg(neg(X))).render() == "Y + X"  # and the additive parent still agrees
+    assert (Y - neg(neg(X))).render() == "Y - X"
+    assert (Y - neg(neg(neg(X)))).render() == "Y + X"  # collapse to -X, then the fold
+
+
+def test_the_involutions_collapse_at_the_int32_floor() -> None:
+    """
+    No exception here, unlike the additive fold: clingo's unary minus wraps mod
+    2**32, so -(-INT32_MIN) IS INT32_MIN. The fold's problem was that there is no
+    legal Number to fold TO; the collapse needs none — it hands back the term itself.
+    """
+    X = Variable("X")
+    floor = Number(-2147483648)
+
+    assert neg(neg(floor)) is floor
+    assert compl(compl(floor)) is floor
+    assert neg(neg(floor)).render() == "-2147483648"
+    assert (X + Number(-2147483648)).render() == "X + -2147483648"  # the fold still refuses this one
+
+
+def test_the_collapse_shrinks_the_depth_it_removes() -> None:
+    """A collapsed pair costs no depth: the cap counts the operators actually rendered."""
+    X = Variable("X")
+
+    inner = X + 1
+    assert abs(abs(inner))._depth == abs(inner)._depth
+
+    # A doubled unary cannot be built at all, so it cannot exhaust the cap either
+    deep: Any = X
+    for _ in range(Expression.MAX_DEPTH):
+        deep = neg(neg(deep))
+    assert deep is X
+
+
+def test_default_negation_stays_doubled() -> None:
+    """
+    The contrast that makes the collapse principled: unary minus and ~ are
+    involutions in clingo's ARITHMETIC, so a doubled pair is removable; default
+    negation is not an involution on LITERALS, so not not p is preserved
+    (test_negation.py owns that topic).
+    """
+    P = Predicate.define("p", [])
+    p = P()
+
+    assert Not(Not(p)).render() == "not not p"
+    assert neg(neg(p)).render() == "p"  # classical negation on an atom, however, IS an involution
+
+
+COLLAPSE_EQUIVALENCE = [
+    # (what the renderer emitted before the collapse, the tree that now renders it collapsed)
+    ("-(-7)", lambda: neg(neg(Number(7)))),
+    ("~(~7)", lambda: compl(compl(Number(7)))),
+    ("||-7||", lambda: abs(abs(Number(-7)))),
+    ("-(-(-7))", lambda: neg(neg(neg(Number(7))))),
+    ("5 + (-(-3))", lambda: Number(5) + neg(neg(Number(3)))),
+    ("5 * (-(-3))", lambda: Number(5) * neg(neg(Number(3)))),
+    # The int32 floor: the identity survives only because clingo wraps mod 2**32
+    # — and it does survive, which is why there is no exception here
+    ("-(--2147483648)", lambda: neg(neg(Number(-2147483648)))),
+    ("~(~(-2147483648))", lambda: compl(compl(Number(-2147483648)))),
+]
+
+
+@pytest.mark.parametrize("old_text,build", COLLAPSE_EQUIVALENCE, ids=[c[0] for c in COLLAPSE_EQUIVALENCE])
+def test_collapse_preserves_the_value_clingo_computes(old_text: str, build: Callable[[], Any]) -> None:
+    """The collapse is cosmetic: clingo evaluates the collapsed render exactly as it did the old one."""
+    term = build()
+    assert term.render() != old_text, "this case no longer exercises the collapse"
+    assert _clingo_evaluates(term.render()) == _clingo_evaluates(old_text)
 
 
 # --- error paths and reflected operators (core.py) ---
@@ -449,8 +611,10 @@ def test_expression_init_bad_second_term() -> None:
 
 
 def test_expression_init_unary_operator_required_when_no_first_term() -> None:
+    # The class-call overloads already refuse this pairing statically (a missing
+    # first term admits only the unary operators); the runtime check is the pin
     with pytest.raises(ValueError, match="unary"):
-        Expression(None, Operation.ADD, 1)
+        Expression(None, Operation.ADD, 1)  # type: ignore[arg-type]
 
 
 def test_expression_init_binary_operator_required_with_first_term() -> None:

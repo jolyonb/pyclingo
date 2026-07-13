@@ -26,6 +26,12 @@ class Operation(Enum):
 
 
 UNARY_OPERATIONS = {Operation.UNARY_MINUS, Operation.COMPLEMENT, Operation.ABS}
+# op(op(t)) IS t in clingo, for every t and with no exception: unary minus wraps
+# mod 2**32, so -(-(-2147483648)) is -2147483648 (an involution even at the int32
+# floor, unlike the additive fold, which cannot fold that one Number because it has
+# no legal negation to fold TO), and ~ is a bit flip applied twice. ABS is not here:
+# it is IDEMPOTENT (abs(abs(t)) is abs(t), not t), so it folds separately.
+INVOLUTION_OPERATIONS = {Operation.UNARY_MINUS, Operation.COMPLEMENT}
 BINARY_OPERATIONS = {
     Operation.ADD,
     Operation.SUBTRACT,

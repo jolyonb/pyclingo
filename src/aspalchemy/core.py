@@ -11,11 +11,12 @@ import weakref
 from abc import ABC, ABCMeta, abstractmethod
 from collections.abc import Sequence
 from enum import Enum
-from typing import TYPE_CHECKING, Any, ClassVar, Never, Self, TypeIs, cast
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, Never, Self, TypeIs, cast, overload
 
 from aspalchemy.operators import (
     BINARY_OPERATIONS,
     EXPLICIT_PARENS_OPERATIONS,
+    INVOLUTION_OPERATIONS,
     NONCOMMUTATIVE_OPERATIONS,
     PRECEDENCE,
     UNARY_OPERATIONS,
@@ -275,7 +276,8 @@ class ArithmeticOps:
     def __rmul__(self: Any, other: ExpressionFieldType) -> Expression:
         return Expression(other, Operation.MULTIPLY, self)
 
-    def __neg__(self: Any) -> Expression:
+    def __neg__(self: Any) -> ValueExpressionType:
+        """Unary minus is an involution in clingo, so -(-x) IS x — not an Expression over one."""
         return Expression(None, Operation.UNARY_MINUS, self)
 
     def __floordiv__(self: Any, other: ExpressionFieldType) -> Expression:
@@ -332,7 +334,10 @@ class ArithmeticOps:
         )
 
     def __abs__(self: Any) -> Expression:
-        """abs(x) is |x| — unambiguous, unlike ~ (which stays reserved for negation)."""
+        """
+        abs(x) is |x| — unambiguous, unlike ~ (which stays reserved for negation).
+        Idempotent: abs(abs(x)) is abs(x), one node, not two.
+        """
         return Expression(None, Operation.ABS, self)
 
 
@@ -1033,7 +1038,74 @@ def pool(elements: range | Sequence[int | str | BasicTerm | Expression] | Pool) 
     raise TypeError(f"Expected Pool, list, tuple, or range, got {type(elements).__name__}")
 
 
-class Expression(ComparableTerm, ArithmeticOps):
+class _ExpressionMeta(ABCMeta):
+    """
+    Collapses a doubled involution at the class call: -(-t) IS t and
+    Compl(Compl(t)) IS t, so the class call hands back the inner term
+    itself — a Variable, a Number, whatever t was — instead of wrapping it
+    in two nodes that render as noise. __init__ cannot do this (it cannot
+    return a different object), and this is the same hook _ValueMeta already
+    uses to intercept its own class call, so both construction paths — the
+    Python operators (-X, Compl(x)) and the raw Expression(None, op, e)
+    constructor — go through the one door.
+
+    No fixpoint loop is needed: this hook is the only way an Expression is
+    built, so no operand reaching it is itself a doubled involution. One
+    unwrap is therefore complete, and -(-(-X)) settles at -X.
+
+    Costs, stated rather than hidden. The overloads make the involutions'
+    honest return type visible — -X and Compl(x) are Value | Expression, and
+    Expression(None, Operation.UNARY_MINUS, e) may hand back a Value — but
+    only to a checker that models metaclass __call__. Pyright does (and so
+    catches .operator on that raw result); mypy does not, and reads the raw
+    path off __init__ as Expression. Both run in the gauntlet, so the
+    stricter one holds the line. The overloads also pair each operator
+    arity with its operand shape, which means a raw call whose Operation is
+    not statically known no longer type-checks; construct such a term
+    through the operators, or cast.
+    """
+
+    @overload
+    def __call__(
+        cls,
+        first_term: None,
+        operator: Literal[Operation.UNARY_MINUS, Operation.COMPLEMENT],
+        second_term: ExpressionFieldType,
+    ) -> ValueExpressionType: ...
+
+    @overload
+    def __call__(
+        cls,
+        first_term: None,
+        operator: Literal[Operation.ABS],
+        second_term: ExpressionFieldType,
+    ) -> Expression: ...
+
+    @overload
+    def __call__(
+        cls,
+        first_term: ExpressionFieldType,
+        operator: Operation,
+        second_term: ExpressionFieldType,
+    ) -> Expression: ...
+
+    def __call__(
+        cls,
+        first_term: ExpressionFieldType | None,
+        operator: Operation,
+        second_term: ExpressionFieldType,
+    ) -> ValueExpressionType:
+        if (
+            first_term is None
+            and operator in INVOLUTION_OPERATIONS
+            and isinstance(second_term, Expression)
+            and second_term.operator is operator
+        ):
+            return second_term.second_term
+        return cast(Expression, super().__call__(first_term, operator, second_term))
+
+
+class Expression(ComparableTerm, ArithmeticOps, metaclass=_ExpressionMeta):
     """
     Represents a mathematical expression in an ASP program.
 
@@ -1042,10 +1114,18 @@ class Expression(ComparableTerm, ArithmeticOps):
 
     An additive operation with a negative right operand is NORMALIZED at
     construction: X + Number(-1) becomes X - 1, and X - (-Y) becomes X + Y
-    (repeated to a fixpoint, so X + (-(-Y)) is X + Y). Both spellings are
-    valid ASP; the fold is cosmetic, and value-preserving. Like Not() on a
-    plain comparison, the normalization is visible: the node built as ADD
+    (repeated to a fixpoint, so X + (-Number(-1)) is X + 1). Both spellings
+    are valid ASP; the fold is cosmetic, and value-preserving. Like Not() on
+    a plain comparison, the normalization is visible: the node built as ADD
     reports SUBTRACT from .operator, and .second_term holds the folded term.
+
+    A doubled unary operator is normalized the same way, everywhere it
+    occurs rather than only under an additive parent: the two involutions
+    collapse to the inner term at the class call (see _ExpressionMeta, so
+    -(-X) IS X, not an Expression), and abs, being idempotent, keeps its
+    node and adopts the inner operand (abs(abs(X)) is abs(X)). Default
+    negation is the deliberate contrast: not not p is PRESERVED, because it
+    is not an involution on literals.
     """
 
     # Nesting cap: the tree walkers (rendering, scoping, collection) recurse
@@ -1112,7 +1192,14 @@ class Expression(ComparableTerm, ArithmeticOps):
                 break
             self._operator = Operation.SUBTRACT if self._operator is Operation.ADD else Operation.ADD
 
-        # Depth is measured after the fold: unwrapping a unary minus makes the tree shallower
+        # abs is idempotent, not an involution: ||X|| is |X|, so the outer node
+        # survives and simply adopts the inner operand. (The involutions collapse
+        # to the inner term itself, which only the class call can do: _ExpressionMeta.)
+        inner = self._second_term
+        if self._operator is Operation.ABS and isinstance(inner, Expression) and inner.operator is Operation.ABS:
+            self._second_term = inner.second_term
+
+        # Depth is measured after the folds: unwrapping an operand makes the tree shallower
         self._depth = 1 + max(
             (term._depth for term in (self._first_term, self._second_term) if isinstance(term, Expression)),
             default=0,
@@ -1630,13 +1717,17 @@ def Not(term: Negatable) -> DefaultNegation | Comparison:
     return DefaultNegation(term)
 
 
-def Compl(term: Value | Expression | int) -> Expression:
+def Compl(term: Value | Expression | int) -> Value | Expression:
     """
     Builds a bitwise-complement expression, rendered ~term.
 
     A named function rather than Python's ~ operator: in aspalchemy, ~ is
     reserved for default negation on literals, so the two meanings of
     clingo's ~ never share a spelling.
+
+    Bitwise complement is an involution, so Compl(Compl(x)) IS x: the doubled
+    form collapses back to the term itself, which is why the return type is
+    not just Expression.
     """
     return Expression(None, Operation.COMPLEMENT, term)
 

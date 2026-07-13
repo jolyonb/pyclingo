@@ -25,9 +25,9 @@ actual evaluation.
 | `x & y` | `x & y` | bitwise and |
 | `x \| y` | `x ? y` | bitwise or — ASP spells it `?` |
 | `x ^ y` | `x ^ y` | bitwise xor |
-| `-x` | `-x` | |
-| `Compl(x)` | `~x` | bitwise complement — `~` itself is reserved for default negation |
-| `abs(x)` | `\|x\|` | |
+| `-x` | `-x` | doubled, it cancels; see doubled unary operators below |
+| `Compl(x)` | `~x` | bitwise complement — `~` itself is reserved for default negation; doubled, it cancels |
+| `abs(x)` | `\|x\|` | doubled, it collapses to one `\|x\|` |
 
 ## Precedence
 
@@ -42,8 +42,10 @@ expression tree using Python's precedence, and the renderer guarantees
 clingo evaluates that same tree: classic arithmetic renders with minimal
 parentheses, while anything involving `**` or the bitwise operators is
 deliberately over-parenthesized (power even against itself, making its
-associativity explicit). The one tidy applied to the tree itself is the
-cosmetic, value-preserving fold below.
+associativity explicit). Two tidies are applied to the tree itself, both
+cosmetic and value-preserving: the [negative-operand
+fold](#negative-operands) and the [collapse of doubled unary
+operators](#doubled-unary-operators) below.
 
 ```python
 from aspalchemy import Number
@@ -70,9 +72,10 @@ a, b, c = Number(1), Number(2), Number(3)
 
 A negative right operand of `+` or `-` is folded into the operator when the
 expression is built, so the rendering reads the way you would write it by
-hand: `X + -1` is spelled `X - 1`, and a double negative cancels. (Both
-spellings are legal ASP — gringo parses a bare negative literal as a unit in
-every operator slot — so this is cosmetic, and value-preserving.)
+hand: `X + -1` is spelled `X - 1`, and a subtracted negative turns into an
+addition. (Both spellings are legal ASP — gringo parses a bare negative
+literal as a unit in every operator slot — so this is cosmetic, and
+value-preserving.)
 
 ```python
 from aspalchemy import Variable
@@ -87,8 +90,8 @@ X, Y = Variable("X"), Variable("Y")
 'X + 1'
 >>> (X + (-Y)).render()
 'X - Y'
->>> (X - (-(-Y))).render()
-'X - Y'
+>>> (X - (-Y)).render()
+'X + Y'
 >>> (X * Number(-1)).render()  # only + and - have a sign to absorb
 'X * -1'
 ```
@@ -117,12 +120,72 @@ into. It is left as written, and is valid ASP as written.
 'X - 2147483647'
 ```
 
+## Doubled unary operators
+
+Unary minus and complement are *involutions* in clingo's arithmetic: `-(-t)`
+is `t` and `~(~t)` is `t`, for every term `t`. So a doubled one is dropped
+when the expression is built, and what you get back is the inner term itself
+— not an expression wrapping it. `abs` is *idempotent* rather than an
+involution, so it keeps one node and drops the other. (Probed against clingo
+5.8: `||t||` does parse in gringo and means `|t|`, so the doubled form was
+ugly rather than broken; all three collapses preserve the value.)
+
+```python
+from aspalchemy import Compl
+```
+
+```python
+>>> (-(-X)).render()
+'X'
+>>> (-(-X)) is X            # the node is gone, not merely hidden
+True
+>>> Compl(Compl(X)).render()
+'X'
+>>> abs(abs(X)).render()
+'|X|'
+>>> (-(-(-X))).render()     # every doubled pair goes, however deep the stack
+'-X'
+>>> (Y * (-(-X))).render()  # under every parent, not just + and -
+'Y * X'
+```
+
+Unlike the [additive fold](#negative-operands), this has no exception at the
+int32 floor. That fold refuses `Number(-2147483648)` because *2147483648* is
+not a representable clingo integer — but clingo's unary minus wraps modulo
+2^32 (probed against clingo 5.8: `-(-2147483648)` evaluates to
+`-2147483648`), which is exactly what makes it an involution on every term
+without exception. So the collapse is value-preserving at the floor too, and
+fires there.
+
+```python
+>>> (-(-Number(-2147483648))) is Number(-2147483648)
+True
+>>> (X + Number(-2147483648)).render()  # while the fold still leaves this one alone
+'X + -2147483648'
+```
+
+Because a doubled unary hands back the inner term, `-x` and `Compl(x)` no
+longer always return an `Expression`: `-(-X)` *is* the `Variable` `X`. Both are
+typed `Value | Expression`, so annotate what you accept as a term rather than
+as an `Expression`. `abs()` is unaffected — it keeps its node, so it always
+returns an `Expression`. The same is true of building an `Expression` by hand:
+a type checker can only tell you what a unary construction returns when it can
+see *which* operator you passed, so `Expression(None, op, x)` with a computed
+`op` no longer type-checks. Build terms with the operators, not the
+constructor.
+
+The contrast to keep in mind is [default negation](rules.md#default-negation):
+`not not p` is *preserved*, because default negation is not an involution on
+literals — under stable-model semantics `not not p` is a genuinely different
+literal from `p`. What collapses here is arithmetic on *terms*, where the
+identity holds for every value.
+
 ## Where clingo and Python disagree
 
 These are semantic differences in the *evaluation* of integer arithmetic.
-aspalchemy hands clingo the expression tree you built (modulo the cosmetic fold
-above); clingo then evaluates it by clingo's rules, which differ from Python's
-in four places:
+aspalchemy hands clingo the expression tree you built (modulo the two cosmetic
+normalizations above); clingo then evaluates it by clingo's rules, which differ
+from Python's in four places:
 
 1. **Integer division and modulo round differently on negatives.** Python
    floors: `-7 // 2 == -4` and `-7 % 2 == 1`. Clingo truncates toward zero:

@@ -166,8 +166,9 @@ put one in a comparison to make a guard —
   spelling for expressions); on a plain comparison it builds the
   complement. [Default negation](rules.md#default-negation).
 - **`Compl()`** — bitwise complement, rendering clingo's `~` (the Python
-  `~` operator is reserved for negation).
-  [Operator table](math.md#operator-table).
+  `~` operator is reserved for negation). Doubled, it collapses and hands
+  back the inner term. [Operator table](math.md#operator-table),
+  [doubled unary operators](math.md#doubled-unary-operators).
 
 ## Hierarchy types
 

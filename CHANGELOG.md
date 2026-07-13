@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.0.4 — 2026-07-13
+## 1.1.0 — 2026-07-13
 
 - Expressions now fold a negative right operand of `+` or `-` into the
   operator when they are built: `X + -1` renders as `X - 1`, `X - -1` as
@@ -11,6 +11,17 @@
   performed at construction and is therefore visible: an expression built as
   an addition of a negative reports `SUBTRACT`. The one value that does not
   fold is the int32 floor, whose negation is not a legal clingo integer.
+- A doubled unary operator now collapses when the expression is built, in
+  every position rather than only under a `+`/`-` parent: `-(-X)` IS `X`
+  (the term itself, not an expression wrapping it), `Compl(Compl(X))` IS `X`,
+  and `abs(abs(X))` renders `|X|`. Unary minus and complement are involutions
+  in clingo's arithmetic and `abs` is idempotent, so this is cosmetic and
+  value-preserving — with no int32 exception this time, since clingo's unary
+  minus wraps modulo 2^32. `not not p` is unaffected: default negation is not
+  an involution on literals, and stays preserved. Consequences worth knowing:
+  `-x` and `Compl(x)` are now typed `Value | Expression` (a doubled one hands
+  the inner term back), and a raw `Expression(...)` call whose `Operation` is
+  not statically known no longer type-checks.
 
 ## 1.0.3 — 2026-07-13
 

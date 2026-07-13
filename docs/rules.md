@@ -307,7 +307,10 @@ claim shown below in a verified transcript, and each row of the
 [translation map](clingo-map.md#negation) links back here:
 
 - On atoms, a **double negation is preserved**: `not not p` is not equivalent
-  to `p` under stable-model semantics. A triple collapses to a single.
+  to `p` under stable-model semantics. A triple collapses to a single. (The
+  contrast is arithmetic, where `-` and `Compl` *are* involutions and a
+  doubled one collapses — see [doubled unary
+  operators](math.md#doubled-unary-operators).)
 - On a **plain comparison**, `~`/`Not()` return the *complement* instead of
   wrapping: `Not(X != 5)` is the binding equality `X = 5`. This is gringo's
   own normalization, performed at construction where you can see it.

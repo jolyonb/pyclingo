@@ -96,10 +96,29 @@ Operators supported (Python operator -> rendered ASP):
   policy as Not() on a plain comparison (see "Negation" below), so it is
   visible: `.operator` reports the normalized operator. Cosmetic only: both
   spellings are valid ASP (gringo parses a bare negative literal as a unit in
-  every operator slot). Never applied to *, /, \, **, bitwise, the unary ops,
-  or the left operand. The one exception is Number(-2147483648), whose
+  every operator slot). Never applied to *, /, \, **, bitwise, the unary ops
+  (those get their own collapse — next bullet; the two are one policy, not
+  two), or the left operand. The one exception is Number(-2147483648), whose
   negation is not a legal int32: it does not fold. The fold runs before
   _depth is computed, so MAX_DEPTH counts the operators actually rendered.
+- A doubled unary operator collapses at construction too, everywhere it
+  occurs (not only under an additive parent — that was the wart the fold
+  left behind). UNARY_MINUS and COMPLEMENT are involutions in clingo's
+  arithmetic (INVOLUTION_OPERATIONS in operators.py), so -(-t) IS t: the
+  collapse must hand back a different OBJECT, which __init__ cannot do, so
+  it lives in the class call (_ExpressionMeta.__call__ — the same hook
+  _ValueMeta uses, covering both the operator path and the raw
+  Expression(None, op, e) path). ABS is idempotent, not an involution
+  (||t|| parses in gringo and means |t|), so it keeps its node and adopts
+  the inner operand — that one is done in __init__. No fixpoint loop
+  anywhere: the hook is the only door, so no operand is ever a doubled
+  involution and one unwrap is complete. There is NO int32 exception here,
+  unlike the fold: clingo's unary minus wraps mod 2**32, so -(-INT32_MIN)
+  is INT32_MIN. "not not p" stays preserved (see "Negation"): default
+  negation is not an involution on literals. Type-checker asymmetry, known
+  and accepted: pyright models the metaclass __call__ overloads (so -X and
+  Compl(x) are Value | Expression, and the raw involution call is caught);
+  mypy reads construction off __init__ and sees Expression for the raw path.
 
 ### 4. Logic Constructs
 
@@ -124,7 +143,10 @@ All support multiple elements and conditions via `add()` method.
 #### Negation (`core.py`)
 - **DefaultNegation**: `not p(X)` (negation as failure), via `Not()` or `~`
 - On atoms, a double negation is PRESERVED (not not p is not p's equivalent
-  under stable-model semantics) and a triple collapses to a single
+  under stable-model semantics) and a triple collapses to a single. This is
+  the one doubling that survives: default negation is not an involution on
+  literals, whereas UNARY_MINUS/COMPLEMENT on a TERM are, and collapse (see
+  "Expressions and Comparisons" above). Do not "fix" the asymmetry
 - On a PLAIN comparison, Not()/~ return the complementary comparison
   instead of wrapping — gringo's own normalization ("not X != Y" is the
   binding "X = Y"), performed at construction where it is visible (the
