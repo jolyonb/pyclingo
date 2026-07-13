@@ -36,3 +36,46 @@ jobs:
       - uses: astral-sh/setup-uv@v6
       - run: uv build
       - run: uv publish --trusted-publishing always
+
+  # The GitHub Release, cut from the CHANGELOG entry for this version — so the
+  # release notes and the changelog can never drift. A tag whose version has no
+  # changelog entry fails here, the same discipline the version check enforces
+  # above. Runs after publish, so a release only appears once PyPI has the files.
+  release:
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # create the release
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Take the release notes from the CHANGELOG
+        run: |
+          python3 - <<'PY'
+          import os, re, sys
+
+          version = os.environ["GITHUB_REF_NAME"].removeprefix("v")
+          changelog = open("CHANGELOG.md").read()
+          entry = re.search(
+              rf"^## {re.escape(version)} — (\d{{4}}-\d{{2}}-\d{{2}})\s*$(.*?)(?=^## |\Z)",
+              changelog,
+              flags=re.M | re.S,
+          )
+          if entry is None:
+              sys.exit(f"CHANGELOG.md has no '## {version} — YYYY-MM-DD' entry to release from")
+          date, body = entry.group(1), entry.group(2).strip()
+
+          with open("release-notes.md", "w") as notes:
+              notes.write(f"{body}\n\nInstall: `pip install aspalchemy=={version}`\n")
+          with open(os.environ["GITHUB_ENV"], "a") as env:
+              env.write(f"RELEASE_DATE={date}\n")
+          PY
+
+      - name: Publish the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --verify-tag \
+            --title "$GITHUB_REF_NAME — $RELEASE_DATE" \
+            --notes-file release-notes.md

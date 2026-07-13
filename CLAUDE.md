@@ -134,7 +134,10 @@ commit, then tag and push. If a refusal is lifted or a new construct
 ships, update `docs/unsupported.md` and `docs/clingo-map.md` in the same
 commit. `.github/workflows/publish.yml` takes it from
 there: it fails the release if the tag doesn't match the pyproject
-version, runs the full gauntlet, and only then builds and uploads.
+version, runs the full gauntlet, builds and uploads to PyPI, and finally
+cuts the GitHub Release with notes taken from the `CHANGELOG.md` entry
+for that version — so a tag whose version has no changelog entry fails
+the release, and the notes can never drift from the changelog.
 
 ```bash
 git tag -a v1.x.y -m "..."
