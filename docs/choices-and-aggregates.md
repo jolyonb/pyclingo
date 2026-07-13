@@ -269,8 +269,8 @@ over the actual data) recognizes the shared aggregate, and the
 two-comparison band grounds to the same solver input as its native
 two-guard interval literal (`3 <= #count{ ... } <= 6` as one body literal —
 the form aspalchemy [deliberately doesn't
-model](unsupported.md#deliberate-strictness)). Probed against clingo 5.8
-(2026-07-10): on a 100-element band, 3,858 bytes of aspif (the ground
+model](unsupported.md#deliberate-strictness)). Probed against clingo 5.8:
+on a 100-element band, 3,858 bytes of aspif (the ground
 statement stream that clasp — the search engine consuming the ground
 program — actually receives) for the two-comparison form against 3,876 for
 the interval literal — the same weight rules, elements grounded once each;

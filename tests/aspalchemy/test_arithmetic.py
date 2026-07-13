@@ -39,6 +39,11 @@ def compl(x: Any) -> Any:
     return ~x if isinstance(x, int) else Compl(x)
 
 
+def neg(x: Any) -> Any:
+    """Unary minus as a function — a nested `-(-x)` is spelled neg(neg(x)) (ruff bans the `--`)."""
+    return -x
+
+
 CASES = [
     # The hard-fought classics
     ("add-mul precedence", lambda a, b, c: a + b * c, (2, 3, 4)),
@@ -76,6 +81,18 @@ CASES = [
     ("complement", lambda a, b, c: compl(a), (5, 0, 0)),
     ("complement of sum", lambda a, b, c: compl(a + b), (5, 3, 0)),
     ("complement then and", lambda a, b, c: compl(a) & b, (5, 7, 0)),
+    # Negative right operands: the additive fold (X + -1 renders X - 1) must
+    # be value-preserving, so clingo's answer still matches Python's
+    ("add of negated term", lambda a, b, c: a + (-b), (5, 3, 0)),
+    ("sub of negated term", lambda a, b, c: a - (-b), (5, 3, 0)),
+    ("double negated term", lambda a, b, c: a + neg(neg(b)), (5, 3, 0)),
+    ("add of negative literal", lambda a, b, c: a + b, (5, -3, 0)),
+    ("sub of negative literal", lambda a, b, c: a - b, (5, -3, 0)),
+    ("negated negative literal", lambda a, b, c: a + (-b), (5, -3, 0)),
+    ("negative literal times", lambda a, b, c: a * b, (5, -3, 0)),
+    ("negated sum folded", lambda a, b, c: a - (-(b + c)), (5, 3, 4)),
+    ("folded inside product", lambda a, b, c: (a + (-b)) * c, (5, 3, 4)),
+    ("folded under subtraction", lambda a, b, c: a - (b + (-c)), (5, 3, 4)),
 ]
 
 
@@ -239,6 +256,138 @@ def test_precedence_with_subexpressions() -> None:
 
     expr2 = X + (Y - Z)
     assert expr2.render() == "X + Y - Z"
+
+
+# --- the additive fold: a negative right operand normalizes into the operator ---
+
+
+def test_negative_right_operand_folds_into_the_operator() -> None:
+    """X + -1 is spelled X - 1: the sign moves into the operator at construction."""
+    X, Y = Variable("X"), Variable("Y")
+
+    assert (X + Number(-1)).render() == "X - 1"
+    assert (X - Number(-1)).render() == "X + 1"
+    assert (X + (-1)).render() == "X - 1"  # the Python-int path, coerced then folded
+    assert (X - (-1)).render() == "X + 1"
+    assert (X + (-Y)).render() == "X - Y"
+    assert (X - (-Y)).render() == "X + Y"
+
+
+def test_the_fold_repeats_to_a_fixpoint() -> None:
+    """One pass is not enough: a double negative must settle."""
+    X, Y = Variable("X"), Variable("Y")
+
+    assert (X + neg(neg(Y))).render() == "X + Y"
+    assert (X - neg(neg(Y))).render() == "X - Y"
+    assert (X + (-Number(-1))).render() == "X + 1"  # unwrap, then fold the literal
+    assert (X - (-Number(-1))).render() == "X - 1"
+
+
+def test_the_fold_is_confined_to_additive_operators() -> None:
+    """Only + and - carry a sign in their symbol; every other operator keeps the literal."""
+    X = Variable("X")
+
+    assert (X * Number(-1)).render() == "X * -1"
+    assert (X // Number(-2)).render() == "X / -2"
+    assert (X % Number(-2)).render() == "X \\ -2"
+    assert (X ** Number(-1)).render() == "X ** -1"
+    assert (X & Number(-1)).render() == "X & -1"
+    assert (X | Number(-1)).render() == "X ? -1"
+    assert (X ^ Number(-1)).render() == "X ^ -1"
+    assert (X * (-Number(1))).render() == "X * (-1)"
+
+
+def test_the_fold_is_confined_to_the_right_operand() -> None:
+    """A negative LEFT operand has no operator to fold into: it stays as written."""
+    X, Y = Variable("X"), Variable("Y")
+
+    assert (Number(-1) + X).render() == "-1 + X"
+    assert (Number(-1) - X).render() == "-1 - X"
+    assert ((-Y) + X).render() == "(-Y) + X"
+    assert (X + Number(0)).render() == "X + 0"  # zero is not negative: untouched
+
+
+def test_int32_min_does_not_fold() -> None:
+    """Negating INT32_MIN leaves clingo's integer range, so there is no Number to fold to."""
+    X = Variable("X")
+
+    assert (X + Number(-2147483647)).render() == "X - 2147483647"  # the last that folds
+    assert (X + Number(-2147483648)).render() == "X + -2147483648"  # the one that cannot
+    assert (X - Number(-2147483648)).render() == "X - -2147483648"
+
+
+def test_fold_reports_the_normalized_operator() -> None:
+    """The normalization is visible, as with Not() on a plain comparison."""
+    X = Variable("X")
+
+    folded = X + Number(-1)
+    assert folded.operator is Operation.SUBTRACT
+    assert folded.second_term is Number(1)  # Values intern: identity is equality
+    assert Expression(X, Operation.ADD, Number(-1)).operator is Operation.SUBTRACT
+    assert (X - Number(-1)).operator is Operation.ADD
+    assert (X + Number(1)).operator is Operation.ADD  # nothing to fold: operator as built
+
+
+def test_parenthesization_survives_the_fold() -> None:
+    """The folded operator drives parenthesization, so nesting still renders faithfully."""
+    X, Y = Variable("X"), Variable("Y")
+    A, B = Variable("A"), Variable("B")
+
+    assert (X - (Y + Number(-1))).render() == "X - (Y - 1)"
+    assert (X + (Y - Number(-1))).render() == "X + Y + 1"
+    assert (X + (-(A - B))).render() == "X - (A - B)"
+    assert (X - (-(A - B))).render() == "X + A - B"
+
+
+def test_fold_shrinks_the_depth_it_unwraps() -> None:
+    """Depth is recomputed after the fold, so the cap counts the operators we actually render."""
+    X, Y = Variable("X"), Variable("Y")
+
+    # X + (-Y) builds two nodes but renders one operator: the cap sees one level
+    assert (X + (-Y))._depth == (X - Y)._depth
+
+    expr: Expression | Variable = X
+    for _ in range(Expression.MAX_DEPTH):
+        expr = expr + (-1)  # each level folds to a single SUBTRACT node
+    assert isinstance(expr, Expression)
+    assert expr.render().count("-") == Expression.MAX_DEPTH
+    with pytest.raises(ValueError, match="aggregate instead"):
+        expr + (-1)
+
+
+FOLD_EQUIVALENCE = [
+    # (what the renderer used to emit, the tree that now renders it folded)
+    ("5 + -3", lambda: Number(5) + Number(-3)),
+    ("5 - -3", lambda: Number(5) - Number(-3)),
+    ("5 + (-3)", lambda: Number(5) + (-Number(3))),
+    ("5 - (-3)", lambda: Number(5) - (-Number(3))),
+    ("5 + (-(-3))", lambda: Number(5) + neg(neg(Number(3)))),
+    ("5 + (-(4 - 9))", lambda: Number(5) + (-(Number(4) - Number(9)))),
+    ("5 - (-(4 - 9))", lambda: Number(5) - (-(Number(4) - Number(9)))),
+    ("5 - (4 + -3)", lambda: Number(5) - (Number(4) + Number(-3))),
+    ("5 + (4 - -3)", lambda: Number(5) + (Number(4) - Number(-3))),
+    ("(5 + -3) * 4", lambda: (Number(5) + Number(-3)) * Number(4)),
+]
+
+
+@pytest.mark.parametrize("old_text,build", FOLD_EQUIVALENCE, ids=[c[0] for c in FOLD_EQUIVALENCE])
+def test_fold_preserves_the_value_clingo_computes(old_text: str, build: Callable[[], Expression]) -> None:
+    """The fold is cosmetic: clingo evaluates the folded render exactly as it did the old one."""
+    expression = build()
+    assert expression.render() != old_text, "this case no longer exercises the fold"
+    assert _clingo_evaluates(expression.render()) == _clingo_evaluates(old_text)
+
+
+def _clingo_evaluates(term_text: str) -> int:
+    """Grounds result(<term>) and reads back the integer clingo computed."""
+    program = ASPProgram()
+    Result = Predicate.define("result", ["value"])
+    program.raw_asp(f"result({term_text}).", predicates=[Result])
+    models = list(program.solve())
+    assert len(models) == 1, f"{term_text!r}: program was not satisfiable"
+    values = [pred["value"].value for pred in models[0].atoms(Result)]
+    assert len(values) == 1
+    return int(values[0])
 
 
 # --- error paths and reflected operators (core.py) ---

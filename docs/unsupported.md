@@ -162,8 +162,8 @@ assert baskets == affordable
 ```
 
 With multiple priority tiers the flag means something sharper than it looks:
-the bound is **lexicographic**. Probed against clingo 5.8 (2026-07-12): a
-model costing (1, 5) is admitted under bound (2, 3) — tier one beat its
+the bound is **lexicographic**. Probed against clingo 5.8: a model
+costing (1, 5) is admitted under bound (2, 3) — tier one beat its
 bound, so later tiers never mattered. That beat-or-tie cascade is the one
 form genuinely clunky to hand-encode, and it is why this entry stays on the
 watch list rather than the roadmap: it gets built when a real
@@ -232,8 +232,8 @@ comparisons, which ground identically; the demo lives in
 [Cardinality tests are not choices](choices-and-aggregates.md#cardinality-tests-are-not-choices).
 
 **Negated heads.** `not p :- body.` derives nothing: gringo itself rewrites
-it into a constraint before grounding — probed against clingo 5.8
-(2026-07-10), `not p :- q.` grounds as `:- q, not not p.`, and in a
+it into a constraint before grounding — probed against clingo 5.8,
+`not p :- q.` grounds as `:- q, not not p.`, and in a
 constraint body `not not p` is equivalent to `p`. It is alternative syntax
 for `forbid(*body, p)`, already spelled; the head position misleads by
 looking like it derives something.

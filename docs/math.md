@@ -16,8 +16,8 @@ actual evaluation.
 
 | Python | ASP rendering | Notes |
 |--------|---------------|-------|
-| `x + y` | `x + y` | |
-| `x - y` | `x - y` | |
+| `x + y` | `x + y` | a negative `y` folds into `-`; see negative operands below |
+| `x - y` | `x - y` | a negative `y` folds into `+`; see negative operands below |
 | `x * y` | `x * y` | |
 | `x // y` | `x / y` | integer division; see sign quirk below |
 | `x % y` | `x \ y` | modulo; see sign quirk below |
@@ -39,10 +39,11 @@ operators bind *looser* than `+`, and unary minus binds *tighter* than `**`
 
 You do not need that table to read aspalchemy's output. Python builds the
 expression tree using Python's precedence, and the renderer guarantees
-clingo sees that same tree: classic arithmetic renders with minimal
+clingo evaluates that same tree: classic arithmetic renders with minimal
 parentheses, while anything involving `**` or the bitwise operators is
 deliberately over-parenthesized (power even against itself, making its
-associativity explicit).
+associativity explicit). The one tidy applied to the tree itself is the
+cosmetic, value-preserving fold below.
 
 ```python
 from aspalchemy import Number
@@ -65,11 +66,63 @@ a, b, c = Number(1), Number(2), Number(3)
 '-(2 ** 2)'
 ```
 
+## Negative operands
+
+A negative right operand of `+` or `-` is folded into the operator when the
+expression is built, so the rendering reads the way you would write it by
+hand: `X + -1` is spelled `X - 1`, and a double negative cancels. (Both
+spellings are legal ASP — gringo parses a bare negative literal as a unit in
+every operator slot — so this is cosmetic, and value-preserving.)
+
+```python
+from aspalchemy import Variable
+
+X, Y = Variable("X"), Variable("Y")
+```
+
+```python
+>>> (X + Number(-1)).render()
+'X - 1'
+>>> (X - Number(-1)).render()
+'X + 1'
+>>> (X + (-Y)).render()
+'X - Y'
+>>> (X - (-(-Y))).render()
+'X - Y'
+>>> (X * Number(-1)).render()  # only + and - have a sign to absorb
+'X * -1'
+```
+
+The fold happens at construction, like [`Not()` on a plain
+comparison](rules.md#default-negation), so it is visible in the tree you get
+back: an expression built as an addition of a negative reports `SUBTRACT`, and
+holds the positive term.
+
+```python
+>>> from aspalchemy import Operation
+>>> (X + Number(-1)).operator is Operation.SUBTRACT
+True
+>>> (X + Number(-1)).second_term
+Number(1)
+```
+
+Exactly one value does not fold: the int32 floor, whose negation (2147483648)
+is not a representable clingo integer, so there is no positive term to fold it
+into. It is left as written, and is valid ASP as written.
+
+```python
+>>> (X + Number(-2147483648)).render()
+'X + -2147483648'
+>>> (X + Number(-2147483647)).render()  # its neighbour folds as usual
+'X - 2147483647'
+```
+
 ## Where clingo and Python disagree
 
 These are semantic differences in the *evaluation* of integer arithmetic.
-aspalchemy renders your expression tree faithfully; clingo then evaluates it
-by clingo's rules, which differ from Python's in four places:
+aspalchemy hands clingo the expression tree you built (modulo the cosmetic fold
+above); clingo then evaluates it by clingo's rules, which differ from Python's
+in four places:
 
 1. **Integer division and modulo round differently on negatives.** Python
    floors: `-7 // 2 == -4` and `-7 % 2 == 1`. Clingo truncates toward zero:

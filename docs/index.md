@@ -128,9 +128,7 @@ def step_in_direction(axis: Variable, step: int) -> Variable | Expression:
     """
     if step == 0:
         return axis
-    if step > 0:
-        return axis + step
-    return axis - abs(step)
+    return axis + step
 
 class Grid:
     """

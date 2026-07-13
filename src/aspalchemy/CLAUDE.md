@@ -90,6 +90,16 @@ Operators supported (Python operator -> rendered ASP):
 - Power and bitwise renderings are deliberately over-parenthesized; classic
   arithmetic keeps minimal parentheses. Pinned against clingo evaluation in
   tests/aspalchemy/test_arithmetic.py.
+- A negative RIGHT operand of a binary ADD/SUBTRACT is folded into the
+  operator at construction (`X + (-1)` becomes `X - 1`, `X - (-Y)` becomes
+  `X + Y`, repeated to a fixpoint) — the same normalize-at-construction
+  policy as Not() on a plain comparison (see "Negation" below), so it is
+  visible: `.operator` reports the normalized operator. Cosmetic only: both
+  spellings are valid ASP (gringo parses a bare negative literal as a unit in
+  every operator slot). Never applied to *, /, \, **, bitwise, the unary ops,
+  or the left operand. The one exception is Number(-2147483648), whose
+  negation is not a legal int32: it does not fold. The fold runs before
+  _depth is computed, so MAX_DEPTH counts the operators actually rendered.
 
 ### 4. Logic Constructs
 
@@ -117,7 +127,8 @@ All support multiple elements and conditions via `add()` method.
   under stable-model semantics) and a triple collapses to a single
 - On a PLAIN comparison, Not()/~ return the complementary comparison
   instead of wrapping — gringo's own normalization ("not X != Y" is the
-  binding "X = Y"), performed at construction where it is visible;
+  binding "X = Y"), performed at construction where it is visible (the
+  same policy as the negative-addend fold in Expression, above);
   comparisons over aggregates keep the "not" wrapper (not
   complement-flippable), and DefaultNegation refuses plain comparisons
 - Classical negation (`-p`): unary minus on a Predicate instance flips its

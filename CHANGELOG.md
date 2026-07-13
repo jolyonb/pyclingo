@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.0.4 — 2026-07-13
+
+- Expressions now fold a negative right operand of `+` or `-` into the
+  operator when they are built: `X + -1` renders as `X - 1`, `X - -1` as
+  `X + 1`, and a negated term cancels the same way (`X - (-Y)` renders as
+  `X + Y`). Both spellings were always valid ASP, so this is cosmetic and
+  value-preserving — generated output now reads the way you would write it by
+  hand. Like `Not()` on a plain comparison, the normalization is
+  performed at construction and is therefore visible: an expression built as
+  an addition of a negative reports `SUBTRACT`. The one value that does not
+  fold is the int32 floor, whose negation is not a legal clingo integer.
+
 ## 1.0.3 — 2026-07-13
 
 Documentation release — no library changes.

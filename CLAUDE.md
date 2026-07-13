@@ -94,8 +94,7 @@ that keep this honest:
   output (enumeration order is not stable). Error wording is not API:
   full messages in doctests are fine (docs *should* update when a message
   improves), but never assert full prose. Empirical asserts are
-  comparative (A == B), never absolute byte counts; prose probe claims
-  are dated ("probed against clingo 5.8 (YYYY-MM-DD)").
+  comparative (A == B), never absolute byte counts.
 - Each topic has one home page; elsewhere link, don't re-explain. One
   executable demo per refusal, homed where the reader first hits it.
 - No YAML front matter (the H1 is the page title, via

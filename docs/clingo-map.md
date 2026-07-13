@@ -91,9 +91,11 @@ precedence, overflow) live in [Arithmetic](math.md).
 | `x ? y` (bitwise or) | `x \| y` | [Arithmetic](math.md#operator-table) |
 | `~x` (bitwise complement) | `Compl(x)` — `~` itself is reserved for default negation | [Arithmetic](math.md#operator-table) |
 | `\|x\|` (absolute value) | `abs(x)` | [Arithmetic](math.md#operator-table) |
+| `x - 1` | `x + (-1)` — a negative right operand of `+`/`-` is normalized into the operator at construction, gringo's own tidy done visibly (`x - 1` also spells itself) | [Negative operands](math.md#negative-operands) |
 
 `+`, `-`, `*`, `**`, `&`, `^`, and all six comparison operators are spelled as
-in Python and render as themselves.
+in Python and render as themselves — the sole exception being that fold, which
+is cosmetic and value-preserving.
 
 ## Optimization
 
@@ -211,6 +213,8 @@ Arithmetic spellings — Python operator in, clingo operator out:
 '~X'
 >>> abs(X).render()
 '|X|'
+>>> (X + Number(-1)).render()  # the negative addend folds into the operator
+'X - 1'
 ```
 
 Negation, in all four of its flavors:

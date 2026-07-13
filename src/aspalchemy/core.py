@@ -1039,6 +1039,13 @@ class Expression(ComparableTerm, ArithmeticOps):
 
     Expressions can be binary operations (e.g., X+Y, X*Z) or
     unary operations (e.g., -X).
+
+    An additive operation with a negative right operand is NORMALIZED at
+    construction: X + Number(-1) becomes X - 1, and X - (-Y) becomes X + Y
+    (repeated to a fixpoint, so X + (-(-Y)) is X + Y). Both spellings are
+    valid ASP; the fold is cosmetic, and value-preserving. Like Not() on a
+    plain comparison, the normalization is visible: the node built as ADD
+    reports SUBTRACT from .operator, and .second_term holds the folded term.
     """
 
     # Nesting cap: the tree walkers (rendering, scoping, collection) recurse
@@ -1090,6 +1097,22 @@ class Expression(ComparableTerm, ArithmeticOps):
         self._operator = operator
         self._second_term = self._convert_if_needed(second_term)
 
+        # Fold a negative right operand into the additive operator (X + -1 is
+        # X - 1; X - (-Y) is X + Y), repeating until stable. INT32_MIN is the
+        # one Number that cannot fold: its negation is outside clingo's integer
+        # range, so there is no Number to fold it to — "X + -2147483648" is
+        # legal ASP and stays as written.
+        while self._operator in (Operation.ADD, Operation.SUBTRACT):
+            second = self._second_term
+            if isinstance(second, Number) and -(2**31) < second.value < 0:
+                self._second_term = Number(-second.value)
+            elif isinstance(second, Expression) and second.operator is Operation.UNARY_MINUS:
+                self._second_term = second.second_term
+            else:
+                break
+            self._operator = Operation.SUBTRACT if self._operator is Operation.ADD else Operation.ADD
+
+        # Depth is measured after the fold: unwrapping a unary minus makes the tree shallower
         self._depth = 1 + max(
             (term._depth for term in (self._first_term, self._second_term) if isinstance(term, Expression)),
             default=0,

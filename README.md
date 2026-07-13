@@ -131,7 +131,7 @@ COORDS = {"rect": ["row", "col"], "hex": ["x", "y", "z"]}
 NEIGHBOURS = {"rect": [(0, 1), (1, 0)], "hex": [(1, -1, 0), (1, 0, -1), (0, 1, -1)]}
 
 def step(axis, delta):  # an ASP term: Col, or Col + 1, or Col - 1
-    return axis if delta == 0 else (axis + delta if delta > 0 else axis - abs(delta))
+    return axis if delta == 0 else axis + delta
 
 def adjacency(program, geometry):
     """Emit adjacency rules in whichever coordinate system this puzzle uses."""

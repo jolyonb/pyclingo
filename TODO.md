@@ -20,15 +20,6 @@ This is a wishlist of items.
   Aggregate would make the type's legality position-dependent (a guarded
   aggregate cannot enter a Comparison). Needs a design that avoids that.
 
-- **Fold negative addends into subtraction when rendering.** `X + -1` renders
-  literally, where `X - 1` is what anyone would write. Valid ASP (gringo does
-  not care), but ugly in generated output — and it shows up constantly in
-  exactly the code the library is best at: offset-driven grid rules, where the
-  offset is a Python int that may be negative (`shift(C, dc)` with `dc = -1`).
-  The renderer could fold `+ (-n)` into `- n` (and, symmetrically, `- (-n)`
-  into `+ n`) for literal Number operands. Purely cosmetic — no semantic
-  change, so the only risk is churn in golden renders.
-
 - **Multi-shot solving.** The big rock. clingo's incremental workflow —
   #program parts grounded onto one Control across successive solves, the
   iterative-deepening/planning idiom — is entirely unmodeled: we ground a
