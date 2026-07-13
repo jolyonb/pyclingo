@@ -19,8 +19,10 @@ forbid(*conds, *extra), and when(*conds).choose(c) is derive(c) — each
 split just names what the statement means.
 """
 
+import copy
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
+from typing import Self
 
 from aspalchemy.choice import Choice
 from aspalchemy.conditioned_element import ConditionType
@@ -110,6 +112,30 @@ class Segment:
     def name(self) -> str:
         """The segment's name."""
         return self._name
+
+    def copy(self, name: str | None = None) -> Self:
+        """
+        An independent copy of this segment: statements added to either one
+        afterwards do not appear in the other.
+
+        Pass name to rename the copy — a segment's name is its key in a
+        program, so a copy destined for the SAME program needs one.
+
+        Nothing mutable is shared. Values and atoms are exempt from the
+        copying, not from the guarantee: they are immutable and interned, so
+        they hand themselves back rather than duplicate (the same reason
+        copy.deepcopy of an atom is free), and a Choice or Aggregate already
+        captured by a rule is frozen — a value in its own right.
+
+        An unfinished when() is refused rather than copied: it holds the
+        segment it will write to, so no copy of it can be the answer the
+        caller means. Close it first.
+        """
+        self._refuse_copy_while_pending()
+        duplicate = copy.deepcopy(self)
+        if name is not None:
+            duplicate._name = self.validate_name(name)
+        return duplicate
 
     def _append(self, element: ProgramElement) -> None:
         """
@@ -393,17 +419,39 @@ class Segment:
             ]
         return lines
 
+    def _pending_listing(self) -> str:
+        """The open when()s, each named by its conditions and opening line."""
+        return "; ".join(
+            f"when({', '.join(c.render() for c in w.conditions)})"
+            + (f" opened at {w.location.display()}" if w.location is not None else "")
+            for w in self._pending
+        )
+
     def check_pending(self) -> None:
         """Raise if any when() on this segment is still awaiting its closer."""
         if self._pending:
-            listing = "; ".join(
-                f"when({', '.join(c.render() for c in w.conditions)})"
-                + (f" opened at {w.location.display()}" if w.location is not None else "")
-                for w in self._pending
-            )
             raise ValueError(
-                f"Segment '{self._name}' has incomplete when() statements: {listing}. "
+                f"Segment '{self._name}' has incomplete when() statements: {self._pending_listing()}. "
                 f"Complete each with .derive/.choose/.require/.forbid/.penalize."
+            )
+
+    def _refuse_copy_while_pending(self) -> None:
+        """
+        Copying across an open when() has no honest answer, so we refuse.
+
+        A When holds the segment it will write to. The handle the caller is
+        holding belongs to the ORIGINAL, so completing it after a copy would
+        write there — while the copy would carry a pending statement reachable
+        through no public surface, and would refuse to render forever, blaming
+        a when() the caller can see is closed. Better to say so now, at the
+        line that copied.
+        """
+        if self._pending:
+            raise ValueError(
+                f"Cannot copy segment '{self._name}' while a when() is unfinished: "
+                f"{self._pending_listing()}. A when() writes to the segment it was opened on, so "
+                f"the handle you hold would complete into the original, not the copy. Close each "
+                f"when() with .derive/.choose/.require/.forbid/.penalize, then copy."
             )
 
     def collect_predicate_occurrences(self) -> set[PredicateOccurrence]:

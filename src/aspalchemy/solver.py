@@ -1,3 +1,4 @@
+import copy
 import math
 import os
 import subprocess
@@ -6,6 +7,7 @@ import tempfile
 import threading
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
+from typing import Any, Self
 
 import clingo
 from clingo.application import Application, clingo_main
@@ -531,6 +533,33 @@ class ASPProgram:
             raise ValueError(f"Segment '{given}' already exists")
         self._segments[attached.name] = attached
         return attached
+
+    def copy(self) -> Self:
+        """
+        An independent copy of this program: statements, segments, constants,
+        and show settings added to either one afterwards do not appear in the
+        other. The obvious use is a variant — solve the program, then copy it
+        and push the copy somewhere the original must not follow.
+
+        Nothing mutable is shared. Values and atoms are exempt from the
+        copying, not from the guarantee (immutable and interned, they hand
+        themselves back); a captured Choice or Aggregate is frozen; and
+        predicate classes are classes, so the copy's show settings stay keyed
+        by the very classes you declared.
+
+        Two consequences worth knowing:
+        - An unfinished when() is refused, not copied (see Segment.copy()):
+          close it, then copy.
+        - A Segment handle you kept from add_segment() still writes to THIS
+          program. The copy holds its own segment of that name; reach it with
+          duplicate["name"].
+
+        Groundings are not copied — a GroundedProgram is already an immutable
+        snapshot, unaffected by later mutation of either program.
+        """
+        for segment in self._segments.values():
+            segment._refuse_copy_while_pending()
+        return copy.deepcopy(self)
 
     def __delitem__(self, segment: str) -> None:
         """
@@ -1329,6 +1358,32 @@ class GroundedProgram:
         # search state silently — the exact quiet overlap the check exists
         # to make loud. Held across check, configure, and _active assignment.
         self._solve_lock = threading.Lock()
+
+    def __copy__(self) -> Self:
+        """A grounding is an immutable snapshot: the copy IS the original."""
+        return self
+
+    def __deepcopy__(self, memo: dict[int, Any]) -> Self:
+        """
+        A grounding is an immutable snapshot: the deep copy IS the original.
+
+        Sharing is the honest answer AND the only safe one. A GroundedProgram
+        owns a clingo Control — C state behind a cffi handle — and a duplicate
+        would carry a second Python object pointing at one C object that only
+        one of them owns. It does not fail cleanly: deepcopy half-copies the
+        Control, and the dangling handle is dereferenced later, typically at
+        interpreter shutdown when a search generator is finalized and reads
+        statistics off the freed Control — a SEGFAULT, arriving nowhere near
+        the code that caused it.
+
+        This hook is what makes deepcopy safe on anything that HOLDS a
+        grounding (an ASPProgram subclass caching one, a dict of them), which
+        is how the crash reached users who never deep-copied a grounding on
+        purpose. To solve the same program under different assumptions, reuse
+        this handle — solves are independent; to vary the PROGRAM, copy the
+        ASPProgram and ground the copy.
+        """
+        return self
 
     @property
     def text(self) -> str:

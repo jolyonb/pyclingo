@@ -30,6 +30,17 @@ copy), and the Control is freed last. Concretely:
   timeout demands it; without one, solving is synchronous and there is no
   second thread to race during teardown.
 
+Refcount order buys nothing at interpreter SHUTDOWN, though, and that is a
+second way to reach the same crash: a search still suspended when the
+interpreter exits is finalized by the GC, which throws GeneratorExit into it
+long after clingo's module state may have gone — so the cleanup's statistics
+read lands on a freed Control and segfaults, with no traceback and nothing on
+the stack that names the program. The generator therefore checks
+sys.is_finalizing() before touching the Control: at shutdown the snapshot is
+skipped (nobody could read it anyway), while the state flags still publish.
+Abandoning a search is a documented idiom — next(iter(result)) takes one model
+and walks away — so this path must be safe, not merely discouraged.
+
 One nuance: a GroundedProgram keeps a strong reference to its most recent
 handle (the sequential guard's _active), so an abandoned mid-flight handle
 tears down by refcount only once the GroundedProgram itself is dropped or
@@ -38,6 +49,7 @@ and the next solve attempt raises the loud still-open error.
 """
 
 import copy
+import sys
 import time
 from abc import ABC, abstractmethod
 from collections.abc import Generator, Iterator, Sequence
@@ -906,9 +918,18 @@ def _search_generator(
         try:
             # Messages after the last emission (exhaustion proof, cancellation)
             state.messages.extend(message_handler.messages[messages_seen:])
-            if final is not None:
-                # Skipped if the handle was closed before solving began. clingo
-                # raises if statistics are not ready; none is better than raising.
+            # `final is not None` skips a handle closed before solving began.
+            #
+            # is_finalizing() is the crash guard, and it is not paranoia: an
+            # abandoned search (never exhausted, never closed) is finalized by
+            # the GC during interpreter shutdown, which throws GeneratorExit in
+            # here — and by then clingo's module state may already be torn down,
+            # so reading native statistics off the Control dereferences freed
+            # memory and SEGFAULTS the process, nowhere near the code at fault.
+            # Nobody can read the snapshot at that point anyway: the interpreter
+            # is going away. Skip it, and let the flag below still publish.
+            if final is not None and not sys.is_finalizing():
+                # clingo raises if statistics are not ready; none beats raising.
                 with suppress(RuntimeError):
                     statistics = dict(control.statistics)
                     statistics["wall_time"] = time.perf_counter() - tic

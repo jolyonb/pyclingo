@@ -1,5 +1,47 @@
 # Changelog
 
+## 1.2.0 — 2026-07-13
+
+- `ASPProgram.copy()` and `Segment.copy()` return an independent copy:
+  statements, segments, constants and show settings added to either one
+  afterwards do not appear in the other. The motivating use is a variant —
+  solve a program, then copy it and push the copy somewhere the original must
+  not follow (an extra fact, a tighter constraint, a what-if). `Segment.copy()`
+  takes an optional `name`, because a segment's name is its key in a program:
+  a copy destined for the same program needs a new one.
+- Nothing mutable is shared by a copy. Values and atoms are exempt from the
+  copying but not from the guarantee — immutable and interned, they hand
+  themselves back rather than duplicate; a `Choice` or `Aggregate` already
+  captured by a rule is frozen, and a frozen builder is a value; and predicate
+  classes are classes, so the copy's show settings stay keyed by the very
+  classes you declared. Groundings are not copied — a `GroundedProgram` is
+  already an immutable snapshot, unaffected by later mutation of either
+  program.
+- Copying across an unfinished `when()` is refused, with an error naming the
+  line the `when()` was opened on. A `when()` holds the segment it will write
+  to, so no copy of it is the answer the caller means: the handle they hold
+  belongs to the original. Likewise, a `Segment` handle kept from
+  `add_segment()` still writes to the program it was added to — the copy holds
+  its own segment of that name, reached with `duplicate["name"]`.
+- **Abandoning a search no longer risks a segfault at exit.** A `SolveResult`
+  that was never exhausted and never closed is finalized by the garbage
+  collector during interpreter shutdown, by which time clingo's module state
+  may already be gone — and the generator's cleanup read native statistics off
+  the freed `Control`, crashing the process with no traceback (roughly two runs
+  in three, on a program as small as two facts). The cleanup now skips the
+  statistics snapshot while the interpreter is finalizing, where nothing could
+  read it anyway. Taking one model and walking away — `next(iter(result))` — is
+  a documented idiom, so it has to be safe, not merely discouraged.
+- **`copy.deepcopy` of a `GroundedProgram` no longer duplicates clingo's
+  `Control`.** It now hands the snapshot back, which is what a grounding
+  already claims to be: immutable, and solvable many times. Duplicating it put
+  two Python objects in front of one C object that only one of them owned,
+  which failed either loudly (a cffi handle cannot be pickled) or, worse,
+  quietly — a dangling handle that segfaulted at teardown. This is what made
+  deepcopy safe on anything *holding* a grounding, such as an `ASPProgram`
+  subclass that memoizes one, which is how the crash reached code that never
+  copied a grounding on purpose.
+
 ## 1.1.0 — 2026-07-13
 
 - Expressions now fold a negative right operand of `+` or `-` into the
