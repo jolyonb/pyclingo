@@ -111,9 +111,9 @@ from aspalchemy import ASPProgram, Expression, Predicate, Variable
 # What a cell IS — the coordinates it is addressed by.
 COORDS: dict[str, list[str]] = {"rect": ["row", "col"], "hex": ["x", "y", "z"]}
 
-# What ADJACENCY means — offsets to a cell's neighbours, in the same order as the
-# coordinates above: east and south on a rectangular grid; three of the six cube
-# directions on a hex grid.
+# What ADJACENCY means — the effect of taking one positive step along each axis
+# defined above: east and south on a rectangular grid; three of the six cube
+# directions on a hex grid. (Opposite directions come from a negative step.)
 NEIGHBOURS: dict[str, list[tuple[int, ...]]] = {
     "rect": [(0, 1), (1, 0)],
     "hex": [(1, -1, 0), (1, 0, -1), (0, 1, -1)],
@@ -196,7 +196,7 @@ adjacent(cell(X, Y, Z), cell(X, Y + 1, Z - 1)) :- cell(X, Y, Z), cell(X, Y + 1, 
 A cell is `cell(Row, Col)` in one and `cell(X, Y, Z)` in the other — different
 arity, different names, different rules, all from one call. Add `regions()` or
 `connectivity()` to `Grid` and a puzzle picks up those rules by asking for them;
-one that doesn't ask never pays to ground them. To do this with a .lp file you 
+one that doesn't ask never pays to ground them. To do this with a .lp file you
 would be templating strings, untyped and unvalidated.
 
 **And here is the honest cost.** A schema invented at runtime is a schema your

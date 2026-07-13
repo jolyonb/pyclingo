@@ -67,8 +67,10 @@ fences concatenate per file and exec in one shared namespace, so each
 page is one runnable script (zero-fence pages skip visibly). The rules
 that keep this honest:
 
-- The fence must be exactly ` ```python ` — variants (` ```python3 `) are
-  silently decorative. Two flavors, sharing the page's namespace: a
+- The fence must be exactly ` ```python `; a python-adjacent variant
+  (` ```python3 `, ` ```Python `, ` ```py `, ` ```python title="x" `) is
+  rejected by the harness, because it would render as code, read as
+  verified, and never run. Two flavors, sharing the page's namespace: a
   SCRIPT fence (no prompts) execs as-is — the paste-and-run narrative
   form — and a DOCTEST fence (first line starts with `>>>`) runs through
   doctest, so the output it shows is verified, not decorative. ELLIPSIS

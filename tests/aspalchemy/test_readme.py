@@ -36,20 +36,46 @@ DOCUMENTS = [
     *sorted(p.relative_to(REPO_ROOT).as_posix() for p in (REPO_ROOT / "docs").glob("*.md")),
 ]
 
+# Only ```python (exactly) is executed. Every OTHER fence is inert, which is
+# fine for ```text and ```bash and fatal for anything python-adjacent: a fence
+# tagged ```python3, ```Python, ```py, or ```python title="x" would render as
+# code, read as verified, and never run. Those are rejected outright.
+_FENCE = re.compile(r"^```([A-Za-z][\w+.-]*)(.*)$", re.MULTILINE)
+_EXECUTABLE = re.compile(r"```python\n(.*?)```", re.DOTALL)
+
+
+def _reject_decorative_fences(doc: str, text: str) -> None:
+    """Fail on a fence that LOOKS like executable Python but would never run."""
+    for fence in _FENCE.finditer(text):
+        language, trailer = fence.group(1), fence.group(2).strip()
+        if language == "python" and not trailer:
+            continue  # the one executable spelling
+        if language.lower().startswith("py"):
+            line = text[: fence.start()].count("\n") + 1
+            raise AssertionError(
+                f"{doc}:{line}: fence is tagged ```{language}{fence.group(2)} — only ```python "
+                f"is executed, so this block would render as code, read as verified, and never "
+                f"run. Retag it ```python, or ```text if it is not meant to be executable."
+            )
+
 
 class _IgnoreTrailingBlanks(doctest.OutputChecker):
     """
-    Ignore trailing blank lines in output.
+    Ignore trailing blank LINES in output — and nothing else.
 
     A fence cannot express them: a blank line at the end of an example just
     closes it, so there is nowhere to put the marker. print() of anything
     already newline-terminated (a program render) emits one, and pages
     should read the way a reader would type them — print(program.render()),
     not print(program.render(), end="").
+
+    Strips newlines only, never other whitespace: rstrip() would also forgive
+    trailing SPACES, quietly licensing a rendering regression the page could
+    not show anyway.
     """
 
     def check_output(self, want: str, got: str, optionflags: int) -> bool:
-        return super().check_output(want.rstrip() + "\n", got.rstrip() + "\n", optionflags)
+        return super().check_output(want.rstrip("\n") + "\n", got.rstrip("\n") + "\n", optionflags)
 
 
 def _mark_blank_lines(block: str) -> str:
@@ -81,8 +107,11 @@ def _mark_blank_lines(block: str) -> str:
 def test_doc_code_blocks_execute(doc: str) -> None:
     path = REPO_ROOT / doc
     text = path.read_text()
-    matches = list(re.finditer(r"```python\n(.*?)```", text, flags=re.DOTALL))
+    _reject_decorative_fences(doc, text)
+    matches = list(_EXECUTABLE.finditer(text))
     if not matches:
+        # Genuinely prose: no python-adjacent fence survived the check above, so
+        # there is nothing here that could pass for a verified example
         pytest.skip(f"no python code blocks in {doc}")
 
     namespace: dict[str, object] = {}
@@ -92,10 +121,15 @@ def test_doc_code_blocks_execute(doc: str) -> None:
         lineno = text[: match.start(1)].count("\n")
         if block.lstrip().startswith(">>>"):
             test = parser.get_doctest(_mark_blank_lines(block), namespace, doc, str(path), lineno)
+            # A prompted fence that parses to nothing would pass in silence
+            assert test.examples, f"{doc}:{lineno + 1}: doctest fence contains no runnable example"
             output: list[str] = []
             runner = doctest.DocTestRunner(checker=_IgnoreTrailingBlanks(), optionflags=doctest.ELLIPSIS)
             results = runner.run(test, out=output.append, clear_globs=False)
-            # Names defined inside the doctest flow back to the page
+            # Names defined inside the doctest flow back to the page — except
+            # doctest's own injected __name__, which would silently arm an
+            # `if __name__ == "__main__":` block in a later script fence
+            test.globs.pop("__name__", None)
             namespace.update(test.globs)
             if results.failed:
                 pytest.fail("".join(output), pytrace=False)
