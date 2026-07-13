@@ -4,7 +4,6 @@
 .claude/
 .venv/
 dist/
-temp/
 
 # Coverage
 .coverage
