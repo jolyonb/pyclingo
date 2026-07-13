@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.0.3 — 2026-07-13
+
+Documentation release — no library changes.
+
+- The readme (and the documentation site) now demonstrate what the library is
+  actually *for*: a worked example where Python chooses both the predicate
+  schema and the rules at runtime, so the same call emits a rectangular grid's
+  adjacency rules or a hex grid's. Previously this was claimed but never shown.
+- Documentation examples are now verified transcripts: the output a page
+  displays — generated ASP included — is checked against the real thing on
+  every commit, and teaching errors are shown as real tracebacks.
+
 ## 1.0.2 — 2026-07-12
 
 Documentation and packaging release — no library changes.

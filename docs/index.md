@@ -2,9 +2,11 @@
 
 <p class="site-hide"><em>&#128214; You are reading the docs source on GitHub &mdash; the rendered site lives at <a href="https://jolyonb.github.io/aspalchemy/">jolyonb.github.io/aspalchemy</a>.</em></p>
 
-Describe the rules of your problem in Python — which states border which, which meetings clash, which seats must differ — and the solver finds every solution that satisfies them: timetables, seatings, puzzles. ASPAlchemy is a Python ORM for [clingo](https://potassco.org/clingo/): you author Answer Set Programming rules as typed Python objects, it renders them to ASP source, solves through the clingo API, and hands the answer sets — the solutions — back as typed Python values. And because your program is Python, it is *dynamic* — rules built with loops, functions, and real data reshape themselves around the input in ways a frozen `.lp` file never can.
+Answer Set Programming (ASP) lets you state requirements, then let a solver figure out how to satisfy them. It's a beautiful language. But it's also niche, and that means that the tooling around it is immature. It runs on text files, often lovingly hand-crafted. Input data needs formatting. Output data needs to be transcribed to the appropriate format. The purpose of ASPAlchemy is to bring to ASP what SQLAlchemy brings to SQL: a thorough encapsulation of the language within strongly-typed Python constructs. While we still think that understanding the basics of ASP is worthwhile, we also think that you should almost never have to construct an ASP program by hand ever again. Let ASPAlchemy handle the details for you.
 
-Here is the whole of n-Queens — place eight queens so that none attacks another. The Python states the rules; the solver does the searching:
+ASPAlchemy is a Python ORM for [clingo](https://potassco.org/clingo/): you author Answer Set Programming rules as typed Python objects, it renders them to ASP source, solves through the clingo API, and hands the answer sets — the solutions — back as typed Python values. And because your program is Python, it is *dynamic* — rules built with loops, functions, and real data reshape themselves around the input in ways a frozen `.lp` file never can.
+
+Here is the whole of n-Queens on a standard 8×8 chessboard — place 8 queens so that none attacks another. The Python states the rules; the solver does the searching:
 
 ```python
 from aspalchemy import (
@@ -16,35 +18,64 @@ class Queen(Predicate, name="q"):
     col: Field[int]
 
 program = ASPProgram()
-n = program.define_constant("n", 8)
-R, C, D = Variable("R"), Variable("C"), Variable("D")
-board = RangePool(1, n)
+size = 8
+n = program.define_constant("n", size)
+R, C, D = (Variable(x) for x in "RCD")
+indices = RangePool(1, n)
 
 # every row and every column holds exactly one queen
-program.when(R.in_(board)).choose(Choice(Queen(row=R, col=board)).exactly(1))
-program.when(C.in_(board)).choose(Choice(Queen(row=board, col=C)).exactly(1))
+program.when(R.in_(indices)).choose(Choice(Queen(row=R, col=indices)).exactly(1))
+program.when(C.in_(indices)).choose(Choice(Queen(row=indices, col=C)).exactly(1))
 
 # no two queens share a diagonal
 falling, rising = RangePool(2, 2 * n), RangePool(1 - n, n - 1)
 program.forbid(Count(C, Queen(row=D - C, col=C)) >= 2, D.in_(falling))
 program.forbid(Count(C, Queen(row=D + C, col=C)) >= 2, D.in_(rising))
 
-queens = program.solve().first().atoms(Queen)  # .row and .col are plain ints
-assert len(queens) == 8
-assert {q.row for q in queens} == {q.col for q in queens} == set(range(1, 9))
-assert len({q.row - q.col for q in queens}) == 8  # all falling diagonals distinct
-assert len({q.row + q.col for q in queens}) == 8  # all rising diagonals distinct
+# Read off the solution
+queens = program.solve().first().atoms(Queen)  # a list of Queen objects
 ```
 
-And `program.render()` hands back the classic encoding — the one you'd have written by hand:
+The eight queens come back as typed Python — no parsing, no unwrapping. Whichever
+of the 92 solutions came back, it holds up:
 
 ```python
-rendered = program.render()
-assert "{ q(R, 1..n) } = 1 :- R = 1..n." in rendered
-assert ":- #count{ C : q(D - C, C) } >= 2, D = 2..2 * n." in rendered
+>>> len(queens)
+8
+>>> sorted(q.col for q in queens)  # exactly one queen per column
+[1, 2, 3, 4, 5, 6, 7, 8]
+>>> sorted(q.row for q in queens)  # and per row
+[1, 2, 3, 4, 5, 6, 7, 8]
+>>> len({q.row - q.col for q in queens})  # no two share a falling diagonal
+8
+>>> len({q.row + q.col for q in queens})  # nor a rising one
+8
+```
+
+And `.row` and `.col` are ordinary ints, so drawing the board is just Python:
+
+```python
+board = {(q.row, q.col) for q in queens}
+for row in range(1, size + 1):
+    print(" ".join("Q" if (row, col) in board else "." for col in range(1, size + 1)))
 ```
 
 ```text
+. Q . . . . . .
+. . . . . . Q .
+. . Q . . . . .
+. . . . . Q . .
+. . . . . . . Q
+. . . . Q . . .
+Q . . . . . . .
+. . . Q . . . .
+```
+
+(Note that you may get a different solution than the above if you run the code yourself; which of the 92 solutions is returned first is not deterministic.) If you want to see the generated code, `program.render()` hands back the ASP:
+
+```python
+>>> print(program.render())
+% Generated by aspalchemy ...
 #const n = 8.
 { q(R, 1..n) } = 1 :- R = 1..n.
 { q(1..n, C) } = 1 :- C = 1..n.
@@ -55,15 +86,138 @@ assert ":- #count{ C : q(D - C, C) } >= 2, D = 2..2 * n." in rendered
 #show q/2.
 ```
 
-(The textbook writes the diagonal tests as body braces, `{ q(D-J,J) } >= 2`; aspalchemy [spells cardinality tests as Count comparisons](choices-and-aggregates.md#cardinality-tests-are-not-choices), which grounds to the same solver input.)
+(For clingo aficionados: the textbook writes those diagonal tests as body braces, `{ q(D-C, C) } >= 2`. ASPAlchemy [spells cardinality tests as `Count` comparisons](choices-and-aggregates.md#cardinality-tests-are-not-choices) deliberately: body braces in a body look like a choice rule but are actually a cardinality test. Both ground identically.)
 
-## Two ways in
+**"But the Python is longer!"** On a toy, yes. Notice where the length *isn't*, though: the rules — the part ASPAlchemy specializes in — are four statements in both versions, line for line. The rest is the imports and the predicate declaration, and that cost is fixed: it buys typed fields, autocomplete, and the typed read-back above, and it does not grow with the problem. What it also buys is the next section, which a `.lp` file cannot have at any length.
 
-- **New to ASP?** Start with [Your First Program](getting-started.md) — you'll be solving your own problem within the hour — then watch the same verbs handle a real 9×9 puzzle in [Walkthrough: Numberlink](numberlink.md).
-- **Already write clingo?** [Clingo to ASPAlchemy](clingo-map.md) answers what's supported, what's spelled how, and what's deliberately refused — with the reasoning in [What We Don't Support](unsupported.md).
+## Your program is dynamic
 
-## Why ASPAlchemy
+This is the point of the whole library. Your rules aren't a file, they're
+Python — so you can write a *module* that knows how to reason about a whole
+family of problems, and emits exactly the rules a given program asks of it.
 
+Take a grid. A puzzle might be laid out on a rectangular board or a hex one, and
+those are not the same shape of problem: a cell is *addressed* differently (a row
+and a column, versus the three cube coordinates a hex grid needs), and "neighbour"
+*means* something different. Everything you might want to compute about a grid —
+regions, lines of sight, distance, connectivity — rests on those two facts.
+
+So state the coordinate system once, and derive the rules from it. Adjacency is
+the instructive case, because it depends on both halves:
+
+```python
+from aspalchemy import ASPProgram, Expression, Predicate, Variable
+
+# What a cell IS — the coordinates it is addressed by.
+COORDS: dict[str, list[str]] = {"rect": ["row", "col"], "hex": ["x", "y", "z"]}
+
+# What ADJACENCY means — offsets to a cell's neighbours, in the same order as the
+# coordinates above: east and south on a rectangular grid; three of the six cube
+# directions on a hex grid.
+NEIGHBOURS: dict[str, list[tuple[int, ...]]] = {
+    "rect": [(0, 1), (1, 0)],
+    "hex": [(1, -1, 0), (1, 0, -1), (0, 1, -1)],
+}
+
+def step_in_direction(axis: Variable, step: int) -> Variable | Expression:
+    """
+    Returns an ASP expression corresponding to taking a step along the given axis.
+    Note the return type: arithmetic on a Variable does not compute anything, it
+    BUILDS a term — `Col + 1` is an Expression, an ASP object that renders as
+    `Col + 1`. A step of zero returns the Variable itself.
+    """
+    if step == 0:
+        return axis
+    if step > 0:
+        return axis + step
+    return axis - abs(step)
+
+class Grid:
+    """
+    Grid rules for one coordinate system. A real module would offer plenty of
+    them — regions, lines, distance, connectivity; here is one. None is emitted
+    until a program asks for it.
+    """
+
+    def __init__(self, geometry: str) -> None:
+        self.coords: list[str] = COORDS[geometry]
+        self.offsets: list[tuple[int, ...]] = NEIGHBOURS[geometry]
+
+        # The geometry decides what a cell even IS: cell(Row, Col) or cell(X, Y, Z).
+        # define() returns a predicate CLASS, built at runtime; coordinates are
+        # ints, so the fields are still type-checked on every write.
+        self.Cell: type[Predicate] = Predicate.define(
+            "cell", {coord: int for coord in self.coords}, show=False
+        )
+        self.Adjacent: type[Predicate] = Predicate.define(
+            "adjacent", {"a": self.Cell, "b": self.Cell}
+        )
+        self.axes: list[Variable] = [Variable(c.capitalize()) for c in self.coords]
+
+    def adjacency(self, program: ASPProgram) -> None:
+        """
+        Emit one rule per neighbour direction, each saying: these two cells are
+        adjacent, provided both of them exist. A rectangular grid gets two rules,
+        a hex grid three — the geometry decides.
+        """
+        # The cell the rules are written about: cell(Row, Col), or cell(X, Y, Z)
+        here = self.Cell(**dict(zip(self.coords, self.axes, strict=True)))
+
+        for offset in self.offsets:
+            # Its neighbour one step away: cell(Row, Col + 1) for the offset (0, 1).
+            # strict=True holds us to the invariant of one step per coordinate.
+            there = self.Cell(**{
+                coord: step_in_direction(axis, step)
+                for coord, axis, step in zip(self.coords, self.axes, offset, strict=True)
+            })
+            program.when(here, there).derive(self.Adjacent(a=here, b=there))
+```
+
+Ask the same module for adjacency on two geometries, and you get two
+structurally different ASP programs:
+
+```python
+>>> rect = ASPProgram()
+>>> grid = Grid("rect")
+>>> grid.adjacency(rect)          # add the adjacency rules to the program
+>>> print(rect["Rules"].render())
+adjacent(cell(Row, Col), cell(Row, Col + 1)) :- cell(Row, Col), cell(Row, Col + 1).
+adjacent(cell(Row, Col), cell(Row + 1, Col)) :- cell(Row, Col), cell(Row + 1, Col).
+
+>>> hexagonal = ASPProgram()
+>>> grid = Grid("hex")
+>>> grid.adjacency(hexagonal)     # the same call, on a different coordinate system
+>>> print(hexagonal["Rules"].render())
+adjacent(cell(X, Y, Z), cell(X + 1, Y - 1, Z)) :- cell(X, Y, Z), cell(X + 1, Y - 1, Z).
+adjacent(cell(X, Y, Z), cell(X + 1, Y, Z - 1)) :- cell(X, Y, Z), cell(X + 1, Y, Z - 1).
+adjacent(cell(X, Y, Z), cell(X, Y + 1, Z - 1)) :- cell(X, Y, Z), cell(X, Y + 1, Z - 1).
+```
+
+A cell is `cell(Row, Col)` in one and `cell(X, Y, Z)` in the other — different
+arity, different names, different rules, all from one call. Add `regions()` or
+`connectivity()` to `Grid` and a puzzle picks up those rules by asking for them;
+one that doesn't ask never pays to ground them. To do this with a .lp file you 
+would be templating strings, untyped and unvalidated.
+
+**And here is the honest cost.** A schema invented at runtime is a schema your
+*type checker* cannot see. `Predicate.define()` gives up static field checking:
+mypy and your IDE know nothing about `Cell`, so a misspelled
+field is no longer caught before you run, and there is no autocomplete. What
+survives is everything at runtime — a bad field name is rejected on
+construction, the `{coord: int}` schema above still validates every write and
+still reads back as plain ints, and rules are validated exactly as always. So
+the trade is real but narrow, and you make it per predicate: the `Queen` class
+at the top of this page is fully typed, because its shape was known when it was
+written. Reach for `define()` when the shape genuinely isn't. And when the
+geometries are known in advance, the sharpest answer is neither: declare a typed
+class per geometry and pick between them at runtime. Static *and* polymorphic.
+
+## Why use ASPAlchemy?
+
+- **Your program writes your program.** `if`, loops, functions, imports,
+  classes — the rules you emit, and the very shape of the predicates they talk
+  about, are decided at runtime. This is the one thing a `.lp` file can never
+  do, and it is why the library exists.
 - **Your rules are Python objects.** Predicates are classes with typed fields;
   atoms are instances; rules are built from both. A misspelled field or a
   missing argument is a type error before clingo ever runs, and the pieces you
@@ -88,17 +242,7 @@ assert ":- #count{ C : q(D - C, C) } >= 2, D = 2..2 * n." in rendered
   need the full language.
 - **Solutions are first-class.** Iterate models lazily, run brave/cautious
   consequence analyses, solve prioritized optimizations, and read atoms back
-  as plain `int`s and `str`s — [Solving and Results](solving.md).
-
-**"But the Python is longer than the `.lp`!"** It is — on a toy. Count again,
-though: the *rules* are four statements in both versions, line for line; the
-extra is the imports and the predicate declaration, a fixed cost that buys
-typed fields, autocomplete, and the typed read-back the asserts above lean on.
-The part that grows with a real problem is data — and data arrives as
-`json.load(...)` or a database query, reshaped by ordinary Python, not as
-facts retyped into a frozen file. That's the ORM trade, the same one
-SQLAlchemy makes: a few declarations up front so that the hundredth rule is
-as safe as the first.
+  as plain `int`s, `str`s and typed predicates — [Solving and Results](solving.md).
 
 ## Install
 
@@ -106,14 +250,18 @@ as safe as the first.
 pip install aspalchemy    # or: uv add aspalchemy
 ```
 
-Requires Python 3.14+ — a deliberate, tinkerer-first choice: ASP is a small community, and we reached for the best available tools rather than the widest floor. clingo 5.8+ is installed automatically; releases live on [PyPI](https://pypi.org/project/aspalchemy/).
+Requires Python 3.14+. We know this is restrictive, but we wanted to leverage the strong typing support that Python 3.14 provides. clingo 5.8+ is installed automatically; ASPAlchemy releases live on [PyPI](https://pypi.org/project/aspalchemy/).
 
 ## These docs run
 
-Every Python block on this site is executed top-to-bottom by the test suite in CI. When a page shows generated ASP or a solved model, an adjacent assert pins the claim — the examples cannot silently rot, and what you paste is what runs. The same culture holds below the docs: the library itself is gated at 100% line coverage, and claims about clingo's behavior are pinned by tests that run the real solver.
+Every Python block on this site is executed top-to-bottom by the test suite in CI. When a page shows generated ASP or a solved model, the underlying code here is tested — the examples cannot silently rot, and what you paste is what runs. The same culture holds below the docs: the library itself is gated at 100% line coverage, and claims about clingo's behavior are pinned by tests that run the real solver.
+
+## Two ways in
+
+- **New to ASP?** Start with [Your First Program](getting-started.md) — you'll be solving your own problem within the hour — then watch the same verbs handle a real 9×9 puzzle in [Walkthrough: Numberlink](numberlink.md).
+- **Already write clingo?** [Clingo to ASPAlchemy](clingo-map.md) answers what's supported, what's spelled how, and what's deliberately refused — with the reasoning in [What We Don't Support](unsupported.md).
 
 ## More
 
 - [Why not clorm?](clingo-map.md#positioning) — the boundary between the two tools, and how they compose.
 - [aspuzzle](https://github.com/jolyonb/aspuzzle) — what this looks like at scale: a puzzle-solving framework built on ASPAlchemy.
-- [Changelog](https://github.com/jolyonb/aspalchemy/blob/main/CHANGELOG.md) — what shipped, release by release.

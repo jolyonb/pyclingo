@@ -121,8 +121,9 @@ class CellDirections(Predicate):
 
 A `Symbol` atom renders with its position nested inside it, one term:
 
-```text
-symbol(cell(2, 5), 7).
+```python
+>>> Symbol(loc=Cell(row=2, col=5), sym=7).render()
+'symbol(cell(2, 5), 7)'
 ```
 
 Note the shown/hidden split, same policy as the tutorial: every scaffolding
@@ -150,13 +151,14 @@ R, C = Variable("R"), Variable("C")
 grid = program.add_segment("grid")
 grid.section("Define cells in the grid")
 grid.when(R.in_(RangePool(1, 9)), C.in_(RangePool(1, 9))).derive(Cell(row=R, col=C))
-
-assert "cell(R, C) :- R = 1..9, C = 1..9." in program.render()
 ```
 
-One rendered line, 81 atoms of intent:
+One rendered line, 81 atoms of intent. A segment is iterable and every
+statement in it renders itself, so the page can print the ASP a rule just
+produced — and every transcript below is real output, checked in CI:
 
-```text
+```python
+>>> print(list(grid)[-1].render())
 cell(R, C) :- R = 1..9, C = 1..9.
 ```
 
@@ -191,11 +193,10 @@ expands to all four.
 ```python
 grid.section("Orthogonal directions")
 grid.fact(OrthogonalDirections(name=ExplicitPool(["n", "e", "s", "w"])))
-
-assert 'orthogonal_directions("n"; "e"; "s"; "w").' in program.render()
 ```
 
-```text
+```python
+>>> print(list(grid)[-1].render())
 orthogonal_directions("n"; "e"; "s"; "w").
 ```
 
@@ -260,8 +261,33 @@ endpoints = [
 clues = program.add_segment("Clues")
 clues.section("Define numbered endpoints")
 clues.fact(*[Symbol(loc=Cell(row=r, col=c), sym=sym) for r, c, sym in endpoints])
+```
 
-assert "symbol(cell(2, 5), 7)." in program.render()
+Eighteen endpoints, eighteen facts — and the `section()` header renders as the
+comment banner above them:
+
+```python
+>>> print(clues.render())
+
+% Define numbered endpoints
+symbol(cell(2, 5), 7).
+symbol(cell(2, 7), 9).
+symbol(cell(2, 8), 4).
+symbol(cell(3, 1), 6).
+symbol(cell(3, 3), 3).
+symbol(cell(4, 4), 8).
+symbol(cell(4, 8), 5).
+symbol(cell(5, 2), 3).
+symbol(cell(5, 4), 6).
+symbol(cell(5, 5), 7).
+symbol(cell(6, 3), 8).
+symbol(cell(7, 1), 2).
+symbol(cell(8, 5), 1).
+symbol(cell(9, 1), 1).
+symbol(cell(9, 2), 2).
+symbol(cell(9, 7), 4).
+symbol(cell(9, 8), 5).
+symbol(cell(9, 9), 9).
 ```
 
 ## Degrees: one exit or two
@@ -285,8 +311,13 @@ rules.when(HasSymbol(loc=Cell_)).derive(PathDegree(loc=Cell_, degree=1))
 rules.when(cell, ~HasSymbol(loc=cell)).derive(PathDegree(loc=cell, degree=2))
 ```
 
-```text
+```python
+>>> print(rules.render())
+
+% Identify cells with symbols
 has_symbol(Cell) :- symbol(Cell, _).
+
+% Path degree requirements
 path_degree(Cell, 1) :- has_symbol(Cell).
 path_degree(cell(R, C), 2) :- cell(R, C), not has_symbol(cell(R, C)).
 ```
@@ -310,14 +341,10 @@ rules.when(PathDegree(loc=cell, degree=N)).derive(
         condition=OrthogonalDir(cell1=cell, direction=D, cell2=ANY),
     ).exactly(N)
 )
-
-assert (
-    "{ path(cell(R, C), D) : orthogonal_dir(cell(R, C), D, _) } = N :- path_degree(cell(R, C), N)."
-    in program.render()
-)
 ```
 
-```text
+```python
+>>> print(list(rules)[-1].render())
 { path(cell(R, C), D) : orthogonal_dir(cell(R, C), D, _) } = N :- path_degree(cell(R, C), N).
 ```
 
@@ -339,6 +366,8 @@ connects its two cells.
 ```python
 OppD = Variable("OppD")
 Cell1, Cell2 = Variable("Cell1"), Variable("Cell2")
+
+mark = len(rules)  # where the segment ends now, so we can print just what follows
 
 rules.section("Bidirectional path constraint")
 rules.when(
@@ -362,10 +391,17 @@ rules.when(
 ).derive(Connected(loc1=Cell1, loc2=Cell2))
 ```
 
-```text
+```python
+>>> print("\n".join(statement.render() for statement in list(rules)[mark:]))
+
+% Bidirectional path constraint
 path(Cell2, OppD) :- path(Cell1, D), orthogonal_dir(Cell1, D, Cell2), opposite(D, OppD).
+
+% Symbol propagation
 propagated_symbol(Cell, Sym) :- symbol(Cell, Sym).
 propagated_symbol(Cell2, Sym) :- propagated_symbol(Cell1, Sym), path(Cell1, D), orthogonal_dir(Cell1, D, Cell2).
+
+% Define connected relationship
 connected(Cell1, Cell2) :- path(Cell1, D), orthogonal_dir(Cell1, D, Cell2).
 ```
 
@@ -385,11 +421,13 @@ rules.section("Symbols cannot be connected to different symbols")
 rules.when(Symbol(loc=Cell_, sym=ANY)).require(
     Count(Sym, condition=PropagatedSymbol(loc=Cell_, sym=Sym)) == 1
 )
-
-assert "#count{ Sym : propagated_symbol(Cell, Sym) } != 1." in program.render()
 ```
 
-```text
+Note the flip in the rendered form: `require(... == 1)` is sugar for forbidding
+the complement, so the ASP reads `!= 1`.
+
+```python
+>>> print(list(rules)[-1].render())
 :- symbol(Cell, _), #count{ Sym : propagated_symbol(Cell, Sym) } != 1.
 ```
 
@@ -411,7 +449,8 @@ rules.forbid(
 )
 ```
 
-```text
+```python
+>>> print(list(rules)[-1].render())
 :- orthogonal_dir(Cell1, _, Cell2), propagated_symbol(Cell1, Sym), propagated_symbol(Cell2, Sym), not connected(Cell1, Cell2).
 ```
 
@@ -438,7 +477,8 @@ rules.when(
 ).derive(CellDirections(loc=cell, dir1=D1, dir2=D2))
 ```
 
-```text
+```python
+>>> print(list(rules)[-1].render())
 cell_directions(cell(R, C), D1, D2) :- cell(R, C), not has_symbol(cell(R, C)), path(cell(R, C), D1), path(cell(R, C), D2), D1 < D2.
 ```
 
@@ -447,9 +487,9 @@ cell_directions(cell(R, C), D1, D2) :- cell(R, C), not has_symbol(cell(R, C)), p
 This puzzle has exactly one solution, so we can do something the tutorial
 couldn't: assert the model count. Pinning solver output is normally
 forbidden — enumeration order isn't stable — but a program with a provably
-unique answer set is the exception, and this instance's uniqueness (and its
-full 63-atom solution table, which this page checks by property instead) is
-pinned by the test suite in CI.
+unique answer set is the exception: with one model, the answer *is*
+deterministic, which is why the picture at the end of this page can be a
+doctest. The checks below are the properties that make it a valid solution.
 
 ```python
 models = list(program.solve())
@@ -505,7 +545,7 @@ The payoff. Each cell's direction pair maps onto a box-drawing character,
 endpoints keep their digits, and the paths appear. This is presentation, not
 modeling — fifteen lines of ordinary Python consuming the solved set. It is
 deterministic by construction (unique model, full grid, row-by-row order), so
-showing the picture is safe; the assert pins the load-bearing property.
+the picture below is a doctest: CI checks the drawing, cell for cell.
 
 ```python
 GLYPHS = {
@@ -520,7 +560,6 @@ picture = [
     "".join(ch if ch.isdigit() else GLYPHS[pair_at[(r, c)]] for c, ch in enumerate(line, start=1))
     for r, line in enumerate(GRID, start=1)
 ]
-assert all(len(row) == 9 for row in picture)
 ```
 
 ```python

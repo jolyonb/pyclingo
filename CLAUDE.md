@@ -78,11 +78,16 @@ that keep this honest:
   a real traceback — full text when short, `...`-elided when long).
   Prefer script fences for program construction and anything a reader
   should paste and run.
-- Output containing blank lines (full program renders with a `#show`
-  block, multi-segment renders) reads badly as a doctest (`<BLANKLINE>`
-  markers) — keep the text-fence-plus-assert pattern there. Text fences
-  are never verified by CI: any load-bearing claim in one needs an
-  adjacent assert or doctest.
+- Blank lines in output are written as themselves — never spell
+  `<BLANKLINE>`. The harness inserts doctest's marker for you, so a full
+  program render (which always carries a blank line before its `#show`
+  block) is doctestable and reads on the page exactly as it prints.
+  Trailing blank lines are ignored (a fence cannot express them), so
+  `print(program.render())` is written the way a reader would type it.
+  Version strings are elided with `...` (ELLIPSIS is on).
+- Text fences are NEVER verified by CI. Anything load-bearing that a page
+  displays — above all generated ASP — belongs in a doctest, not a text
+  fence: a picture of output that nothing checks will eventually lie.
 - Asserts pin properties (validity, key lines present), never exact solver
   output (enumeration order is not stable). Error wording is not API:
   full messages in doctests are fine (docs *should* update when a message

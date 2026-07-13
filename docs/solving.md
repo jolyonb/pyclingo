@@ -84,17 +84,19 @@ N = Variable("N")
 menu = ASPProgram()
 menu.fact(*(Item(name=n) for n in ["a", "b", "c"]))
 menu.choose(Choice(Chosen(name=N), condition=Item(name=N)).at_least(1))
+```
 
-result = menu.solve()
-some = list(islice(result, 2))      # take two models; the rest are never computed
-assert len(some) == 2
-assert result.models_yielded == 2 and not result.exhausted
-result.close()                      # finalizes the flags and statistics
-
-assert len(list(menu.solve())) == 7  # all non-empty subsets of three items
-
-first = menu.solve().first()         # any one of the seven
-assert 1 <= len(first.atoms(Chosen)) <= 3
+```python
+>>> result = menu.solve()
+>>> some = list(islice(result, 2))   # take two models; the rest are never computed
+>>> len(some), result.models_yielded, result.exhausted
+(2, 2, False)
+>>> result.close()                   # finalizes the flags and statistics
+>>> len(list(menu.solve()))          # all non-empty subsets of three items
+7
+>>> first = menu.solve().first()     # any one of the seven
+>>> 1 <= len(first.atoms(Chosen)) <= 3
+True
 ```
 
 Every call to `solve()` renders and grounds a fresh clingo Control, so
@@ -124,10 +126,12 @@ Reads are plain Python: a `Field[str]` field comes back as a real `str`, a
 [Writes and reads](predicates.md#writes-and-reads).
 
 ```python
-model = menu.solve().first()
-names = sorted(atom.name for atom in model.atoms(Chosen))
-assert all(isinstance(name, str) for name in names)   # typed reads: plain str
-assert names and set(names) <= {"a", "b", "c"}
+>>> model = menu.solve().first()
+>>> names = sorted(atom.name for atom in model.atoms(Chosen))
+>>> all(isinstance(name, str) for name in names)      # typed reads: plain str
+True
+>>> bool(names) and set(names) <= {"a", "b", "c"}     # which items came back is the solver's call
+True
 ```
 
 Hidden atoms (`show=False` and never shown) are never read back into results
@@ -156,14 +160,18 @@ in every answer set. `brave()` computes the union of all answer sets,
 `cautious()` the intersection; each returns eagerly:
 
 ```python
-possible = menu.brave()             # true in AT LEAST ONE answer set
-assert {atom.name for atom in possible.atoms(Chosen)} == {"a", "b", "c"}
-assert possible.complete            # a PROOF the refinement finished
-
-certain = menu.cautious()           # true in EVERY answer set
-assert certain.complete
-assert len(certain.atoms(Chosen)) == 0   # something must be chosen, but no one item is forced
-assert len(certain.path) >= 1       # every approximation, kept as receipts
+>>> possible = menu.brave()                             # true in AT LEAST ONE answer set
+>>> sorted(atom.name for atom in possible.atoms(Chosen))
+['a', 'b', 'c']
+>>> possible.complete                                   # a PROOF the refinement finished
+True
+>>> certain = menu.cautious()                           # true in EVERY answer set
+>>> certain.complete
+True
+>>> certain.atoms(Chosen)   # something must be chosen, but no one item is forced
+[]
+>>> len(certain.path) >= 1                              # every approximation, kept as receipts
+True
 ```
 
 `BraveConsequences` and `CautiousConsequences` carry their evidence: `.path`
@@ -292,13 +300,13 @@ call: a grounded atom assumes it true, `~atom` assumes it false, for that
 solve only.
 
 ```python
-grounding = menu.ground()           # grounding is paid once
-
-assert len(list(grounding.solve())) == 7
-with_a = list(grounding.solve(assumptions=[Chosen(name="a")]))
-assert len(with_a) == 4             # the subsets containing "a"
-without_a = list(grounding.solve(assumptions=[~Chosen(name="a")]))
-assert len(without_a) == 3          # the non-empty subsets of {"b", "c"}
+>>> grounding = menu.ground()       # grounding is paid once
+>>> len(list(grounding.solve()))
+7
+>>> len(list(grounding.solve(assumptions=[Chosen(name="a")])))    # the subsets containing "a"
+4
+>>> len(list(grounding.solve(assumptions=[~Chosen(name="a")])))   # the non-empty subsets of {"b", "c"}
+3
 ```
 
 Assumptions are also accepted directly by `ASPProgram.solve()` and the other
