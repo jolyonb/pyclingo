@@ -67,24 +67,28 @@ class Status(Predicate):
 belt = ASPProgram()
 belt.raw_asp('status("a"). -status("b").', predicates=[Status, -Status])
 rendered = belt.render()
-assert "#show status/1." in rendered
-assert "#show -status/1." in rendered
-
 model = belt.solve().first()
-assert sorted(a.render() for a in model.atoms(Status)) == ['-status("b")', 'status("a")']
+```
+
+```python
+>>> "#show status/1." in rendered
+True
+>>> "#show -status/1." in rendered
+True
+>>> sorted(a.render() for a in model.atoms(Status))
+['-status("b")', 'status("a")']
 ```
 
 Forgetting the seatbelt is loud, not silent — an undeclared signature fails
 the ground with a teaching error naming it:
 
 ```python
-mystery = ASPProgram()
-mystery.raw_asp("hidden_gem(7).")
-try:
-    mystery.solve().first()
-    raise AssertionError("expected a ValueError")
-except ValueError as e:
-    assert "never declared" in str(e) and "hidden_gem/1" in str(e)
+>>> mystery = ASPProgram()
+>>> mystery.raw_asp("hidden_gem(7).")
+>>> mystery.solve().first()
+Traceback (most recent call last):
+  ...
+ValueError: The grounded program contains predicates never declared to aspalchemy: hidden_gem/1. raw_asp blocks must declare every predicate occurring in their text via predicates=[...]; ...
 ```
 
 Visibility stays under your control as usual: declare the class with
@@ -106,12 +110,11 @@ state crosses block boundaries. An early version let an unterminated `%*`
 smuggle a `#const` past the guard in a later block; the rejection is the fix.
 
 ```python
-scratch = ASPProgram()
-try:
-    scratch.raw_asp("%* this comment never closes")
-    raise AssertionError("expected a ValueError")
-except ValueError as e:
-    assert "lexically self-contained" in str(e)
+>>> scratch = ASPProgram()
+>>> scratch.raw_asp("%* this comment never closes")
+Traceback (most recent call last):
+  ...
+ValueError: raw_asp() text opens a %* block comment that never closes: every raw block must be lexically self-contained. ...
 ```
 
 The same rule means a `#script` block must open and close within ONE raw
@@ -138,11 +141,10 @@ error message:
 - `#include` — it's Python; use Python. Read the file and pass its text.
 
 ```python
-try:
-    scratch.raw_asp("#const width = 9.")
-    raise AssertionError("expected a ValueError")
-except ValueError as e:
-    assert "define_constant()" in str(e)
+>>> scratch.raw_asp("#const width = 9.")
+Traceback (most recent call last):
+  ...
+ValueError: raw_asp() text contains #const — register it with define_constant() instead: ...
 ```
 
 ## Calling Python during grounding
@@ -226,12 +228,15 @@ projected.choose(Choice(Audited()))
 projected.raw_asp("#project pick/1.")
 
 grounded = projected.ground()
-assert len(list(grounded.solve())) == 8  # audited doubles every pick set: inert
+```
 
-grounded.control.configuration.solve.project = "project"
-assert len(list(grounded.solve())) == 4  # one model per pick set
-
-grounded.control.configuration.solver.heuristic = "Domain"  # the #heuristic knob
+```python
+>>> len(list(grounded.solve()))  # audited doubles every pick set: inert
+8
+>>> grounded.control.configuration.solve.project = "project"
+>>> len(list(grounded.solve()))  # one model per pick set
+4
+>>> grounded.control.configuration.solver.heuristic = "Domain"  # the #heuristic knob
 ```
 
 Eight models collapse to four: with projection on, models that differ only in
@@ -253,14 +258,19 @@ from aspalchemy import convert_predicate_to_symbol, convert_symbol_to_predicate
 class Cell(Predicate):
     row: Field[int]
     col: Field[int]
+```
 
-sym = convert_predicate_to_symbol(-Cell(row=1, col=2))
-assert isinstance(sym, clingo.Symbol)
-assert str(sym) == "-cell(1,2)"
-
-back = convert_symbol_to_predicate(sym, {("cell", 2): Cell})
-assert back == -Cell(row=1, col=2)
-assert back.negated and back.row == 1
+```python
+>>> sym = convert_predicate_to_symbol(-Cell(row=1, col=2))
+>>> isinstance(sym, clingo.Symbol)
+True
+>>> str(sym)
+'-cell(1,2)'
+>>> back = convert_symbol_to_predicate(sym, {("cell", 2): Cell})
+>>> back == -Cell(row=1, col=2)
+True
+>>> back.negated, back.row
+(True, 1)
 ```
 
 The reverse direction takes a `(name, arity) -> class` mapping and returns a

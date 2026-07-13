@@ -75,12 +75,13 @@ the offending line:
 ```python
 people = [("sam", 41), ("ada", 12)]
 program.fact(*(Person(name=n, age=a) for n, a in people))
+```
 
-try:
-    program.fact(Person(name=X, age=30))
-    raise AssertionError("fact() should have refused a variable")
-except ValueError as e:
-    assert "requires grounded predicates" in str(e)
+```python
+>>> program.fact(Person(name=X, age=30))
+Traceback (most recent call last):
+  ...
+ValueError: fact() requires grounded predicates, but person(X, 30) contains variable(s) X. Use when(*conditions).derive(...) to derive predicates.
 ```
 
 ### Rules: when().derive()
@@ -92,15 +93,13 @@ the Python line where it was opened (every statement is stamped with the line
 that authored it — see [source locations](diagnostics.md#source-locations)):
 
 ```python
-Named = Predicate.define("named", ["name"], show=False)
-
-pending = program.when(Person(name=X, age=ANY))
-try:
-    program.render()
-    raise AssertionError("render should have refused the open when()")
-except ValueError as e:
-    assert "incomplete when() statements" in str(e)
-pending.derive(Named(name=X))  # closed; the program renders again
+>>> Named = Predicate.define("named", ["name"], show=False)
+>>> pending = program.when(Person(name=X, age=ANY))
+>>> program.render()
+Traceback (most recent call last):
+  ...
+ValueError: Segment 'Rules' has incomplete when() statements: when(person(X, _)) opened at ...
+>>> pending.derive(Named(name=X))  # closed; the program renders again
 ```
 
 `derive()` is one of five closers. The others: `.choose(choice)` puts a
@@ -125,12 +124,13 @@ it — and the error says so:
 ```python
 program.when(Person(name=ANY, age=Y)).require(Y < 150)
 assert ':- person(_, Y), Y >= 150.' in program.render()
+```
 
-try:
-    program.require(john)
-    raise AssertionError("require() should have refused an atom")
-except TypeError as e:
-    assert "takes a Comparison" in str(e)
+```python
+>>> program.require(john)
+Traceback (most recent call last):
+  ...
+TypeError: require() takes a Comparison, got Person. To make a predicate hold, derive it: when(*conditions).derive(...).
 ```
 
 ## Variables
@@ -165,12 +165,17 @@ loud. The lint is switchable when you disagree:
 Reading = Predicate.define("reading", ["sensor", "value"], show=False)
 
 strict = ASPProgram()
-try:
-    strict.forbid(Reading(sensor=X, value=Y), X > 0)  # Y used exactly once
-    raise AssertionError("the singleton lint should have fired")
-except ValueError as e:
-    assert "Singleton variable" in str(e)
+```
 
+```python
+>>> strict.forbid(Reading(sensor=X, value=Y), X > 0)  # Y used exactly once
+Traceback (most recent call last):
+  ...
+ValueError: Singleton variable(s) Y in rule: :- reading(X, Y), X > 0.
+A variable used exactly once is usually a typo; use ANY for an intentional don't-care.
+```
+
+```python
 loose = ASPProgram(allow_singletons=True)
 loose.forbid(Reading(sensor=X, value=Y), X > 0)  # accepted as written
 ```
@@ -204,13 +209,14 @@ atoms is plain Python equality — see
 ```python
 comparison = X < Y  # a term, not a bool
 assert comparison.render() == "X < Y"
+```
 
-try:
-    if X == Y:
-        pass
-    raise AssertionError("a comparison should refuse to be a bool")
-except TypeError as e:
-    assert "no boolean value" in str(e)
+```python
+>>> if X == Y:
+...     pass
+Traceback (most recent call last):
+  ...
+TypeError: A Comparison (X = Y) has no boolean value: comparison operators on aspalchemy terms build ASP terms rather than evaluating them. ...
 ```
 
 One binding shorthand you will use constantly: `X.in_(pool_or_range)` renders

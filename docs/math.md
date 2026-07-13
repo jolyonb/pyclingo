@@ -48,18 +48,21 @@ associativity explicit).
 from aspalchemy import Number
 
 a, b, c = Number(1), Number(2), Number(3)
+```
 
-# Classic arithmetic: minimal parentheses
-assert (a + b * c).render() == "1 + 2 * 3"
-assert (a - (b - c)).render() == "1 - (2 - 3)"
-
-# Power and bitwise: explicit parentheses, always
-assert (a + b**c).render() == "1 + (2 ** 3)"
-assert (a**b**c).render() == "1 ** (2 ** 3)"
-assert ((a & b) | c).render() == "(1 & 2) ? 3"
-
-# Python parses -2**2 as -(2**2); the rendering preserves that tree
-assert (-(b**b)).render() == "-(2 ** 2)"
+```python
+>>> (a + b * c).render()  # classic arithmetic: minimal parentheses
+'1 + 2 * 3'
+>>> (a - (b - c)).render()
+'1 - (2 - 3)'
+>>> (a + b**c).render()  # power and bitwise: explicit parentheses, always
+'1 + (2 ** 3)'
+>>> (a**b**c).render()
+'1 ** (2 ** 3)'
+>>> ((a & b) | c).render()
+'(1 & 2) ? 3'
+>>> (-(b**b)).render()  # Python parses -2**2 as -(2**2); the tree survives
+'-(2 ** 2)'
 ```
 
 ## Where clingo and Python disagree

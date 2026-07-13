@@ -48,21 +48,18 @@ nothing runs ahead of your consumption. Take what you need:
 for a condition. A whole-stream read (`list(result)`, a bare for-loop)
 enumerates *every* model, which an underconstrained program can make
 effectively endless. This program has no choices, so it provably has exactly
-one answer set and enumerating it all is safe — and the exact assert below
-is legitimate:
+one answer set and enumerating it all is safe — and the exact transcript
+below is legitimate:
 
 ```python
-result = program.solve()
-for model in result:
-    for adult in sorted(model.atoms(Adult), key=lambda atom: atom.render()):
-        print(adult)
-
-assert result.satisfiable and result.exhausted and result.models_yielded == 1
-```
-
-```text
+>>> result = program.solve()
+>>> for model in result:
+...     for adult in sorted(model.atoms(Adult), key=lambda atom: atom.render()):
+...         print(adult)
 adult("john")
 adult("mary")
+>>> result.satisfiable and result.exhausted and result.models_yielded == 1
+True
 ```
 
 `satisfiable`, `exhausted`, and `models_yielded` update as models arrive and
@@ -139,11 +136,10 @@ hidden class raises with the remedy instead of returning an `[]` that would
 read as "none were derived":
 
 ```python
-try:
-    model.atoms(Item)               # Item is show=False
-    raise AssertionError("hidden classes must refuse, not return []")
-except ValueError as e:
-    assert "hidden" in str(e)
+>>> model.atoms(Item)               # Item is show=False
+Traceback (most recent call last):
+  ...
+ValueError: item/1 is hidden (show=False and never shown): hidden atoms are not read back into results ... show() the class, or define it with show=True, to read it.
 ```
 
 Lookup is by exact class (an
@@ -232,9 +228,15 @@ chores.when(Task(name=T)).derive(
 chores.penalize(Assigned(task=T, slot=S), weight=S, terms=[T])  # earlier slots are cheaper
 
 best = chores.optimize()
-assert best.cost == (3,)            # all three tasks land in slot 1
-assert best.proven                  # optimality was PROVED, not assumed
-assert {atom.slot for atom in best.atoms(Assigned)} == {1}
+```
+
+```python
+>>> best.cost                                      # all three tasks land in slot 1
+(3,)
+>>> best.proven                                    # optimality was PROVED, not assumed
+True
+>>> {atom.slot for atom in best.atoms(Assigned)}
+{1}
 ```
 
 `cost` has one entry per surviving priority level, highest first (a
@@ -259,14 +261,12 @@ rather than silently enumerating answer sets the objective was supposed to
 rank:
 
 ```python
-try:
-    chores.solve()
-    raise AssertionError("plain solve() must refuse an optimizing program")
-except ValueError as e:
-    assert "ignore_optimization" in str(e)
-
-everything = list(chores.solve(ignore_optimization=True))
-assert len(everything) == 27        # three slots per task, objective ignored
+>>> chores.solve()
+Traceback (most recent call last):
+  ...
+ValueError: This program optimizes (#minimize/#maximize present). Solve it with optimize(), or pass ignore_optimization=True to enumerate answer sets as if there were no objective.
+>>> len(list(chores.solve(ignore_optimization=True)))   # three slots per task, objective ignored
+27
 ```
 
 `ignore_optimization=True` (clasp's `opt-mode=ignore`) enumerates answer
@@ -311,14 +311,14 @@ Control cannot run overlapping searches, so starting a new solve while a
 previous result is unconsumed raises instead of silently corrupting either:
 
 ```python
-open_result = grounding.solve()
-try:
-    grounding.solve()
-    raise AssertionError("overlapping searches must refuse")
-except RuntimeError as e:
-    assert "still open" in str(e)
-open_result.close()                 # or consume it, or leave its with-block
-assert len(list(grounding.solve())) == 7   # the snapshot solves the same program forever
+>>> open_result = grounding.solve()
+>>> grounding.solve()
+Traceback (most recent call last):
+  ...
+RuntimeError: The previous solve on this grounding is still open; a Control cannot run overlapping searches. Consume the previous result, close() it, leave its with-block, or call abandon() on this grounding.
+>>> open_result.close()                 # or consume it, or leave its with-block
+>>> len(list(grounding.solve()))        # the snapshot solves the same program forever
+7
 ```
 
 `ground()` + assumptions is also the interim answer to incremental solving:

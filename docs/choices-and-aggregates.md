@@ -58,10 +58,15 @@ directly with `choose()`:
 ```python
 class OnCall(Predicate):
     worker: Field[str]
+```
 
-banded = Choice(Assigned(task=T, worker=W), condition=Worker(name=W)).at_least(2).at_most(4)
-assert banded.render() == "2 { assigned(T, W) : worker(W) } 4"
+```python
+>>> banded = Choice(Assigned(task=T, worker=W), condition=Worker(name=W)).at_least(2).at_most(4)
+>>> banded.render()
+'2 { assigned(T, W) : worker(W) } 4'
+```
 
+```python
 # A bare choice: no body, holds unconditionally
 standby = Choice(OnCall(worker=W), condition=Worker(name=W)).at_least(1)
 program.choose(standby)
@@ -81,10 +86,15 @@ class Approve(Predicate):
 
 class Defer(Predicate):
     task: Field[str]
+```
 
-decision = Choice(Approve(task=T)).add(Defer(task=T))
-assert decision.render() == "{ approve(T); defer(T) }"
+```python
+>>> decision = Choice(Approve(task=T)).add(Defer(task=T))
+>>> decision.render()
+'{ approve(T); defer(T) }'
+```
 
+```python
 # Solve and check the choices were honored
 model = program.solve().first()
 for t in ["wiring", "plumbing", "painting"]:
@@ -107,12 +117,10 @@ afterwards would silently rewrite the recorded rule, so instead it raises,
 naming the file and line of the rule that captured it:
 
 ```python
-try:
-    standby.at_most(2)  # standby was captured by program.choose() above
-    raise AssertionError("mutating a captured Choice should have raised")
-except RuntimeError as e:
-    assert "frozen" in str(e)
-    assert "Build a new Choice instead" in str(e)
+>>> standby.at_most(2)  # standby was captured by program.choose() above
+Traceback (most recent call last):
+  ...
+RuntimeError: This Choice was captured by the rule at ... and is frozen; mutating it would silently rewrite the recorded rule. Build a new Choice instead.
 ```
 
 A frozen builder is a value, not a spent cartridge: further rules may capture
@@ -166,14 +174,14 @@ tuples distinct — `Sum((A, X), Person(name=X, age=A))` sums ages, one per
 person, even when two people share an age:
 
 ```python
-from aspalchemy import Max, Sum
-
-A = Variable("A")
-total_age = Sum((A, X), Person(name=X, age=A))
-assert total_age.render() == "#sum{ A, X : person(X, A) }"
-
-oldest = Max(A, Person(name=ANY, age=A))
-assert oldest.render() == "#max{ A : person(_, A) }"
+>>> from aspalchemy import Max, Sum
+>>> A = Variable("A")
+>>> total_age = Sum((A, X), Person(name=X, age=A))
+>>> total_age.render()
+'#sum{ A, X : person(X, A) }'
+>>> oldest = Max(A, Person(name=ANY, age=A))
+>>> oldest.render()
+'#max{ A : person(_, A) }'
 ```
 
 An aggregate never stands alone: it becomes usable by putting it in a
@@ -315,11 +323,10 @@ aspalchemy refuses a `Choice` in body position, and the error says how to
 spell what the body braces actually mean:
 
 ```python
-try:
-    program.forbid(Choice(OnCall(worker=W), condition=Worker(name=W)).at_least(3))
-    raise AssertionError("a Choice in a body should have raised")
-except ValueError as e:
-    assert "cardinality TEST" in str(e)
+>>> program.forbid(Choice(OnCall(worker=W), condition=Worker(name=W)).at_least(3))
+Traceback (most recent call last):
+  ...
+ValueError: A Choice belongs in a rule head, where braces CHOOSE. In a body, clingo's braces mean a cardinality TEST — a different construct aspalchemy spells as a Count comparison: Count(X, condition=...) >= n.
 ```
 
 The test is spelled as a `Count` guard — which is what it is — and it grounds

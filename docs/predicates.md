@@ -23,8 +23,13 @@ class Person(Predicate):
 
 john = Person(name="john", age=30)
 mary = Person(name="mary", age=25)
-assert john.render() == 'person("john", 30)'
-assert john.age == 30  # reads back as a plain int
+```
+
+```python
+>>> john.render()
+'person("john", 30)'
+>>> john.age  # reads back as a plain int
+30
 ```
 
 This is the typed form from [the tutorial](getting-started.md), and it is the
@@ -40,7 +45,11 @@ class Waypoint(Predicate):
     order: PredicateField
 
 stop = Waypoint(label="dock", order=1)
-assert stop.render() == 'waypoint("dock", 1)'
+```
+
+```python
+>>> stop.render()
+'waypoint("dock", 1)'
 ```
 
 The price of the open slot is on the read side: an untyped field reads back
@@ -76,16 +85,14 @@ what each half of the contract looks like at the boundary. A rule term passes
 straight through, a wrong-typed ground value is refused at construction:
 
 ```python
-from aspalchemy import Variable
-
-P, N = Variable("P"), Variable("N")
-assert Score(player=P, points=N).render() == "score(P, N)"  # rule terms pass through
-
-try:
-    Score(player="ada", points="three")
-    raise AssertionError("expected a TypeError")
-except TypeError as e:
-    assert "expects int" in str(e)
+>>> from aspalchemy import Variable
+>>> P, N = Variable("P"), Variable("N")
+>>> Score(player=P, points=N).render()  # rule terms pass through
+'score(P, N)'
+>>> Score(player="ada", points="three")
+Traceback (most recent call last):
+  ...
+TypeError: Field 'points' expects int, got str
 ```
 
 One footnote on the static types: fields are typed by their *ground* schema,
@@ -112,16 +119,21 @@ part of a predicate's identity:
 class HasSymbol(Predicate):
     loc: Field[int]
 
-assert HasSymbol(loc=3).render() == "has_symbol(3)"
-
 class Pipe(Predicate, name="pipe_seg", show=False):
     length: Field[int]
 
-assert Pipe(length=4).render() == "pipe_seg(4)"
-
 GridSymbol = HasSymbol.in_namespace("grid")
-assert GridSymbol(loc=3).render() == "grid_has_symbol(3)"
-assert HasSymbol.in_namespace("grid") is GridSymbol  # clones are cached
+```
+
+```python
+>>> HasSymbol(loc=3).render()
+'has_symbol(3)'
+>>> Pipe(length=4).render()
+'pipe_seg(4)'
+>>> GridSymbol(loc=3).render()
+'grid_has_symbol(3)'
+>>> HasSymbol.in_namespace("grid") is GridSymbol  # clones are cached
+True
 ```
 
 Visibility can also be overridden per program, without touching the class:
@@ -166,9 +178,11 @@ symbolic constant *is* a function of arity zero. (`Predicate.define` is
 covered [below](#dynamic-predicates).) The receipt, side by side:
 
 ```python
-Direction = Predicate.define("direction", ["d"], show=False)
-assert Direction(d=n).render() == "direction(n)"
-assert Direction(d="n").render() == 'direction("n")'
+>>> Direction = Predicate.define("direction", ["d"], show=False)
+>>> Direction(d=n).render()
+'direction(n)'
+>>> Direction(d="n").render()
+'direction("n")'
 ```
 
 There is deliberately no Symbol type: a Python `str` always means a quoted ASP
@@ -185,8 +199,9 @@ When the schema is only known at runtime — generated programs, schemas read
 from configuration — build the same thing dynamically:
 
 ```python
-Edge = Predicate.define("edge", ["a", "b"])
-assert Edge(a=1, b=2).render() == "edge(1, 2)"
+>>> Edge = Predicate.define("edge", ["a", "b"])
+>>> Edge(a=1, b=2).render()
+'edge(1, 2)'
 ```
 
 This is not a second-class citizen: `define()` and the class statement share a
@@ -199,17 +214,15 @@ its atoms don't pickle — the refusal is a teaching error, and the remedy is to
 transport such atoms as rendered text. `copy.deepcopy` still works fine:
 
 ```python
-import copy
-import pickle
-
-atom = Edge(a=1, b=2)
-try:
-    pickle.dumps(atom)
-    raise AssertionError("expected a TypeError")
-except TypeError as e:
-    assert "do not pickle" in str(e)
-
-assert copy.deepcopy(atom) is atom  # atoms are immutable; deepcopy is free
+>>> import copy
+>>> import pickle
+>>> atom = Edge(a=1, b=2)
+>>> pickle.dumps(atom)
+Traceback (most recent call last):
+  ...
+TypeError: edge atoms do not pickle: the class was built at runtime ...
+>>> copy.deepcopy(atom) is atom  # atoms are immutable; deepcopy is free
+True
 ```
 
 ## Classical negation
@@ -244,11 +257,13 @@ genuine contradiction: any program that derives both has no answer sets.
 ```python
 clash = ASPProgram()
 clash.fact(Safe(node="x"), -Safe(node="x"))
-try:
-    clash.solve().first()
-    raise AssertionError("expected UnsatisfiableError")
-except UnsatisfiableError as e:
-    assert "unsatisfiable" in str(e)
+```
+
+```python
+>>> clash.solve().first()
+Traceback (most recent call last):
+  ...
+aspalchemy.exceptions.UnsatisfiableError: first() found no model: the program is unsatisfiable. ...
 ```
 
 (This is different from default negation `~Safe(...)` — "not known to be safe"

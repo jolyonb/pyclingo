@@ -68,14 +68,27 @@ page is one runnable script (zero-fence pages skip visibly). The rules
 that keep this honest:
 
 - The fence must be exactly ` ```python ` — variants (` ```python3 `) are
-  silently decorative. Generated ASP and expected output go in ` ```text `
-  fences, which CI never verifies: every load-bearing claim needs an
-  adjacent assert in a python fence.
+  silently decorative. Two flavors, sharing the page's namespace: a
+  SCRIPT fence (no prompts) execs as-is — the paste-and-run narrative
+  form — and a DOCTEST fence (first line starts with `>>>`) runs through
+  doctest, so the output it shows is verified, not decorative. ELLIPSIS
+  is on globally (`...` matches anything).
+- Prefer doctest fences for receipts: term renders, small deterministic
+  outputs, boolean checks, and refusal demos (show the teaching error as
+  a real traceback — full text when short, `...`-elided when long).
+  Prefer script fences for program construction and anything a reader
+  should paste and run.
+- Output containing blank lines (full program renders with a `#show`
+  block, multi-segment renders) reads badly as a doctest (`<BLANKLINE>`
+  markers) — keep the text-fence-plus-assert pattern there. Text fences
+  are never verified by CI: any load-bearing claim in one needs an
+  adjacent assert or doctest.
 - Asserts pin properties (validity, key lines present), never exact solver
-  output (enumeration order is not stable). Refusal demos are try/except
-  asserting a short key fragment — error wording is not API. Empirical
-  asserts are comparative (A == B), never absolute byte counts; prose probe
-  claims are dated ("probed against clingo 5.8 (YYYY-MM-DD)").
+  output (enumeration order is not stable). Error wording is not API:
+  full messages in doctests are fine (docs *should* update when a message
+  improves), but never assert full prose. Empirical asserts are
+  comparative (A == B), never absolute byte counts; prose probe claims
+  are dated ("probed against clingo 5.8 (YYYY-MM-DD)").
 - Each topic has one home page; elsewhere link, don't re-explain. One
   executable demo per refusal, homed where the reader first hits it.
 - No YAML front matter (the H1 is the page title, via

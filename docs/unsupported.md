@@ -164,14 +164,12 @@ expand disjunctively, so the negated form is true for every `X` — there is
 always some pool member `X` differs from. The teaching error spells the fix:
 
 ```python
-from aspalchemy import Not
-
-X = Variable("X")
-try:
-    Not(X.in_((2, 3)))
-    raise AssertionError("negating a pool comparison must be refused")
-except ValueError as e:
-    assert "pools expand disjunctively" in str(e)   # ...write X != 2, X != 3
+>>> from aspalchemy import Not
+>>> X = Variable("X")
+>>> Not(X.in_((2, 3)))
+Traceback (most recent call last):
+  ...
+ValueError: Negating a pool comparison does not mean 'not in': pools expand disjunctively, ... Write separate conditions instead, e.g. X != 2, X != 3
 ```
 
 The same disjunctive expansion is why `require()` refuses pool comparisons:

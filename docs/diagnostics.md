@@ -42,20 +42,15 @@ T, H = Variable("T"), Variable("H")
 program.when(Task(name=T)).derive(
     Choice(Scheduled(task=T, hour=H), condition=Slot(hour=H)).exactly(1)
 )
-
-# A "fact" with a variable in it is not a fact — and the error says so
-try:
-    program.fact(Scheduled(task=T, hour=9))
-    raise AssertionError("the teaching error did not fire")
-except ValueError as e:
-    assert "requires grounded predicates" in str(e)
-    assert "when(*conditions).derive" in str(e)
 ```
 
-The message, verbatim:
+A "fact" with a variable in it is not a fact — and the error says so:
 
-```text
-fact() requires grounded predicates, but scheduled(T, 9) contains variable(s) T. Use when(*conditions).derive(...) to derive predicates.
+```python
+>>> program.fact(Scheduled(task=T, hour=9))
+Traceback (most recent call last):
+  ...
+ValueError: fact() requires grounded predicates, but scheduled(T, 9) contains variable(s) T. Use when(*conditions).derive(...) to derive predicates.
 ```
 
 It names the offending atom, the variable, and the construct you probably
@@ -81,15 +76,19 @@ the fix goes:
 ```python
 scratch = ASPProgram()
 pending = scratch.when(Slot(hour=H))  # opened, never closed
+```
 
-try:
-    scratch.render()
-    raise AssertionError("the dangling when() was not reported")
-except ValueError as e:
-    assert "incomplete when() statements" in str(e)
-    assert "opened at" in str(e)  # ...naming this file and the line above
+```python
+>>> scratch.render()
+Traceback (most recent call last):
+  ...
+ValueError: Segment 'Rules' has incomplete when() statements: when(slot(H)) opened at ... Complete each with .derive/.choose/.require/.forbid/.penalize.
+```
 
-# A held reference can still be completed — the report clears
+The "opened at" names the file and the line where the `when()` was written.
+A held reference can still be completed — and the report clears:
+
+```python
 class OpenSlot(Predicate):
     hour: Field[int]
 
@@ -271,28 +270,26 @@ with location_override(SourceLocation("puzzle.py", 12)):
     prof_program.fact(*(Item(n=i) for i in range(1, 31)))
 with location_override(SourceLocation("puzzle.py", 13)):
     prof_program.when(Item(n=A), Item(n=B)).derive(Pair(a=A, b=B))
-
-report = prof_program.ground().analyze_grounding()
-assert "pair/2: 900 atoms" in report  # 30 x 30 — the line to rethink
-assert "derived at puzzle.py:13" in report
-print(report)
 ```
 
-```text
+```python
+>>> report = prof_program.ground().analyze_grounding()
+>>> print(report)
 Grounding profile: 930 ground atoms across 2 signatures
   pair/2: 900 atoms — derived at puzzle.py:13
   item/1: 30 atoms — derived at puzzle.py:12
 ```
 
-Counts are gringo's ground truth: atoms simplified away during grounding are
+The top row is the 30 x 30 cross-product: the line to rethink. Counts are gringo's ground truth: atoms simplified away during grounding are
 already gone, and both signs of a signature count together. When you want
 the same data structured rather than printed, `grounding_profile()` returns
 one typed `SignatureGrounding` row per signature — `name`, `arity`,
 `atom_count`, and the `derived_at` locations:
 
 ```python
-profile = prof_program.ground().grounding_profile()
-assert profile[0].name == "pair" and profile[0].atom_count == 900
+>>> profile = prof_program.ground().grounding_profile()
+>>> profile[0].name, profile[0].atom_count
+('pair', 900)
 ```
 
 One blind spot, stated plainly: the report joins on rule *heads*, so a

@@ -521,10 +521,10 @@ picture = [
     for r, line in enumerate(GRID, start=1)
 ]
 assert all(len(row) == 9 for row in picture)
-print("\n".join(picture))
 ```
 
-```text
+```python
+>>> print("\n".join(picture))
 ┌────┐┌─┐
 │┌─┐7│94│
 6│3│││┌┘│

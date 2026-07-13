@@ -276,8 +276,6 @@ and Idaho all border each other, so a triangle of states needs three colors
 is Python, building the variant is a loop body, not a second file:
 
 ```python
-from aspalchemy import UnsatisfiableError
-
 two_color = ASPProgram()
 two_color.fact(*(Edge(a=a, b=b) for a, b in borders))
 two_color.fact(*(Color(color=c) for c in ["red", "green"]))
@@ -287,12 +285,15 @@ two_color.when(Node(name=N)).derive(
     Choice(ColoredNode(name=N, color=C), condition=Color(color=C)).exactly(1)
 )
 two_color.forbid(Edge(a=A, b=B), ColoredNode(name=A, color=C), ColoredNode(name=B, color=C))
+```
 
-try:
-    two_color.solve().first()
-    raise AssertionError("two colors should never suffice here")
-except UnsatisfiableError:
-    print("UNSAT: two colors are not enough for this map")
+Two colors never suffice here, and the solver says so:
+
+```python
+>>> two_color.solve().first()
+Traceback (most recent call last):
+  ...
+aspalchemy.exceptions.UnsatisfiableError: first() found no model: the program is unsatisfiable. ...
 ```
 
 UNSAT is not an error in your code — it's the solver's *proof* that no
@@ -338,10 +339,12 @@ cheapest world:
 
 ```python
 program.penalize(ColoredNode(name=N, color="red"), terms=[N])
+```
 
-best = program.optimize()
-print(f"red states in the best coloring: {best.cost[0]}")
-assert best.cost == (2,)
+```python
+>>> best = program.optimize()
+>>> best.cost  # red states in the best coloring
+(2,)
 ```
 
 `terms=[N]` makes each state a distinct charge — one penalty per red state,
@@ -350,8 +353,8 @@ at 1.
 
 The optimum is provably 2 — the triangle forces a third color somewhere, and
 two red states is the least this map can get away with — which is why the
-assert can pin it: optimal *cost* is unique even when the optimal coloring
-isn't. (`cost` is a tuple — one entry per priority tier, and this program
+transcript above can pin it: optimal *cost* is unique even when the optimal
+coloring isn't. (`cost` is a tuple — one entry per priority tier, and this program
 has one tier — see [Solving and Results](solving.md#optimization).) The
 five aggregates live in
 [Choices and Aggregates](choices-and-aggregates.md); objectives, priorities,
