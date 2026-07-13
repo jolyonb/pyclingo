@@ -7,7 +7,7 @@
 
 **ASPAlchemy is a Python ORM for [clingo](https://potassco.org/clingo/)**: you author Answer Set Programming rules as typed Python objects, it renders them to ASP source, solves through the clingo API, and hands the answer sets back as typed Python values.
 
-## Why ASPAlchemy?
+## Write Clingo using Python
 
 **Your rules are Python objects.** Predicates are classes with typed fields; atoms are instances; rules are built from both. A misspelled field or a missing argument is a type error before clingo ever runs, and the pieces you use over and over live in ordinary Python variables instead of being typed out again each time.
 
@@ -118,7 +118,7 @@ node(N) :- edge(_, N).
 #show colored_node/2.
 ```
 
-**"But the Python is three times longer!"** It is — on a toy. Look at where the length isn't, though: the *rules*, the part ASPAlchemy actually specializes in, are four statements in both versions, line for line. Most of the extra Python is the predicate declarations, and that cost is fixed: it buys typed fields, autocomplete, and typed answers, and it doesn't grow with the problem. The part that does grow is data — and in real use `borders` arrives as `json.load(...)` or a database query, not as facts you retype into a `.lp` file. Scale the map to fifty states and the Python program doesn't change size; the clingo program does. That's the ORM trade, the same one SQLAlchemy makes: a few declarations up front so that the hundredth rule is as safe as the first.
+**"But the Python is three times longer!"** It is — on a toy. Look at where the length isn't, though: the *rules*, the part ASPAlchemy actually specializes in, are four statements in both versions, line for line. Most of the extra Python is the predicate declarations, and that cost is fixed: it buys typed fields, autocomplete, and typed answers, and it doesn't grow with the problem. The part that does grow is data — and in real use `borders` arrives as `json.load(...)` or a database query, not as facts you retype into a `.lp` file. Scale the map to fifty states and the Python program doesn't change size; the clingo program does. That's the ORM trade: you pay for the schema once, and the program you maintain stops growing while the problem it solves keeps going.
 
 ## Why not [clorm](https://github.com/potassco/clorm)?
 

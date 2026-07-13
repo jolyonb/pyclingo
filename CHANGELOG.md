@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.0.2 — 2026-07-12
+
+Documentation and packaging release — no library changes.
+
+- A complete documentation site at
+  [jolyonb.github.io/aspalchemy](https://jolyonb.github.io/aspalchemy/):
+  a tutorial and a worked Numberlink walkthrough for newcomers to ASP; a
+  guide covering predicates, rules, choices and aggregates, solving, and
+  diagnostics; and, for clingo users, a construct-by-construct translation
+  map, an account of what the library deliberately refuses and why, and the
+  escape hatches for when you need the full language. Plus an FAQ and a
+  curated API reference.
+- PyPI metadata: project links, classifiers, and search keywords.
+
 ## 1.0.1 — 2026-07-11
 
 Documentation and packaging release — no library changes.
