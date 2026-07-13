@@ -8,6 +8,40 @@ readme = "README.md"
 requires-python = ">=3.14"
 authors = [{ name = "Jolyon Bloomfield", email = "jolyonb84@gmail.com" }]
 dependencies = ["clingo>=5.8.0,<6"]
+keywords = [
+    "asp",
+    "answer set programming",
+    "clingo",
+    "potassco",
+    "orm",
+    "logic programming",
+    "constraint solving",
+    "combinatorial optimization",
+    "solver",
+    "declarative programming",
+]
+# No "License ::" classifier: the SPDX `license` field above supersedes it (PEP 639)
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Mathematics",
+    "Topic :: Software Development :: Code Generators",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed",
+]
+
+# These become the "Project links" sidebar on PyPI
+[project.urls]
+Documentation = "https://jolyonb.github.io/aspalchemy/"
+Repository = "https://github.com/jolyonb/aspalchemy"
+Changelog = "https://github.com/jolyonb/aspalchemy/blob/main/CHANGELOG.md"
+Issues = "https://github.com/jolyonb/aspalchemy/issues"
 
 [dependency-groups]
 dev = [
