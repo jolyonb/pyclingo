@@ -33,3 +33,6 @@ This is a wishlist of items.
   (multi-shot's usual companion for per-step toggles); ground()+assumptions
   already covers much of that use today, so external support should be
   argued from a concrete need, not completeness.
+
+- **Separate fact/rule files.** It would be nice to be able to separate input
+  data from the rules, rather than always rendering everything together.

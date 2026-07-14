@@ -97,21 +97,29 @@ that keep this honest:
   comparative (A == B), never absolute byte counts.
 - Each topic has one home page; elsewhere link, don't re-explain. One
   executable demo per refusal, homed where the reader first hits it.
+- Prose wraps at 100 characters, not 80. Code inside fences aims to stay
+  under 80, because the site's code blocks scroll horizontally past that —
+  a guideline, not a gate: contorting a line to fit costs more readability
+  than the scrollbar does. Library *output* in a doctest (rendered ASP,
+  error text) is exempt outright — it is what the code prints, so it
+  cannot be rewrapped; elide it with `...` if the width really hurts.
 - No YAML front matter (the H1 is the page title, via
   jekyll-titles-from-headings); filenames lowercase; anchors are kramdown
-  auto-ids, so renaming a linked heading means grepping `docs/` for the
-  old anchor in the same commit. Internal links are relative `.md` paths
+  auto-ids, so renaming a heading silently breaks every inbound link to
+  it. Internal links are relative `.md` paths
   (jekyll-relative-links rewrites them); CHANGELOG is not in the site —
   link it absolutely. The docs are self-contained: never lean on the root
   README for content (the pitch lives on `index.md`, the clorm positioning
   on `clingo-map.md#positioning`) — the README is the PyPI/GitHub
   storefront, so keep the two tellings in sync when either changes.
-- Drift tripwires: `docs/clingo-map.md` ends in a CI-pinned assert block,
-  and `test_architecture.py` checks that every `__all__` symbol appears in
+- Drift tripwires: `docs/clingo-map.md` ends in a CI-pinned assert block;
+  `test_architecture.py` checks that every `__all__` symbol appears in
   `docs/reference.md` with `##` sections mirroring the `__all__`
-  categories. If a refusal is lifted or a construct ships, update
-  `docs/unsupported.md` and `docs/clingo-map.md` in the same commit (see
-  the release section below).
+  categories; and `test_doc_links.py` checks every internal link and
+  `#anchor` in the README and `docs/*.md` (plus the layout's nav), so a
+  renamed heading or page fails CI instead of rotting a link. If a refusal
+  is lifted or a construct ships, update `docs/unsupported.md` and
+  `docs/clingo-map.md` in the same commit (see the release section below).
 
 Preview locally before pushing (needs Homebrew Ruby — the `github-pages`
 gem itself requires an EOL Ruby, so the Gemfile uses Jekyll 4 with the

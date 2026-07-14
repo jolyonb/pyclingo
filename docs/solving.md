@@ -282,10 +282,7 @@ sets as if the program had no objective, for that solve only — and it
 requires an objective to ignore, raising on a program without one rather
 than passing vacuously. If what you actually want is every model within a
 cost budget, see
-[Cost-budget enumeration](unsupported.md#cost-budget-enumeration); for a
-gentler introduction to objectives, the tutorial's
-[Count and prefer](getting-started.md#count-and-prefer) builds one on the
-map-coloring program.
+[Cost-budget enumeration](unsupported.md#cost-budget-enumeration).
 
 ## Ground once, solve many
 
@@ -371,10 +368,7 @@ The same evidence is available as `SolveResult.unsat_core` once a search has
 `UnsatisfiableError` too. It is *a* core, not necessarily a minimal one:
 clasp promises it contains a conflict, nothing more. A core only exists
 relative to assumptions — which is why this section lives beside the
-grounding story, where assumption-driven questioning is the workflow. For
-UNSAT as a plain outcome (no assumptions, just an overconstrained program),
-see the tutorial's
-[When there's no answer](getting-started.md#when-theres-no-answer).
+grounding story, where assumption-driven questioning is the workflow.
 
 ## Statistics and messages
 

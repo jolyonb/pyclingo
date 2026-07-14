@@ -57,8 +57,7 @@ worker("grace").
 ```
 
 For each task `T`, pick exactly one `assigned` atom, drawing `W` from the
-workers — [the tutorial reads this shape word by
-word](getting-started.md#choose-exactly-one-color) if it is new to you. The
+workers. The
 three cardinality methods render the way clingo spells them: `exactly(1)` is
 `{ ... } = 1`, `at_least(2).at_most(4)` is `2 { ... } 4`, and with no bounds
 at all the subset is unconstrained. A choice that needs no body goes in

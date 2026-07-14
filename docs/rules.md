@@ -161,7 +161,7 @@ uppercase letter. Two shorthands cover the common cases: the module-level `V`
 is `Variable("Room")`, no declaration preamble — and `ANY` is the anonymous
 variable `_` for a
 don't-care position, as in the `Edge(a=N, b=ANY)` rules of
-[the tutorial](getting-started.md#derive-rules). gringo — clingo's grounder,
+[the tutorial](getting-started.md#derive-new-facts-with-rules). gringo — clingo's grounder,
 the component that instantiates rules — accepts `_X`-style don't-warn names;
 aspalchemy deliberately refuses them: one underscore means anonymous,
 full stop — use `ANY`.
