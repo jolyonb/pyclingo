@@ -6,6 +6,7 @@ theme: jekyll-theme-primer
 # preview (see Gemfile) behaves like the real build.
 plugins:
   - jekyll-seo-tag
+  - jekyll-sitemap
   - jekyll-github-metadata
   - jekyll-optional-front-matter
   - jekyll-readme-index
