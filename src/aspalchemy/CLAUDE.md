@@ -130,7 +130,7 @@ ASP choice constructs with cardinality constraints:
 
 Methods:
 - `add()`: Add elements with conditions
-- `exactly()`, `at_least()`, `at_most()`: Set cardinality constraints
+- `exactly()`, `at_least()`, `at_most()`: return a NEW Choice carrying the bound (the receiver is untouched; legal on a frozen Choice)
 
 #### Aggregates (`aggregates.py`)
 Aggregate functions for ASP:
@@ -344,7 +344,7 @@ findability gate both ways, nested refusal, re-interned field values).
 ## Key Design Principles
 
 1. **Type Safety**: Extensive use of type hints and runtime validation
-2. **Immutability**: Values and Predicates are immutable (cached/frozen); Choice and Aggregate are mutable builders that freeze when a rule captures them — mutating one afterwards raises (naming the capturing rule's file:line) instead of silently rewriting the recorded rule. A frozen builder is a value: further rules may capture and share it. The Value cache interns weakly (dead values are evicted, racing constructors agree on one object under a lock, copy/deepcopy return the interned object), so equal-live-values-are-the-same-object holds under threads, copying, and long-running generation
+2. **Immutability**: Values and Predicates are immutable (cached/frozen); Choice and Aggregate are mutable builders that freeze when a rule captures them — mutating one afterwards raises (naming the capturing rule's file:line) instead of silently rewriting the recorded rule. A frozen builder is a value: further rules may capture and share it. Mutation is exactly `add()` (element accumulation), which returns None as a mutator should. Choice BOUNDS are not mutation: `exactly()`/`at_least()`/`at_most()` return a NEW Choice carrying the bound, so one menu can be bounded several ways for several rules, and bounding a frozen Choice is legal (it rewrites nothing). copy() is the way out of a frozen builder (deep, MUTABLE); copy.copy/copy.deepcopy are faithful (frozen stays frozen), because ASPProgram.copy() deep-copies a program whose rules still hold their captured builders. KNOWN SHARP EDGE, deliberately unguarded: a bound whose result is discarded (`menu.exactly(1)` as a bare statement, then capturing `menu`) records an UNBOUNDED choice — legal ASP that grounds and solves, admitting the answer sets the bound was meant to exclude, and no type checker sees it. A freeze-time guard was tried and REJECTED: a choice that is unbounded in one rule and bounded in another is a legitimate program, so any trigger either blocks it or is order-dependent (fires only when the bound is taken before the unbounded capture). Do not re-add one. The Value cache interns weakly (dead values are evicted, racing constructors agree on one object under a lock, copy/deepcopy return the interned object), so equal-live-values-are-the-same-object holds under threads, copying, and long-running generation
 3. **Composability**: Rich operator overloading for natural expression building
 4. **Validation**: Context-aware validation for rule construction, at the
    line that built the rule. Unsafe-variable rejection is an

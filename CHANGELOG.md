@@ -1,5 +1,55 @@
 # Changelog
 
+## 1.3.0 — 2026-07-14
+
+### Breaking
+
+- **A builder's mutator returns `None`; everything else returns a value.** Five
+  methods used to mutate a builder *and* hand it back for chaining (`add()` on
+  both builders, and `Choice`'s three bounds), so they read as values while
+  behaving as statements. That is now resolved in both directions, and the rule
+  is worth stating plainly: `add()` is the only thing that changes a builder,
+  and it returns nothing. (Program-level verbs that mutate and return something
+  you need — `define_constant()`, `add_segment()` — are unchanged: they hand
+  back a different object, not themselves.)
+
+- **`Choice.add()` and `Aggregate.add()` return `None`** rather than `self`,
+  the same contract as `list.append`. Chained construction
+  (`Choice(p).add(q).add(r)`) becomes a statement per element:
+
+  ```python
+  menu = Choice(p)
+  menu.add(q)
+  menu.add(r)
+  ```
+
+- **A `Choice`'s cardinality bounds no longer mutate it.** `exactly()`,
+  `at_least()` and `at_most()` each return a NEW `Choice` carrying the bound,
+  leaving the one they were called on untouched. So elements are built and
+  bounds are values, and the two halves no longer contradict each other.
+
+  The point is reuse: one menu of elements can be bounded several ways for
+  several rules, which is the common shape of "the data decides how many".
+  Bounding a *frozen* `Choice` is legal for the same reason: a captured choice
+  is fenced against being rewritten, and bounding rewrites nothing. Freezing
+  still fences `add()`, which is the operation that could silently change a
+  recorded rule.
+
+### Added
+
+- **`Choice.copy()` and `Aggregate.copy()`**: an independent, *mutable* copy of
+  a builder, with the same elements. This is the way out of a frozen builder —
+  the copy is held by no rule, so building on it cannot rewrite anything already
+  recorded, which is the only thing freezing ever protected. The freeze error
+  now points at it, and the cardinality bounds are built on it.
+
+- Copy semantics are now explicit, and the two kinds differ on purpose:
+  `copy()` unfreezes, while `copy.copy()` and `copy.deepcopy()` are *faithful*
+  (frozen stays frozen, receipt included). The dunders must be faithful because
+  `ASPProgram.copy()` deep-copies a program and the copy's rules still hold
+  their captured builders: unfreezing those would hand back a program whose
+  recorded rules could be silently rewritten.
+
 ## 1.2.0 — 2026-07-13
 
 - `ASPProgram.copy()` and `Segment.copy()` return an independent copy:

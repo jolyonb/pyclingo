@@ -28,7 +28,11 @@ def build_knapsack() -> ASPProgram:
     # Choose at least one of picks 1..4, minimize the sum: optimum is {1}
     program = ASPProgram()
     X = Variable("X")
-    program.choose(Choice(Pick(x=1)).add(Pick(x=2)).add(Pick(x=3)).add(Pick(x=4)).at_least(1))
+    picks = Choice(Pick(x=1))
+    picks.add(Pick(x=2))
+    picks.add(Pick(x=3))
+    picks.add(Pick(x=4))
+    program.choose(picks.at_least(1))
     program.minimize(X, condition=Pick(x=X))
     return program
 
@@ -160,7 +164,10 @@ def test_optimize_under_assumptions() -> None:
 def test_maximize_optimum_reports_negated_cost() -> None:
     program = ASPProgram()
     X = Variable("X")
-    program.choose(Choice(Pick(x=1)).add(Pick(x=2)).add(Pick(x=3)).at_least(1).at_most(1))
+    picks = Choice(Pick(x=1))
+    picks.add(Pick(x=2))
+    picks.add(Pick(x=3))
+    program.choose(picks.at_least(1).at_most(1))
     program.maximize(X, condition=Pick(x=X))
     result = program.optimize()
     assert result.proven
@@ -203,7 +210,10 @@ def build_three_optima() -> ASPProgram:
     # Exactly one pick, every choice costs 1: three optimal models
     program = ASPProgram()
     X = Variable("X")
-    program.choose(Choice(Pick(x=1)).add(Pick(x=2)).add(Pick(x=3)).at_least(1).at_most(1))
+    picks = Choice(Pick(x=1))
+    picks.add(Pick(x=2))
+    picks.add(Pick(x=3))
+    program.choose(picks.at_least(1).at_most(1))
     program.penalize(Pick(x=X))
     return program
 
@@ -266,7 +276,10 @@ def test_bound_starts_the_search_at_a_known_cost() -> None:
 def test_multi_priority_bound_is_priority_keyed() -> None:
     program = ASPProgram()
     X = Variable("X")
-    program.choose(Choice(Pick(x=1)).add(Pick(x=2)).add(Pick(x=3)).at_least(1).at_most(2))
+    picks = Choice(Pick(x=1))
+    picks.add(Pick(x=2))
+    picks.add(Pick(x=3))
+    program.choose(picks.at_least(1).at_most(2))
     program.minimize(1, X, condition=Pick(x=X), priority=2)
     program.minimize(X, condition=Pick(x=X), priority=1)
     grounded = program.ground()
@@ -327,7 +340,9 @@ def test_optimum_levels_keys_cost_by_priority() -> None:
     # by priority name
     program = ASPProgram()
     X = Variable("X")
-    program.choose(Choice(Pick(x=1)).add(Pick(x=2)).at_least(1))
+    picks = Choice(Pick(x=1))
+    picks.add(Pick(x=2))
+    program.choose(picks.at_least(1))
     program.minimize(X, condition=Pick(x=X), priority=2)
     program.minimize(1, X, condition=Pick(x=X), priority=1)
     result = program.optimize()

@@ -815,7 +815,7 @@ class Pool(BasicTerm, ABC):
         raise ValueError(
             "Pools can only be used as arguments to predicates or in comparisons. "
             "For a disjunctive head (a ; b), aspalchemy has no construct: "
-            "Choice(...).at_least(1) covers most uses, raw_asp() the rest."
+            "A Choice with at_least(1) covers most uses, raw_asp() the rest."
         )
 
 

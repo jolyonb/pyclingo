@@ -13,7 +13,8 @@ receipt, common to the mutable builders (Choice, Aggregate) that hold
 these elements.
 """
 
-from typing import ClassVar
+import copy
+from typing import ClassVar, Self
 
 from aspalchemy.core import AggregateBase, Comparison, DefaultNegation, PredicateOccurrence, Term
 from aspalchemy.predicate import Predicate
@@ -29,10 +30,27 @@ class FreezableBuilder:
     builder mutates freely until a rule captures it. A frozen builder is a
     value — further rules may capture and share it — so only mutation is
     fenced, with the capturing rule's line as the receipt.
+
+    Three ways out of a frozen builder, and they are deliberately different:
+
+    - copy(): a fresh, MUTABLE builder with the same elements. No rule holds
+      it, so nothing it does can rewrite a recorded rule. This is what the
+      freeze error points at.
+    - copy.copy() / copy.deepcopy(): FAITHFUL copies — frozen stays frozen,
+      receipt included. ASPProgram.copy() deep-copies a program, and the
+      copy's rules still hold their captured builders: unfreezing those would
+      hand back a program whose recorded rules could be silently rewritten.
+    - Choice bounds (exactly/at_least/at_most): a new bounded Choice, built on
+      copy(), so it comes back mutable too.
     """
 
     # How the mutation error names the builder ("Choice", "aggregate")
     _RECEIPT_NOUN: ClassVar[str]
+
+    # Set by each builder; named here because the copy hooks below must not
+    # share the list (a shallow copy that did would let add() on one reach
+    # the other)
+    _elements: list[ConditionedElement]
 
     _frozen: bool = False
     _captured_at: SourceLocation | None = None
@@ -43,12 +61,56 @@ class FreezableBuilder:
             self._frozen = True
             self._captured_at = capture_location()
 
+    def copy(self) -> Self:
+        """
+        An independent, MUTABLE copy of this builder: same elements, no freeze.
+
+        This is the way out of a frozen builder. The copy is held by no rule,
+        so building on it cannot rewrite anything already recorded — which is
+        the only thing freezing ever protected.
+
+        What stops add() on one from reaching the other is the fresh element
+        LIST (see __copy__, which does only that). Going deep on top of it is
+        belt and braces: the ConditionedElements are immutable today, so
+        sharing them would be safe, but a copy that owns its own is one fewer
+        thing to be careful about later. It stays cheap because the atoms and
+        values inside them are immutable and hand themselves back.
+        """
+        duplicate = copy.deepcopy(self)
+        duplicate._frozen = False
+        duplicate._captured_at = None
+        return duplicate
+
+    def __copy__(self) -> Self:
+        """
+        A faithful copy: frozen stays frozen, receipt and all.
+
+        Deliberately NOT copy()'s behaviour. A copy that lands inside a copied
+        program is still held by that program's rules, and must stay fenced;
+        use copy() to get a builder you may keep building.
+
+        Copies the instance __dict__ only: a subclass declaring __slots__ would
+        lose that state here, while copy() and deepcopy (which go through
+        __reduce_ex__) keep it. No shipped builder has slots, and subclassing
+        them is not a supported surface, so this is noted rather than handled.
+        """
+        duplicate = object.__new__(type(self))
+        duplicate.__dict__.update(self.__dict__)
+        # A new list, so add() on one cannot reach the other. The
+        # ConditionedElements inside ARE shared, which is safe because they are
+        # immutable (slots, no setters, conditions returns a defensive copy) —
+        # copy(), which deep-copies, does not share them.
+        duplicate._elements = list(self._elements)
+        return duplicate
+
     def _require_mutable(self) -> None:
         if self._frozen:
             rule = f"the rule at {self._captured_at.display()}" if self._captured_at is not None else "a rule"
+            noun = self._RECEIPT_NOUN
             raise RuntimeError(
-                f"This {self._RECEIPT_NOUN} was captured by {rule} and is frozen; mutating it would "
-                f"silently rewrite the recorded rule. Build a new {self._RECEIPT_NOUN} instead."
+                f"This {noun} was captured by {rule} and is frozen; mutating it would "
+                f"silently rewrite the recorded rule. Call .copy() for a fresh, mutable "
+                f"{noun} with the same elements, or build a new {noun}."
             )
 
 

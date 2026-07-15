@@ -21,7 +21,8 @@ import textwrap
 
 import pytest
 
-from aspalchemy import ANY, ASPProgram, Field, Predicate, Segment, Variable
+from aspalchemy import ANY, ASPProgram, Choice, Comparison, Count, Field, Predicate, Segment, Variable
+from aspalchemy.program_elements import Rule
 
 N = Variable("N")
 
@@ -257,3 +258,93 @@ def test_an_abandoned_search_does_not_crash_the_interpreter() -> None:
             f"abandoned search crashed the interpreter: exit {completed.returncode} "
             f"(negative or >=128 means a signal; SIGSEGV is the regression)"
         )
+
+
+# --- builders: Choice and Aggregate -----------------------------------------
+#
+# A builder is the one mutable thing a rule can record, so its copy semantics
+# are load-bearing in a way the program's are not: copy() must hand back
+# something a rule does NOT hold (so it may be built on), while copy.copy and
+# copy.deepcopy must be faithful (so a copied program's recorded rules stay
+# fenced). The two must not be conflated.
+
+
+def test_add_returns_none_on_both_builders() -> None:
+    """
+    The contract of 1.3.0: a builder's mutator returns None. Pinned at runtime
+    because the annotation and the behaviour could drift back together — revert
+    both and every call site still works.
+
+    The ignores are the point, not a wart: mypy REFUSES to let this be written
+    without them ("add of Choice does not return a value"), which is the same
+    contract, enforced statically.
+    """
+    X = Variable("X")
+    P = Predicate.define("p_ar", ["x"])
+
+    menu = Choice(P(x=X))
+    assert menu.add(P(x=1)) is None  # type: ignore[func-returns-value]
+
+    tally = Count(X, condition=P(x=X))
+    assert tally.add(1, P(x=1)) is None  # type: ignore[func-returns-value]
+
+
+def test_aggregate_copy_is_mutable_and_its_hooks_are_faithful() -> None:
+    """Same three-way split as Choice — pinned for the second builder too."""
+    program = ASPProgram()
+    X = Variable("X")
+    P, Q = (Predicate.define(name, ["x"]) for name in ("p_ag", "q_ag"))
+
+    tally = Count(X, condition=P(x=X))
+    program.forbid(tally > 1)  # captured: frozen
+
+    fresh = tally.copy()  # copy(): mutable
+    fresh.add(X, Q(x=X))
+    assert fresh.render() == "#count{ X : p_ag(X); X : q_ag(X) }"
+    assert tally.render() == "#count{ X : p_ag(X) }"
+
+    for duplicate in (copy.copy(tally), copy.deepcopy(tally)):  # hooks: faithful
+        assert duplicate._frozen is True
+        with pytest.raises(RuntimeError, match="frozen"):
+            duplicate.add(X, Q(x=X))
+        assert duplicate._elements is not tally._elements
+
+
+def test_copy_carries_the_bounds_across() -> None:
+    P = Predicate.define("p_bc", ["x"])
+    bounded = Choice(P(x=1)).exactly(2)
+    assert bounded.copy().render() == "{ p_bc(1) } = 2"
+
+
+def test_an_aggregate_in_a_rule_body_stays_frozen_across_a_program_copy() -> None:
+    """
+    The head case is pinned above; the BODY case travels a different path
+    through the rule, and is the one a program copy is most likely to reach.
+    """
+    program = ASPProgram()
+    X = Variable("X")
+    P = Predicate.define("p_ab", ["x"])
+
+    tally = Count(X, condition=P(x=X))
+    program.forbid(tally > 1)
+
+    duplicate = program.copy()
+    body_rule = next(iter(duplicate["Rules"]))
+    assert isinstance(body_rule, Rule)
+    held = next(term for term in body_rule.body if isinstance(term, Comparison))
+    aggregate = held.left_term
+    assert isinstance(aggregate, Count)
+    assert aggregate._captured_at == tally._captured_at  # the receipt travels
+    with pytest.raises(RuntimeError, match="frozen"):
+        aggregate.add(X, P(x=1))
+
+
+def test_copy_of_a_frozen_bounded_choice_carries_its_bounds() -> None:
+    program = ASPProgram()
+    P = Predicate.define("p_fb", ["x"])
+    bounded = Choice(P(x=1)).exactly(2)
+    program.choose(bounded)  # frozen, and bounded
+
+    fresh = bounded.copy()
+    fresh.add(P(x=2))  # mutable
+    assert fresh.render() == "{ p_fb(1); p_fb(2) } = 2"  # bounds came across

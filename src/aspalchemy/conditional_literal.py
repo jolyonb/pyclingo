@@ -80,7 +80,7 @@ class ConditionalLiteral(Term):
         if is_in_head:
             raise ValueError(
                 "Conditional literals cannot be used in rule heads — aspalchemy does not "
-                "model disjunctive heads. Choice(...).at_least(1) covers most uses, "
+                "model disjunctive heads. A Choice with at_least(1) covers most uses, "
                 "raw_asp() the rest."
             )
 

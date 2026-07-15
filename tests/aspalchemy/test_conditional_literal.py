@@ -76,7 +76,7 @@ def test_head_rejection_signposts_disjunction() -> None:
     P = Predicate.define("p_disj", ["x"])
     Q = Predicate.define("q_disj", ["x"])
     X = Variable("X")
-    with pytest.raises(ValueError, match=r"Choice\(...\)\.at_least\(1\)"):
+    with pytest.raises(ValueError, match=r"Choice with at_least\(1\)"):
         program.when(Q(x=X)).derive(ConditionalLiteral(P(x=X), Q(x=X)))
 
 

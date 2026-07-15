@@ -1,6 +1,6 @@
 from abc import ABC
 from enum import StrEnum
-from typing import ClassVar, Self
+from typing import ClassVar
 
 from aspalchemy.conditioned_element import ConditionedElement, ConditionType, FreezableBuilder
 from aspalchemy.core import (
@@ -71,9 +71,9 @@ class Aggregate(FreezableBuilder, AggregateBase, ABC):
         self,
         element: TupleTermType | tuple[TupleTermType, ...],
         condition: ConditionType | list[ConditionType] | None = None,
-    ) -> Self:
+    ) -> None:
         """
-        Add an element with optional condition(s); returns self for chaining.
+        Add an element with optional condition(s), in place.
 
         Args:
             element: The value, predicate, or tuple to be aggregated
@@ -84,7 +84,10 @@ class Aggregate(FreezableBuilder, AggregateBase, ABC):
             >>> from aspalchemy import Variable
             >>> X, Y, Z, W = (Variable(n) for n in "XYZW")
             >>> p, q, r = (Predicate.define(name, ["x"]) for name in "pqr")
-            >>> Count(X).add(Y, p(x=Y)).add((Z, W), [q(x=Z), r(x=W)]).render()
+            >>> tally = Count(X)
+            >>> tally.add(Y, p(x=Y))
+            >>> tally.add((Z, W), [q(x=Z), r(x=W)])
+            >>> tally.render()
             '#count{ X; Y : p(Y); Z, W : q(Z), r(W) }'
         """
         self._require_mutable()
@@ -121,8 +124,6 @@ class Aggregate(FreezableBuilder, AggregateBase, ABC):
                     f"ignores (tuple ignored). Lead the tuple with the weight."
                 )
         self._elements.append(ConditionedElement(element_tuple, condition, "aggregate"))
-
-        return self
 
     @property
     def elements(self) -> list[ConditionedElement]:

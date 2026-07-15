@@ -268,7 +268,7 @@ def test_dataclasses_replace_drops_the_sign_as_documented() -> None:
 def test_disjunction_attempt_teaches_the_modeled_spellings() -> None:
     P = Predicate.define("p_disj", ["x"])
     Q = Predicate.define("q_disj", ["x"])
-    with pytest.raises(TypeError, match=r"disjunctive heads.*Choice\(\.\.\.\)\.at_least\(1\)"):
+    with pytest.raises(TypeError, match=r"disjunctive heads.*Choice with at_least\(1\)"):
         P(x=1) | Q(x=1)  # type: ignore[operator]
 
 

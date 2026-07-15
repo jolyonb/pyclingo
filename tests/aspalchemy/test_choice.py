@@ -2,6 +2,7 @@
 Tests for Choice construction guards.
 """
 
+import copy
 import inspect
 import re
 
@@ -9,6 +10,7 @@ import clingo
 import pytest
 
 from aspalchemy import ANY, SUP, ASPProgram, Choice, Count, Not, Number, Predicate, SourceLocation, String, Variable
+from aspalchemy.program_elements import Rule
 
 
 def test_impossible_cardinality_rejected() -> None:
@@ -38,17 +40,26 @@ def test_choice_freezes_when_captured_by_a_rule() -> None:
     X = Variable("X")
     choice = Choice(P(x=X), condition=Q(x=X))
     program.when(Q(x=X)).derive(choice)
-    with pytest.raises(RuntimeError, match="frozen"):
+    # add() MUTATES, and would rewrite the recorded rule: fenced — and the
+    # error must name the way out, which is the only thing that makes it useful
+    with pytest.raises(RuntimeError, match=r"frozen.*\.copy\(\)"):
         choice.add(P(x=X))
-    with pytest.raises(RuntimeError, match="frozen"):
-        choice.at_most(3)
+    # bounding does NOT mutate: it hands back a new Choice, so it is safe on a
+    # frozen one, and the rule that captured this one is untouched
+    bounded = choice.at_most(3)
+    assert bounded is not choice
+    assert bounded.render() == "{ p(X) : q(X) } 3"
+    assert choice.render() == "{ p(X) : q(X) }"
+    assert program.render().count("{ p(X) : q(X) } :- q(X).") == 1
 
 
 def test_choice_builds_freely_before_capture_and_shares_after() -> None:
     program = ASPProgram()
     P, Q, R = (Predicate.define(n, ["x"]) for n in ("p", "q", "r"))
     X = Variable("X")
-    choice = Choice(P(x=X), condition=Q(x=X)).add(R(x=X)).exactly(1)  # chaining pre-capture
+    menu = Choice(P(x=X), condition=Q(x=X))
+    menu.add(R(x=X))
+    choice = menu.exactly(1)  # bounded before capture
     program.when(Q(x=X)).derive(choice)
     program.when(R(x=X)).derive(choice)  # a frozen choice is a value: same choice under a second body
     assert program.render().count("{ p(X) : q(X); r(X) } = 1") == 2
@@ -93,7 +104,124 @@ def test_frozen_choice_error_without_receipt_falls_back(monkeypatch: pytest.Monk
     choice = Choice(P(x=1))
     program.choose(choice)
     with pytest.raises(RuntimeError, match="captured by a rule and is frozen"):
-        choice.at_most(1)
+        choice.add(P(x=2))
+
+
+def test_one_choice_can_be_bounded_several_ways() -> None:
+    """
+    The motivating case: the same menu of elements, a different size per rule.
+    Bounding returns a new Choice, so neither rule can disturb the other — and
+    the unbounded original stays reusable.
+    """
+    program = ASPProgram()
+    P, Q, R = (Predicate.define(name, ["x"]) for name in ("p", "q", "r"))
+    X = Variable("X")
+
+    menu = Choice(P(x=X), condition=Q(x=X))
+    program.when(Q(x=X)).derive(menu.exactly(1))
+    program.when(R(x=X)).derive(menu.exactly(2))
+
+    rules = [line for line in program.render().splitlines() if ":-" in line]
+    assert rules == [
+        "{ p(X) : q(X) } = 1 :- q(X).",
+        "{ p(X) : q(X) } = 2 :- r(X).",
+    ]
+    # the original is untouched: still unbounded, still mutable
+    assert menu.render() == "{ p(X) : q(X) }"
+    menu.add(R(x=X))
+    assert menu.render() == "{ p(X) : q(X); r(X) }"
+
+
+def test_bounding_copies_the_elements() -> None:
+    """A later add() on either side must not reach the other."""
+    P, Q = (Predicate.define(name, ["x"]) for name in ("p", "q"))
+    X = Variable("X")
+
+    menu = Choice(P(x=X))
+    bounded = menu.exactly(1)
+    menu.add(Q(x=X))  # after bounding
+
+    assert bounded.render() == "{ p(X) } = 1"
+    assert menu.render() == "{ p(X); q(X) }"
+
+
+def test_copy_of_a_builder_is_deep_mutable_and_independent() -> None:
+    """copy() is the way out of a frozen builder: same elements, no freeze."""
+    program = ASPProgram()
+    P, Q, R = (Predicate.define(name, ["x"]) for name in ("p_cp", "q_cp", "r_cp"))
+    X = Variable("X")
+
+    menu = Choice(P(x=X), condition=Q(x=X))
+    program.choose(menu)  # captured: frozen
+
+    fresh = menu.copy()
+    fresh.add(R(x=X))  # the copy is mutable...
+
+    assert fresh.render() == "{ p_cp(X) : q_cp(X); r_cp(X) }"
+    assert menu.render() == "{ p_cp(X) : q_cp(X) }"  # ...and the original is untouched
+    assert "{ p_cp(X) : q_cp(X) }." in program.render()  # as is the rule that captured it
+
+    # and it works on an aggregate too
+    tally = Count(X, condition=P(x=X))
+    program.forbid(tally > 1)  # captured: frozen
+    grown = tally.copy()
+    grown.add(X, Q(x=X))
+    assert grown.render() == "#count{ X : p_cp(X); X : q_cp(X) }"
+    assert tally.render() == "#count{ X : p_cp(X) }"
+
+
+def test_copy_hooks_are_faithful_and_do_not_unfreeze() -> None:
+    """
+    copy.copy/copy.deepcopy must preserve the freeze — ASPProgram.copy()
+    deep-copies a program, and the copy's rules still hold their captured
+    builders. Unfreezing those would hand back a program whose recorded rules
+    could be silently rewritten. copy() is the explicit way out; the dunders
+    are not.
+    """
+    program = ASPProgram()
+    P, Q = (Predicate.define(name, ["x"]) for name in ("p_hk", "q_hk"))
+    X = Variable("X")
+
+    menu = Choice(P(x=X), condition=Q(x=X))
+    program.choose(menu)
+
+    for duplicate in (copy.copy(menu), copy.deepcopy(menu)):
+        assert duplicate._frozen is True
+        assert duplicate._captured_at == menu._captured_at
+        with pytest.raises(RuntimeError, match="frozen"):
+            duplicate.add(Q(x=X))
+        # but the element list is never shared, frozen or not
+        assert duplicate._elements is not menu._elements
+
+    # the property that matters: a copied PROGRAM's captured choices stay fenced
+    duplicate_program = program.copy()
+    captured = next(iter(duplicate_program["Rules"]))
+    assert isinstance(captured, Rule)
+    held = captured.head
+    assert isinstance(held, Choice)
+    with pytest.raises(RuntimeError, match="frozen"):
+        held.add(Q(x=X))
+
+
+def test_bounding_a_frozen_choice_hands_back_a_mutable_one() -> None:
+    """
+    Freezing fences the object a rule recorded. The bounded copy is a fresh
+    object no rule holds, so it comes back mutable — you can keep building it
+    before the next rule captures it.
+    """
+    program = ASPProgram()
+    P, Q, R = (Predicate.define(name, ["x"]) for name in ("p_uf", "q_uf", "r_uf"))
+    X = Variable("X")
+
+    menu = Choice(P(x=X), condition=Q(x=X))
+    program.choose(menu)  # captures and freezes menu
+
+    variant = menu.exactly(1)  # bounding a frozen Choice: legal, rewrites nothing
+    variant.add(R(x=X))  # ...and the copy is not frozen
+    program.when(Q(x=X)).derive(variant)
+
+    assert menu.render() == "{ p_uf(X) : q_uf(X) }"  # untouched by either
+    assert "{ p_uf(X) : q_uf(X); r_uf(X) } = 1 :- q_uf(X)." in program.render()
 
 
 def test_negative_cardinality_rejected_for_number_too() -> None:

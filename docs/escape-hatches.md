@@ -243,7 +243,9 @@ class Audited(Predicate):
     pass
 
 projected = ASPProgram()
-projected.choose(Choice(Pick(x=1)).add(Pick(x=2)))
+picks = Choice(Pick(x=1))
+picks.add(Pick(x=2))
+projected.choose(picks)
 projected.choose(Choice(Audited()))
 projected.raw_asp("#project pick/1.")
 

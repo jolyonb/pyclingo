@@ -30,11 +30,17 @@ class Choice(FreezableBuilder, Term):
     - 2 { p(X) : q(X) } 4
     - { p(X) : q(X) } = 3
 
-    A Choice is a mutable builder until a rule captures it, which freezes
-    it. A frozen Choice is a value: further rules may capture it too — the
-    same choice under different bodies — and it renders identically in
-    each. Only mutation is fenced (it would silently rewrite every rule
-    that holds the builder).
+    A Choice accumulates ELEMENTS by mutation — add() appends to this
+    object — and is frozen when a rule captures it, because mutating it
+    afterwards would silently rewrite the recorded rule. A frozen Choice is
+    still a value: further rules may capture it too, and it renders
+    identically in each.
+
+    BOUNDS are different: exactly()/at_least()/at_most() do not mutate, they
+    return a new Choice carrying the bound. So one unbounded choice can be
+    bounded several ways for several rules — the common shape of "the data
+    decides how many" — and bounding a frozen Choice is fine, since nothing
+    it holds is rewritten.
     """
 
     _RECEIPT_NOUN = "Choice"
@@ -62,9 +68,9 @@ class Choice(FreezableBuilder, Term):
         self,
         element: Predicate,
         condition: ConditionType | list[ConditionType] | None = None,
-    ) -> Self:
+    ) -> None:
         """
-        Add another element with optional condition(s); returns self for chaining.
+        Add another element with optional condition(s), in place.
 
         Args:
             element: The predicate that can be chosen
@@ -75,7 +81,10 @@ class Choice(FreezableBuilder, Term):
             >>> from aspalchemy import Predicate, Variable
             >>> X = Variable("X")
             >>> p, q, r, s, t, u = (Predicate.define(name, ["x"]) for name in "pqrstu")
-            >>> Choice(p(x=X)).add(q(x=X), r(x=X)).add(s(x=X), [t(x=X), u(x=X)]).render()
+            >>> menu = Choice(p(x=X))
+            >>> menu.add(q(x=X), r(x=X))
+            >>> menu.add(s(x=X), [t(x=X), u(x=X)])
+            >>> menu.render()
             '{ p(X); q(X) : r(X); s(X) : t(X), u(X) }'
         """
         self._require_mutable()
@@ -83,8 +92,6 @@ class Choice(FreezableBuilder, Term):
             raise TypeError(f"Choice element must be a Predicate, got {type(element).__name__}")
 
         self._elements.append(ConditionedElement((element,), condition, "choice"))
-
-        return self
 
     @staticmethod
     def _validate_cardinality(count: int | Value | Expression, description: str) -> Value | Expression:
@@ -119,56 +126,68 @@ class Choice(FreezableBuilder, Term):
         if isinstance(minimum, Number) and isinstance(maximum, Number) and minimum.value > maximum.value:
             raise ValueError(f"Choice cardinality is impossible: at_least({minimum.value}) > at_most({maximum.value})")
 
+    def _bounded(self, minimum: Value | Expression | None, maximum: Value | Expression | None) -> Self:
+        """
+        A new Choice: these elements, those bounds. The receiver is untouched.
+
+        Bounding is not mutation — it derives a value from a builder — so it
+        works on a frozen Choice too, and one unbounded Choice can be bounded
+        several ways for several rules. copy() does the work, so a bounded
+        Choice comes back mutable and independent, exactly like any other copy.
+        """
+        duplicate = self.copy()
+        duplicate._min_cardinality = minimum
+        duplicate._max_cardinality = maximum
+        return duplicate
+
     def exactly(self, count: CardinalityType) -> Self:
         """
-        Set the exact cardinality (min = max = count); returns self for chaining.
+        A copy of this Choice with an exact cardinality (min = max = count).
 
-        Raises ValueError if cardinality constraints are already set.
+        Returns a NEW Choice; this one is unchanged. That is what lets one
+        `menu` be bounded two ways for two rules — the frequent case of a
+        choice whose size the data decides — and it is why bounding a frozen
+        Choice is allowed: nothing is rewritten.
+
+        Raises ValueError if this Choice already carries cardinality bounds.
         """
-        self._require_mutable()
         count = self._validate_cardinality(count, "Exact cardinality")
 
         if self._min_cardinality is not None or self._max_cardinality is not None:
             raise ValueError("Cardinality constraints are already set")
 
-        self._min_cardinality = count
-        self._max_cardinality = count
-
-        return self
+        return self._bounded(count, count)
 
     def at_least(self, count: CardinalityType) -> Self:
         """
-        Set the minimum cardinality; returns self for chaining.
+        A copy of this Choice with a minimum cardinality; this one is unchanged.
 
-        Raises ValueError if minimum cardinality is already set.
+        Chains: at_least(1).at_most(3) bounds a copy of a copy, and only the
+        last one carries both bounds.
+
+        Raises ValueError if this Choice already carries a minimum.
         """
-        self._require_mutable()
         count = self._validate_cardinality(count, "Minimum cardinality")
 
         if self._min_cardinality is not None:
             raise ValueError("Minimum cardinality is already set")
         self._check_cardinality_possible(minimum=count, maximum=self._max_cardinality)
 
-        self._min_cardinality = count
-
-        return self
+        return self._bounded(count, self._max_cardinality)
 
     def at_most(self, count: CardinalityType) -> Self:
         """
-        Set the maximum cardinality; returns self for chaining.
+        A copy of this Choice with a maximum cardinality; this one is unchanged.
 
-        Raises ValueError if maximum cardinality is already set.
+        Raises ValueError if this Choice already carries a maximum.
         """
-        self._require_mutable()
         count = self._validate_cardinality(count, "Maximum cardinality")
 
         if self._max_cardinality is not None:
             raise ValueError("Maximum cardinality is already set")
         self._check_cardinality_possible(minimum=self._min_cardinality, maximum=count)
 
-        self._max_cardinality = count
-
-        return self
+        return self._bounded(self._min_cardinality, count)
 
     @property
     def elements(self) -> list[ConditionedElement]:

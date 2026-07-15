@@ -101,7 +101,8 @@ class Defer(Predicate):
 ```
 
 ```python
->>> decision = Choice(Approve(task=T)).add(Defer(task=T))
+>>> decision = Choice(Approve(task=T))
+>>> decision.add(Defer(task=T))          # add() mutates, and returns nothing
 >>> decision.render()
 '{ approve(T); defer(T) }'
 ```
@@ -116,24 +117,62 @@ assert len(model.atoms(OnCall)) >= 1
 
 Cardinalities are not limited to literal integers: a `Variable` or
 `Expression` bound in the rule's body works too, so the *data* can decide how
-many atoms to choose — the [Numberlink
-walkthrough](numberlink.md#choose-the-paths) turns exactly that trick into
-one rule doing the work of two.
+many atoms to choose.
+
+## Bounds are values; elements are built
+
+The two halves of a `Choice` behave differently, and the difference is worth
+knowing.
+
+**Elements are built by mutation.** `add()` appends to *this* object, and
+returns nothing — the same contract as `list.append`, so it can never be
+mistaken for a value.
+
+**Bounds are not.** `exactly()`, `at_least()` and `at_most()` do not touch the
+choice they are called on — each hands back a *new* `Choice` carrying the
+bound. That is what lets one menu be bounded two ways:
+
+```python
+>>> menu = Choice(OnCall(worker=W), condition=Worker(name=W))
+>>> weekday, weekend = menu.exactly(1), menu.exactly(2)
+>>> weekday.render()
+'{ on_call(W) : worker(W) } = 1'
+>>> weekend.render()
+'{ on_call(W) : worker(W) } = 2'
+>>> menu.render()   # the original is untouched, and still reusable
+'{ on_call(W) : worker(W) }'
+```
 
 ## Builders freeze
 
-`Choice` (and every aggregate below) is a mutable builder: `add()`,
-`exactly()`, `at_least()`, `at_most()` all mutate and return `self` for
-chaining. The moment a rule captures the builder, it freezes — mutating it
-afterwards would silently rewrite the recorded rule, so instead it raises,
-naming the file and line of the rule that captured it:
+The moment a rule captures a builder it freezes, because *mutating* it
+afterwards would silently rewrite the recorded rule. So `add()` raises, naming
+the file and line of the rule that captured it:
 
 ```python
->>> standby.at_most(2)  # standby was captured by program.choose() above
+>>> standby.add(OnCall(worker=W))  # standby was captured by program.choose() above
 Traceback (most recent call last):
   ...
-RuntimeError: This Choice was captured by the rule at ... and is frozen; mutating it would silently rewrite the recorded rule. Build a new Choice instead.
+RuntimeError: This Choice was captured by the rule at ... and is frozen; mutating it would silently rewrite the recorded rule. Call .copy() for a fresh, mutable Choice with the same elements, or build a new Choice.
 ```
+
+The error names the way out. `copy()` hands back an independent, *mutable*
+builder with the same elements — no rule holds it, so building on it cannot
+rewrite anything already recorded, which is the only thing freezing ever
+protected:
+
+```python
+>>> extended = standby.copy()   # a fresh, mutable Choice
+>>> extended.add(OnCall(worker="hot_spare"))
+>>> extended.render()
+'1 { on_call(W) : worker(W); on_call("hot_spare") }'
+>>> standby.render()            # the captured one is untouched
+'1 { on_call(W) : worker(W) }'
+```
+
+Bounding a frozen choice is fine for the same reason: it rewrites nothing, and
+hands back a new (mutable) choice. `exactly()` and friends are built on
+`copy()`.
 
 A frozen builder is a value, not a spent cartridge: further rules may capture
 and share it, and it renders identically in each — the same choice under

@@ -659,7 +659,7 @@ class Predicate(PredicateBase, Negatable, metaclass=_PredicateMeta):
         """p | q is a disjunction attempt: always raises, teaching the modeled spellings."""
         raise TypeError(
             "aspalchemy does not model disjunctive heads (p | q): "
-            "Choice(...).at_least(1) covers most uses, raw_asp() the rest"
+            "A Choice with at_least(1) covers most uses, raw_asp() the rest"
         )
 
     def __invert__(self) -> DefaultNegation:

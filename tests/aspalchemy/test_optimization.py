@@ -53,7 +53,11 @@ def build_knapsack() -> ASPProgram:
     # Choose at least one of picks 1..4, minimize the sum: optimum is {1}
     program = ASPProgram()
     X = Variable("X")
-    program.choose(Choice(Pick(x=1)).add(Pick(x=2)).add(Pick(x=3)).add(Pick(x=4)).at_least(1))
+    picks = Choice(Pick(x=1))
+    picks.add(Pick(x=2))
+    picks.add(Pick(x=3))
+    picks.add(Pick(x=4))
+    program.choose(picks.at_least(1))
     program.minimize(X, condition=Pick(x=X))
     return program
 
@@ -153,7 +157,9 @@ def test_grounds_cleanly() -> None:
     # The rendered directive is real gringo: grounding succeeds
     program = ASPProgram()
     X = Variable("X")
-    program.choose(Choice(Pick(x=1)).add(Pick(x=2)))
+    picks = Choice(Pick(x=1))
+    picks.add(Pick(x=2))
+    program.choose(picks)
     program.minimize(X, condition=Pick(x=X))
     grounded = program.ground()
     assert "#minimize" in grounded.text
@@ -181,7 +187,9 @@ def test_priority_gaps_are_free() -> None:
     # Priorities are ordinal keys: @3/@1 behaves exactly like dense levels
     program = ASPProgram()
     X = Variable("X")
-    program.choose(Choice(Pick(x=1)).add(Pick(x=2)).at_least(1))
+    picks = Choice(Pick(x=1))
+    picks.add(Pick(x=2))
+    program.choose(picks.at_least(1))
     program.minimize(1, X, condition=Pick(x=X), priority=3)
     program.minimize(X, condition=Pick(x=X), priority=1)
     assert optimal_cost(program) == [1, 1]  # two entries, highest priority first, no phantom @2
@@ -205,7 +213,9 @@ def test_bare_statements_sit_at_priority_zero() -> None:
     # prioritized statements creates distinct levels, bare least important
     program = ASPProgram()
     X = Variable("X")
-    program.choose(Choice(Pick(x=1)).add(Pick(x=2)).at_least(1))
+    picks = Choice(Pick(x=1))
+    picks.add(Pick(x=2))
+    program.choose(picks.at_least(1))
     program.minimize(1, X, condition=Pick(x=X), priority=2)
     program.minimize(X, condition=Pick(x=X))  # bare: level 0
     assert optimal_cost(program) == [1, 1]  # [level 2, level 0], count then sum
@@ -214,7 +224,9 @@ def test_bare_statements_sit_at_priority_zero() -> None:
 def test_native_directive_refuses_solve_and_consequences() -> None:
     program = ASPProgram()
     X = Variable("X")
-    program.choose(Choice(Pick(x=1)).add(Pick(x=2)).at_least(1))
+    picks = Choice(Pick(x=1))
+    picks.add(Pick(x=2))
+    program.choose(picks.at_least(1))
     program.minimize(X, condition=Pick(x=X))
     with pytest.raises(ValueError, match=r"optimize\(\)"):
         program.solve()
@@ -247,7 +259,9 @@ def test_project_shown_refuses_optimization() -> None:
     # projection; the combination is refused at ground
     program = ASPProgram()
     X = Variable("X")
-    program.choose(Choice(Pick(x=1)).add(Pick(x=2)).at_least(1))
+    picks = Choice(Pick(x=1))
+    picks.add(Pick(x=2))
+    program.choose(picks.at_least(1))
     program.minimize(X, condition=Pick(x=X))
     program.project_shown = True
     with pytest.raises(ValueError, match="enumeration order"):
@@ -290,7 +304,10 @@ def test_penalize_is_minimize_in_disguise() -> None:
 
     def build_with(spelling: str) -> ASPProgram:
         program = ASPProgram()
-        program.choose(Choice(Pick(x=1)).add(Pick(x=2)).add(Pick(x=3)).at_least(1))
+        picks = Choice(Pick(x=1))
+        picks.add(Pick(x=2))
+        picks.add(Pick(x=3))
+        program.choose(picks.at_least(1))
         if spelling == "penalize":
             program.penalize(Pick(x=X), weight=X, terms=[X])
         else:
@@ -309,7 +326,9 @@ def test_penalize_is_minimize_in_disguise() -> None:
 def test_penalize_detected_as_optimizing() -> None:
     program = ASPProgram()
     X = Variable("X")
-    program.choose(Choice(Pick(x=1)).add(Pick(x=2)).at_least(1))
+    picks = Choice(Pick(x=1))
+    picks.add(Pick(x=2))
+    program.choose(picks.at_least(1))
     program.penalize(Pick(x=X), weight=X, terms=[X])
     with pytest.raises(ValueError, match=r"optimize\(\)"):
         program.solve()
@@ -459,7 +478,10 @@ def test_penalize_accepts_aggregate_comparisons() -> None:
     # forbid(): aggregate comparisons are legal there
     program = ASPProgram()
     X = Variable("X")
-    program.choose(Choice(Pick(x=1)).add(Pick(x=2)).add(Pick(x=3)))
+    picks = Choice(Pick(x=1))
+    picks.add(Pick(x=2))
+    picks.add(Pick(x=3))
+    program.choose(picks)
     program.penalize(Count(X, condition=Pick(x=X)) >= 2, terms=[])
     assert ":~ #count{ X : pick(X) } >= 2. [1]" in program.render()
     result = program.optimize()
@@ -494,7 +516,9 @@ def test_penalize_accepts_conditional_literals() -> None:
     program = ASPProgram()
     X = Variable("X")
     program.fact(Cell(x=1), Cell(x=2))
-    program.choose(Choice(Covered(x=1)).add(Covered(x=2)))
+    picks = Choice(Covered(x=1))
+    picks.add(Covered(x=2))
+    program.choose(picks)
     program.penalize(
         ConditionalLiteral(Covered(x=X), [Cell(x=X), Covered(x=X)]),
         Covered(x=1),
@@ -512,7 +536,9 @@ def test_auto_terms_exclude_construct_locals() -> None:
     Tag = Predicate.define("tag_at", ["t"])
     program = ASPProgram()
     X, T = Variable("X"), Variable("T")
-    program.choose(Choice(Pick(x=1)).add(Pick(x=2)))
+    picks = Choice(Pick(x=1))
+    picks.add(Pick(x=2))
+    program.choose(picks)
     program.fact(Tag(t=1), Tag(t=2))
     program.penalize(Tag(t=T), Count(X, condition=Pick(x=X)) >= 2)
     assert ':~ tag_at(T), #count{ X : pick(X) } >= 2. [1, "weak-constraint-0", T]' in program.render()
@@ -536,7 +562,9 @@ def test_raw_optimization_gets_ground_truth_guarding_too() -> None:
     # optimization gets the same exact tier guard as native directives
     def build_raw() -> ASPProgram:
         program = ASPProgram()
-        program.choose(Choice(Pick(x=1)).add(Pick(x=2)).at_least(1))
+        picks = Choice(Pick(x=1))
+        picks.add(Pick(x=2))
+        program.choose(picks.at_least(1))
         program.raw_asp("#minimize{ X,X : pick(X) }.", predicates=[Pick])
         return program
 
@@ -603,7 +631,9 @@ def test_vanished_tier_bound_keys_drop_silently() -> None:
     # a hint that cannot prune, not an error
     program = ASPProgram()
     X = Variable("X")
-    program.choose(Choice(Pick(x=1)).add(Pick(x=2)).at_least(1))
+    picks = Choice(Pick(x=1))
+    picks.add(Pick(x=2))
+    program.choose(picks.at_least(1))
     program.minimize(1, X, condition=[Pick(x=X), X > 100], priority=2)  # grounds empty
     program.minimize(X, condition=Pick(x=X), priority=1)
     grounded = program.ground()
@@ -627,7 +657,9 @@ def test_fully_empty_objectives_mean_not_optimizing() -> None:
     # the program does not optimize — solve() works, optimize() teaches
     program = ASPProgram()
     X = Variable("X")
-    program.choose(Choice(Pick(x=1)).add(Pick(x=2)))
+    picks = Choice(Pick(x=1))
+    picks.add(Pick(x=2))
+    program.choose(picks)
     program.minimize(X, condition=[Pick(x=X), X > 100])  # grounds empty
     grounded = program.ground()
     assert len(list(grounded.solve())) == 4  # not optimizing: enumeration allowed
@@ -641,7 +673,9 @@ def test_observer_catches_every_optimization_spelling() -> None:
     # observer sees all three spellings — raw text included
     for raw in ("#minimize{ X,X : pick(X) }.", "#maximize{ X,X : pick(X) }.", ":~ pick(X). [X@0, X]"):
         program = ASPProgram()
-        program.choose(Choice(Pick(x=1)).add(Pick(x=2)).at_least(1))
+        picks = Choice(Pick(x=1))
+        picks.add(Pick(x=2))
+        program.choose(picks.at_least(1))
         program.raw_asp(raw)
         grounded = program.ground()
         assert grounded.optimization_levels == (0,), raw
