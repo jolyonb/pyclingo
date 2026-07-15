@@ -584,9 +584,9 @@ class ASPProgram:
         """Forbid the combination, in the default segment; see Segment.forbid()."""
         self._default_segment().forbid(*conditions)
 
-    def require(self, comparison: Comparison) -> None:
-        """Require a comparison to hold, in the default segment; see Segment.require()."""
-        self._default_segment().require(comparison)
+    def require(self, target: Comparison | Predicate) -> None:
+        """Require a Comparison or atom to hold, in the default segment; see Segment.require()."""
+        self._default_segment().require(target)
 
     def minimize(
         self,

@@ -103,7 +103,7 @@ ValueError: Segment 'Rules' has incomplete when() statements: when(person(X, _))
 
 `derive()` is one of five closers. The others: `.choose(choice)` puts a
 [choice rule](choices-and-aggregates.md#choice-rules) under the conditions;
-`.require(comparison)` demands a comparison hold whenever the conditions do;
+`.require(target)` demands a comparison or an atom hold whenever the conditions do;
 `.forbid(*violation)` forbids extra literals in the situation the conditions
 describe; `.penalize(*violation)` charges a cost instead of forbidding
 ([optimization](solving.md#optimization)). Exactly one closer completes each
@@ -115,10 +115,10 @@ describe; `.penalize(*violation)` charges a cost instead of forbidding
 all the conditions together. It renders as a headless rule — `:- conditions.`
 — which is exactly how clingo spells "this situation must not happen".
 
-`require(comparison)` is the positive spelling for a comparison that must
-hold; it takes exactly one comparison and renders as a `forbid()` of its
-inverse. Only comparisons can be required — to make an *atom* hold, derive
-it — and the error says so:
+`require(target)` is the positive spelling of a constraint — you state what
+must *hold*, and the library writes the `forbid()` of its opposite. A
+comparison flips to its inverse (`require(Y < 150)` forbids `Y >= 150`); an
+atom is required by forbidding its negation (`require(p)` renders `:- not p`).
 
 ```python
 program.when(Person(name=ANY, age=Y)).require(Y < 150)
@@ -145,11 +145,16 @@ named(X) :- person(X, _).
 #show person/2.
 ```
 
+`require()` will not flip a *negated* atom for you: `require(~p)` reads as "p
+must not hold", but the flip would forbid `not not p` — default negation on an
+atom is preserved, not cancelled — which is not `:- p`. When you want an atom
+absent, that is just `forbid(p)`, and the error says so:
+
 ```python
->>> program.require(john)
+>>> program.require(~Person(name="mary", age=25))
 Traceback (most recent call last):
   ...
-TypeError: require() takes a Comparison, got Person. To make a predicate hold, derive it: when(*conditions).derive(...).
+ValueError: require() will not take a negated atom: require(~p) would forbid `not not p`, which is not `:- p`. To require p holds, require(p); to require p does NOT hold, forbid(p).
 ```
 
 ## Variables

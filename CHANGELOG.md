@@ -37,6 +37,14 @@
 
 ### Added
 
+- **`require()` now accepts an atom, not only a comparison.** `require()` states
+  what must hold and writes the constraint forbidding the opposite; that flip
+  now covers predicates as well as comparisons — `require(p)` renders `:- not p`
+  (p must hold), the positive spelling of `forbid(~p)`. A *negated* target is
+  refused: `require(~p)` would flip to `not not p` (default negation on an atom
+  is preserved, not cancelled), which is not `:- p`, so it points you at
+  `forbid(p)` instead.
+
 - **`Choice.copy()` and `Aggregate.copy()`**: an independent, *mutable* copy of
   a builder, with the same elements. This is the way out of a frozen builder —
   the copy is held by no rule, so building on it cannot rewrite anything already

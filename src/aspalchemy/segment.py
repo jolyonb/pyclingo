@@ -8,15 +8,15 @@ choose() adds a bare choice rule. when(*conditions) holds the
 conditions and completes
 with exactly one closer, which adds the conditions as the rule body:
 derive (a rule head — an atom or a choice), choose (a choice head,
-named), require (a comparison the body must satisfy), forbid (extra
-body literals that must not all hold), or penalize (the same as a weak
-constraint). choose, forbid, require, and penalize also exist as flat
-verbs, without a when() context; a flat derive is spelled fact().
+named), require (a comparison or atom the body must satisfy), forbid
+(extra body literals that must not all hold), or penalize (the same as a
+weak constraint). choose, forbid, require, and penalize also exist as
+flat verbs, without a when() context; a flat derive is spelled fact().
 
-Some verbs are readability sugar: require(cmp) is forbid(cmp.inverse()),
-when(*conds).forbid(*extra) renders identically to flat
-forbid(*conds, *extra), and when(*conds).choose(c) is derive(c) — each
-split just names what the statement means.
+Some verbs are readability sugar: require(cmp) is forbid(cmp.inverse())
+and require(p) is forbid(not p), when(*conds).forbid(*extra) renders
+identically to flat forbid(*conds, *extra), and when(*conds).choose(c)
+is derive(c) — each split just names what the statement means.
 """
 
 import copy
@@ -26,7 +26,7 @@ from typing import Self
 
 from aspalchemy.choice import Choice
 from aspalchemy.conditioned_element import ConditionType
-from aspalchemy.core import Comparison, Pool, PredicateOccurrence, Term
+from aspalchemy.core import Comparison, DefaultNegation, Not, Pool, PredicateOccurrence, Term
 from aspalchemy.optimization import (
     Optimization,
     OptimizationDirective,
@@ -230,15 +230,17 @@ class Segment:
         rule = Rule(body=list(conditions), check_singletons=self._check_singletons)
         self._append(rule)
 
-    def require(self, comparison: Comparison) -> None:
+    def require(self, target: Comparison | Predicate) -> None:
         """
-        Require that a comparison holds in every answer set. Takes exactly
-        one Comparison; a conditional requirement is spelled
-        when(*conditions).require(comparison). Sugar for forbidding the
-        inverse comparison.
+        Require that a Comparison or an atom holds in every answer set. A
+        conditional requirement is spelled when(*conditions).require(target).
+
+        Sugar for forbidding the opposite: require(x == 1) forbids `x != 1`,
+        and require(p) forbids `not p` (p must hold). A negated target such as
+        require(~p) is refused — its flip would forbid `not not p`, not `:- p`;
+        to require that p is absent, use forbid(p).
         """
-        target = _required_comparison(comparison)
-        rule = Rule(body=[target.inverse()], check_singletons=self._check_singletons)
+        rule = Rule(body=[_required_body(target)], check_singletons=self._check_singletons)
         self._append(rule)
 
     def penalize(
@@ -575,16 +577,19 @@ class When:
             rule = Rule(head=choice, body=list(self._conditions), check_singletons=self._segment._check_singletons)
             self._complete("choose", rule)
 
-    def require(self, comparison: Comparison) -> None:
+    def require(self, target: Comparison | Predicate) -> None:
         """
-        Require the comparison to hold under the conditions. Takes exactly
-        one Comparison; sugar for forbid(*conditions, comparison.inverse()).
+        Require a Comparison or an atom to hold under the conditions. Sugar
+        for forbid(*conditions, <flip of target>): require(x == 1) forbids
+        `x != 1`, and require(p) forbids `not p` (p must hold). A negated
+        target such as require(~p) is refused — its flip would forbid
+        `not not p`, not `:- p`; to require p is absent, use forbid(p).
         """
         with self._unregister_on_error():
-            target = _required_comparison(comparison)
+            body_literal = _required_body(target)
             self._guard()
             rule = Rule(
-                body=[*self._conditions, target.inverse()],
+                body=[*self._conditions, body_literal],
                 check_singletons=self._segment._check_singletons,
             )
             self._complete("require", rule)
@@ -641,17 +646,49 @@ class When:
             self._complete("penalize", weak)
 
 
-def _required_comparison(target: Comparison) -> Comparison:
-    """The require() operand, with teaching errors for the wrong-type and pool shapes."""
-    if not isinstance(target, Comparison):
-        raise TypeError(
-            f"require() takes a Comparison, got {type(target).__name__}. To make "
-            f"a predicate hold, derive it: when(*conditions).derive(...)."
-        )
-    if isinstance(target.right_term, Pool):
+def _required_body(target: Term) -> Term:
+    """
+    The single body literal that makes `target` a requirement — the flip at
+    the heart of require(). require() says what must HOLD and lets the library
+    write the constraint that forbids the opposite:
+
+    - a Comparison flips to its inverse: require(x == 1) forbids `x != 1`;
+    - a plain atom is required by forbidding its default negation:
+      require(p) is `:- not p` (p must hold).
+
+    require() will NOT flip a negation for you, for two reasons. The mechanical
+    flip of require(~p) forbids `not not p`, and under stable-model semantics
+    `not not p` is not `p` — a second default negation does not cancel the
+    first. And the intent is ambiguous regardless: a required negation could
+    just as well mean "p must be absent", which is forbid(p). Rather than guess,
+    a negated target is refused, and the error offers the two explicit verbs.
+    """
+    if isinstance(target, Comparison):
+        if isinstance(target.right_term, Pool):
+            raise ValueError(
+                "require() cannot invert a pool comparison: pools expand disjunctively, "
+                "so 'X != (2;3)' is true for every X. Write the domain restriction as a "
+                "positive body condition instead."
+            )
+        return target.inverse()
+    if isinstance(target, DefaultNegation):
+        # A plain comparison complements at construction (Not(x == y) is x != y),
+        # so a DefaultNegation here wraps either an atom or an aggregate comparison
+        # (which keeps its "not" wrapper). The two want different advice.
+        if isinstance(target.term, Comparison):
+            raise ValueError(
+                "require() will not take a negated comparison: require(~c) would forbid "
+                "`not not c`, not the complement of c. Write the comparison you want to "
+                "hold directly, e.g. require(count <= 3) rather than require(~(count > 3))."
+            )
         raise ValueError(
-            "require() cannot invert a pool comparison: pools expand disjunctively, "
-            "so 'X != (2;3)' is true for every X. Write the domain restriction as a "
-            "positive body condition instead."
+            "require() will not take a negated atom: require(~p) would forbid `not not p`, "
+            "which is not `:- p`. To require p holds, require(p); to require p does NOT "
+            "hold, forbid(p)."
         )
-    return target
+    if isinstance(target, Predicate):
+        return Not(target)
+    raise TypeError(
+        f"require() takes a Comparison or a Predicate, got {type(target).__name__}. "
+        f"require(p) makes p hold; forbid(p) makes it not hold."
+    )

@@ -44,7 +44,7 @@ construct anyway.
 | `p(a).` (symbolic-constant argument) | the argument is a zero-arity atom: `fact(P(x=a()))` with `a = Predicate.define("a", [])` — a Python `str` would render the quoted string `"a"`, a different value | [Bare atoms](predicates.md#bare-atoms-and-the-one-text-type-design) |
 | `h :- b1, b2.` | `program.when(b1, b2).derive(h)` | [The verbs](rules.md#the-verbs) |
 | `:- b1, b2.` | `program.forbid(b1, b2)` | [The verbs](rules.md#the-verbs) |
-| a comparison that must hold | `program.require(cmp)` — renders as a constraint forbidding the complement | [The verbs](rules.md#the-verbs) |
+| a comparison or atom that must hold | `program.require(cmp)` / `program.require(p)` — the constraint forbidding the opposite; `require(p)` renders `:- not p` | [The verbs](rules.md#the-verbs) |
 | `% comment` | `program.comment(...)`, `section(...)`, `blank_line()` | [Organizing output](rules.md#organizing-output) |
 | `a; b :- c.` (disjunctive heads) | **refused** | [Excluded by philosophy](unsupported.md#excluded-by-philosophy) |
 

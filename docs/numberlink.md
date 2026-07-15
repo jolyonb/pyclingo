@@ -333,24 +333,23 @@ program.when(cell).require(
 
 ## Forbid self-touch
 
-The final constraint we need to put in place is the one forbidding paths from touching themselves.
-We write this as: if two cells are adjacent, and propagate the same number, then they must also be
-connected. Here, we need to be careful about how ASP allows for atoms to be
-derived. We don't want this rule to derive anything; we only want to forbid the rule being violated.
-To do that, we say that whenever two cells are adjacent and propagate the same number, if they are
-NOT connected, then that is forbidden.
+The last rule stops a path from touching itself. Stated positively: if two cells are adjacent and
+carry the same number, then they must be *connected* — the path has to actually step between them,
+rather than run alongside itself. That "must" is a requirement, so we reach for `require()` again —
+this time on a plain atom rather than a comparison:
 
 ```python
 program.section("A path may never touch itself")
-program.forbid(
+program.when(
     Adjacent(cell1=C[1], direction=ANY, cell2=C[2]),
     PropagatedNumber(loc=C[1], number=Num),
     PropagatedNumber(loc=C[2], number=Num),
-    ~Connected(loc1=C[1], loc2=C[2]),
-)
+).require(Connected(loc1=C[1], loc2=C[2]))
 ```
 
-Note the use of negation to represent the lack of connection.
+`require()` on an atom means "this must hold." For clingo readers: it renders as a constraint with
+the requirement flipped to its negation — `:- …, not connected(…)` — so it is the *un*connected
+same-number adjacency that gets forbidden.
 
 ## Extract the solution
 

@@ -200,8 +200,8 @@ ValueError: Negating a pool comparison does not mean 'not in': pools expand disj
 ```
 
 The same disjunctive expansion is why `require()` refuses pool comparisons:
-`require()` works by inverting its comparison into a constraint, and a pool
-comparison has no inverse.
+`require()` on a comparison inverts it into a constraint, and a pool comparison
+has no inverse.
 
 **Aggregates on both sides of one comparison.**
 `#count{ ... } < #count{ ... }` is a clingo syntax error. Refused at

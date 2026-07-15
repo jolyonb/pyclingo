@@ -12,7 +12,7 @@ from typing import Any
 
 import pytest
 
-from aspalchemy import ASPProgram, Choice, Count, Predicate, RangePool, Variable
+from aspalchemy import ASPProgram, Choice, Count, Not, Predicate, RangePool, Variable
 
 X = Variable("X")
 
@@ -142,11 +142,51 @@ def test_require_without_conditions() -> None:
     assert ":- #count{ C : p3(C) } < 2." in program.render()
 
 
-def test_require_rejects_predicates_with_teaching() -> None:
+def test_require_accepts_a_predicate_and_forbids_its_negation() -> None:
+    # require(p) is the positive spelling of `:- not p` — p must hold
     program = ASPProgram()
-    P = Predicate.define("p4", ["x"])
-    with pytest.raises(TypeError, match=r"derive it: when\(\*conditions\)\.derive"):
-        program.require(P(x=1))  # type: ignore[arg-type]
+    P, Q = Predicate.define("p4", ["x"]), Predicate.define("q4", ["x"])
+    X_ = Variable("X")
+    program.when(Q(x=X_)).require(P(x=X_))
+    rules = [line for line in program.render().splitlines() if ":-" in line]
+    assert rules == [":- q4(X), not p4(X)."]
+
+
+def test_require_predicate_checks_rather_than_derives() -> None:
+    # A fact keeps the signature present; require a DIFFERENT instance that is
+    # never true → UNSAT. That proves require CHECKS: derive(P(x=2)) would have
+    # made it true and the program would have solved.
+    program = ASPProgram()
+    P = Predicate.define("p_chk", ["x"], show=False)
+    program.fact(P(x=1))
+    program.require(P(x=2))  # p_chk(2) is never derived → :- not p_chk(2)
+    assert list(program.solve()) == []
+
+
+def test_require_refuses_a_negated_atom() -> None:
+    # require(~p) reads as "p must not hold" but the flip is `not not p`, not
+    # `:- p`; refuse and point at forbid(p)
+    program = ASPProgram()
+    P = Predicate.define("p4n", ["x"])
+    with pytest.raises(ValueError, match=r"negated atom.*not not p.*forbid\(p\)"):
+        program.require(Not(P(x=1)))  # type: ignore[arg-type]
+
+
+def test_require_refuses_a_negated_comparison_with_tailored_advice() -> None:
+    # A negated AGGREGATE comparison keeps its "not" wrapper, so it reaches the
+    # same refusal — but the advice must point at the positive comparison, not
+    # at forbid(p) (which is the atom case's fix, wrong here).
+    program = ASPProgram()
+    P = Predicate.define("p4c", ["x"], show=False)
+    C = Variable("C")
+    with pytest.raises(ValueError, match=r"negated comparison.*not not c.*require\(count <= 3\)"):
+        program.require(Not(Count(C, condition=P(x=C)) > 3))  # type: ignore[arg-type]
+
+
+def test_require_refuses_a_non_term_with_teaching() -> None:
+    program = ASPProgram()
+    with pytest.raises(TypeError, match=r"Comparison or a Predicate.*forbid\(p\)"):
+        program.require(42)  # type: ignore[arg-type]
 
 
 def test_require_rejects_pool_comparisons() -> None:
