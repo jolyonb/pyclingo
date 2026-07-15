@@ -35,14 +35,15 @@ mary = Person(name="mary", age=25)
 This is the typed form from [the tutorial](getting-started.md), and it is the
 default: annotate every field whose ground type you know. When a slot
 genuinely has to hold *anything* — ints, strs, variables, expressions, pools,
-other atoms — there is an untyped fallback, `PredicateField`:
+other atoms — the polymorphic spelling is `Field[PredicateArg]`. Every field is
+a `Field[...]`; `PredicateArg` is just the "any predicate argument" type:
 
 ```python
-from aspalchemy import PredicateField
+from aspalchemy import Field, PredicateArg
 
 class Waypoint(Predicate):
-    label: PredicateField
-    order: PredicateField
+    label: Field[PredicateArg]
+    order: Field[PredicateArg]
 
 stop = Waypoint(label="dock", order=1)
 ```
@@ -52,19 +53,30 @@ stop = Waypoint(label="dock", order=1)
 'waypoint("dock", 1)'
 ```
 
-The price of the open slot is on the read side: an untyped field reads back
-as a wrapped term (`stop.order` is a `Number`, not an `int`), where a typed
-field reads back as plain Python. That trade is the subject of the next
-section. The full declaration surface is catalogued in the
+The open slot costs you static typing and write-time validation — not the read
+shape. `stop.order` reads back as a plain `int`, exactly as a typed field
+would, and the `Number`/`String` term view is always one bracket away:
+
+```python
+>>> stop.order            # plain Python, like every field
+1
+>>> stop["order"]         # the Term view stays a bracket away
+Number(1)
+```
+
+The full declaration surface is catalogued in the
 [API reference](reference.md#declaring-predicates).
 
 ## Writes and reads
 
 Every `Field[int]`, `Field[str]`, or `Field[SomePredicate]` annotation gives
-its slot a contract. Writes accept the ground type *or* rule terms
-(Variables, Expressions), so the same class serves in facts and in rules;
-ground writes are validated per field. Reads are plain typed Python — a
-solution atom's fields come back as real ints and strs, no unwrapping:
+its slot a contract that a `Field[PredicateArg]` slot does not: writes are
+validated against the ground type, and a read is statically that ground type
+rather than the open union. What it does *not* change is the read shape — plain-Python reads
+are uniform across every field. Writes accept the ground type *or* rule terms
+(Variables, Expressions), so the same class serves in facts and in rules; ground
+writes are validated per field. A solution atom's fields come back as real ints
+and strs, no unwrapping:
 
 ```python
 from aspalchemy import ASPProgram, Field, Predicate
@@ -98,11 +110,86 @@ TypeError: Field 'points' expects int, got str
 One footnote on the static types: fields are typed by their *ground* schema,
 so a rule atom like `Score(points=N)` transiently holds a Variable that a type
 checker still calls `int` — reads of non-ground atoms are the one place the
-annotations overpromise. And if you add `Field[...]` to an existing untyped
-schema, every read site changes from wrapped terms to plain values (`atom.points.value`
-becomes `atom.points`) — migrate the reads together with the annotation.
-Reading solutions in bulk is covered in
+annotations overpromise. Because reads are uniform, narrowing an existing
+`Field[PredicateArg]` slot to a typed `Field[...]` only tightens its writes and
+static type — no read site changes. Reading solutions in bulk is covered in
 [Solving and Results](solving.md#reading-models).
+
+The third form, `Field[SomePredicate]`, makes a slot hold another atom, so a
+predicate's argument can itself be a predicate. It is validated and read like
+any field: the write is checked against the nested class, and the read hands
+back a typed instance — `piece.at` is a `Cell`, so `piece.at.row` is a plain
+`int`. This is how a named nested term (`piece(cell(1, 2), ...)`) is modelled,
+rather than an anonymous tuple, which aspalchemy
+[does not admit](unsupported.md#excluded-by-philosophy).
+
+```python
+class Cell(Predicate):
+    row: Field[int]
+    col: Field[int]
+
+class Piece(Predicate):
+    at: Field[Cell]
+    kind: Field[str]
+
+piece = Piece(at=Cell(row=1, col=2), kind="rook")
+```
+
+```python
+>>> piece.render()
+'piece(cell(1, 2), "rook")'
+>>> piece.at.row                  # the nested atom reads back typed
+1
+>>> Piece(at=5, kind="rook")      # a wrong-typed nested slot is refused
+Traceback (most recent call last):
+  ...
+TypeError: Field 'at' expects Cell, got int
+```
+
+## What counts as a field
+
+A predicate's arguments are exactly its `Field[...]` slots (`Field[PredicateArg]`
+included). Every *other* annotation on the class is refused at creation, naming
+the fix — a field you forgot to wrap in `Field[...]` fails loudly here instead
+of silently vanishing from the signature:
+
+```python
+>>> class Broken(Predicate):
+...     name: Field[str]
+...     age: int                  # forgot Field — refused, not dropped
+Traceback (most recent call last):
+  ...
+TypeError: Broken.age is annotated <class 'int'>, which is not a predicate field. ...
+```
+
+Non-argument class data has two supported homes, both untouched by that rule: a
+`ClassVar` for a typed constant, and a bare (unannotated) assignment for
+anything else — an unannotated attribute never enters `__annotations__`, so it
+is never a candidate field:
+
+```python
+from typing import ClassVar
+
+class Task(Predicate):
+    name: Field[str]
+    PRIORITY: ClassVar[int] = 1   # a typed class-level constant
+    tag = "chore"                 # a bare attribute, not an argument
+
+task = Task(name="dishes")
+```
+
+```python
+>>> task.render()                 # only the Field slot is an argument
+'task("dishes")'
+>>> Task.field_names()
+['name']
+>>> Task.PRIORITY, task.tag
+(1, 'chore')
+```
+
+A `ClassVar` may not shadow a `Predicate` member (`render`, `arguments`, and
+the like) — that too is refused, so a helper can never silently break the
+atom's own API.
 
 ## Names, namespaces, and visibility
 

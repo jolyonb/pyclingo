@@ -1,5 +1,63 @@
 # Changelog
 
+## 1.4.0 — 2026-07-15
+
+### Breaking
+
+- **The polymorphic Predicate field is now `Field[PredicateArg]`; `PredicateField` is
+  gone.** Every field is now a `Field[...]`: the "holds anything" slot is
+  spelled `Field[PredicateArg]`, where `PredicateArg` is the exported "any
+  predicate argument" union. The old bare `x: PredicateField` no longer works —
+  rewrite it as `x: Field[PredicateArg]`. (`PredicateField` is removed from the
+  public API; `PredicateArg` replaces it.)
+
+- **A polymorphic slot now reads back plain Python, not a wrapped term.**
+  Reading a `Field[PredicateArg]` field by attribute used to hand back a
+  `Number` or `String`, so callers wrote `atom.order.value` to reach the value.
+  It now reads plain, exactly as a `Field[int]`/`Field[str]` slot always has —
+  `atom.order` *is* the `int`. The `Number`/`String` term view has not gone
+  anywhere; it lives on bracket access, which is unchanged:
+
+  ```python
+  atom.order          # 1        (was Number(1))
+  atom["order"]       # Number(1) (unchanged — the Term view)
+  ```
+
+  Migration: drop the `.value` from attribute reads of polymorphic fields
+  (`atom.order.value` → `atom.order`), or read `atom["order"].value` to keep
+  the term. Typed `Field[...]` fields are unaffected — they already read plain.
+
+- **A predicate's arguments are exactly its `Field[...]` slots; every other
+  annotation is refused.** An annotation that is not a `Field[...]` and not a
+  `ClassVar` now raises at class creation, naming the fix. This makes a
+  forgotten `Field[...]` a loud error instead of a silent one: `age: int` — a
+  bare, untyped field that used to work in 1.3.0 (reading back a wrapped term) —
+  is refused with a pointer to `Field[int]`/`Field[PredicateArg]`, rather than
+  silently changing arity or corrupting reads. Non-argument class data has two
+  supported homes, both unaffected: a `ClassVar` for a typed constant, and a
+  bare *unannotated* assignment for anything else. A `ClassVar` may not shadow a
+  `Predicate` member, and a subclass may only *add* fields — re-declaring an
+  inherited field is refused.
+
+### Changed
+
+- **The read model is now uniform, so `Field[...]` only tightens writes.**
+  Every field — typed or `Field[PredicateArg]` — reads back as plain Python; a
+  typed `Field[...]` annotation adds write-validation and a static ground type,
+  and no longer changes what any read returns. Narrowing a `Field[PredicateArg]`
+  slot to a typed one is a pure tightening with no read-site churn.
+
+- **`Field[PredicateArg]` reads as the value union**
+  (`int | str | Value | Predicate | Expression | Pool`, some narrowing), not
+  `Any`; `Field[Any]` is refused, with a pointer back to `Field[PredicateArg]`.
+
+- **Atoms now `repr()` as plain Python** — `Person(name='ada', age=3)`, not
+  `Person(name=String('ada'), age=Number(3))`. The `Number`/`String` wrappers
+  are internal; `repr` keeps them out. (`str()`/`canonical_str()` — the ASP
+  forms — are unchanged.) `RangePool`/`ExplicitPool` also gained a
+  reconstructable `repr` (`RangePool(1, 5)`, `ExplicitPool([1, 3, 5])`) instead
+  of the default object address.
+
 ## 1.3.0 — 2026-07-14
 
 ### Breaking

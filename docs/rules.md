@@ -18,11 +18,11 @@ terms those verbs accept.
 The examples on this page share one small domain:
 
 ```python
-from aspalchemy import Predicate, PredicateField
+from aspalchemy import Field, Predicate, PredicateArg
 
 class Person(Predicate):
-    name: PredicateField
-    age: PredicateField
+    name: Field[PredicateArg]
+    age: Field[PredicateArg]
 
 john = Person(name="john", age=30)
 mary = Person(name="mary", age=25)

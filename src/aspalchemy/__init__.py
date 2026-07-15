@@ -48,7 +48,7 @@ from .core import (
 from .exceptions import ASPAlchemyError, GroundingError, UnsatisfiableError
 from .operators import ComparisonOperator, Operation
 from .optimization import OptStrategy
-from .predicate import Field, FieldAsTermType, NegatedSignature, Predicate, PredicateField, TupleTermType
+from .predicate import Field, FieldAsTermType, NegatedSignature, Predicate, PredicateArg, TupleTermType
 from .program_elements import ProgramElement, RenderedLine
 from .segment import Segment, When
 from .solve_result import (
@@ -112,7 +112,7 @@ __all__ = [  # noqa: RUF022 (categorized deliberately, not sorted)
     "Predicate",
     "NegatedSignature",
     "Field",
-    "PredicateField",
+    "PredicateArg",
     # Rule-building objects
     "Variable",
     "ANY",

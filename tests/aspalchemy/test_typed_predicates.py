@@ -5,16 +5,16 @@ shared with define().
 
 import pytest
 
-from aspalchemy import ASPProgram, Predicate, PredicateField
+from aspalchemy import ASPProgram, Field, Predicate, PredicateArg
 
 
 class Person(Predicate):
-    name: PredicateField
-    age: PredicateField
+    name: Field[PredicateArg]
+    age: Field[PredicateArg]
 
 
 class Plumbing(Predicate, name="pipe_seg", namespace="grid", show=False):
-    loc: PredicateField
+    loc: Field[PredicateArg]
 
 
 def test_name_derives_from_class_name() -> None:
@@ -42,12 +42,12 @@ def test_schema_validation_fires_at_class_creation() -> None:
     with pytest.raises(ValueError, match="lowercase"):
 
         class Bad(Predicate, name="BadName"):
-            x: PredicateField
+            x: Field[PredicateArg]
 
     with pytest.raises(ValueError, match="shadow"):
 
         class Shadow(Predicate):
-            render: PredicateField  # type: ignore[assignment]
+            render: Field[PredicateArg]  # type: ignore[assignment]
 
 
 def test_nullary_class_syntax() -> None:
@@ -63,7 +63,8 @@ def test_round_trips_typed() -> None:
     model = next(iter(program.solve()))
     people = model.atoms(Person)
     assert people == [Person(name="john", age=30)]
-    assert people[0].age.value == 30  # type: ignore[union-attr]
+    assert people[0].age == 30  # untyped field, now read back as plain Python
+    assert people[0]["age"].value == 30  # the Term view stays on bracket access
 
 
 def test_define_uses_the_same_creation_path() -> None:
@@ -75,6 +76,6 @@ def test_define_uses_the_same_creation_path() -> None:
 
 def test_default_name_snake_cases_the_class_name() -> None:
     class HasSymbol(Predicate, show=False):
-        loc: PredicateField
+        loc: Field[PredicateArg]
 
     assert HasSymbol.get_name() == "has_symbol"

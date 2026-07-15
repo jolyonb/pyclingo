@@ -15,7 +15,7 @@ def test_the_three_representations_carry_the_sign() -> None:
     atom = -P(x=1)
     assert atom.render() == "-p(1)"
     assert atom.canonical_str() == "-p(x=1)"
-    assert repr(atom) == "-p(x=Number(1))"
+    assert repr(atom) == "-p(x=1)"  # plain Python repr; here it coincides with canonical (class is named "p")
 
 
 def test_double_negation_is_identity() -> None:

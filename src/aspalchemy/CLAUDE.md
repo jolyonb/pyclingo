@@ -62,11 +62,35 @@ Key features:
 ### 2. Predicates (`predicate.py`)
 Core building blocks for ASP facts and rules:
 - **Predicate**: Base class using dataclass pattern
-- Class-syntax declaration with statically checked fields; `Field[int]`,
-  `Field[str]`, and `Field[SomePredicate]` annotations add per-field write
-  validation and plain-Python typed reads (solution atoms return real
-  ints/strs). Rule terms (Variables, Expressions) are always accepted on write.
-- Dynamic predicate creation via `Predicate.define()`
+- A predicate's ARGUMENTS are exactly its `Field[...]` slots — EVERY field is a
+  `Field[...]`. `Field[int]`, `Field[str]`, `Field[SomePredicate]` add per-field
+  write validation and a static ground type; `Field[PredicateArg]` is the
+  polymorphic slot (any term, no ground-type gate — still validates int range /
+  string content, rejects bool/tuple). `PredicateArg` is the "any predicate
+  argument" union (a lazy `type` alias up top); `_field_ground_types` recognizes
+  it by identity as the polymorphic marker. `Field[Any]` is refused (points at
+  `Field[PredicateArg]`). Rule terms (Variables, Expressions) are always
+  accepted on write.
+- READS are plain Python for EVERY field, typed or polymorphic (solution atoms
+  return real ints/strs): the Field descriptor unwraps `int`/`str` on write and
+  stores plain values. The `Number`/`String` Term view is reached through
+  bracket access (`atom["x"]`) and `read_as_term()`, never plain attribute
+  access (and `__repr__` reads the plain value too, so atoms repr as
+  `Person(name='ada', age=3)`). So narrowing a `Field[PredicateArg]` slot to a
+  typed `Field[...]` changes writes and static types only — no read site moves.
+- A predicate's arguments are EXACTLY its `Field[...]` slots. Every annotation
+  that is not a `Field[...]` and not a `ClassVar` is REFUSED at class creation
+  (in `__init_subclass__`), naming the fix — a forgotten `Field[...]` fails loud
+  instead of being silently dropped from the signature. Non-argument class data
+  lives in a `ClassVar` (typed constant) or a bare unannotated assignment (never
+  enters `__annotations__`). A `ClassVar` may not shadow a `Predicate` member,
+  and a bare unsubscripted `Field` / a stringified annotation (`from __future__
+  import annotations`) are both refused too.
+- `cls._field_names` (a tuple, cached once at class creation) is the ordered
+  argument list every hot path uses; `dataclasses.fields()` is called only there
+  and in the public `argument_fields()` shim, never per render/eq/repr.
+- Dynamic predicate creation via `Predicate.define()` (list or `None`-valued
+  dict entries become `Field[PredicateArg]` slots)
 - Support for namespacing
 - Show directive management
 

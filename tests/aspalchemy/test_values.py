@@ -293,6 +293,16 @@ def test_explicit_pool_coerces_str_and_int_elements() -> None:
     assert ExplicitPool([1]).render() == "(1)"
 
 
+def test_pool_repr_is_reconstructable() -> None:
+    # repr is Python you could type back — Number/String elements show as plain
+    # values, non-ground bounds/elements by their term repr.
+    X = Variable("X")
+    assert repr(RangePool(1, 5)) == "RangePool(1, 5)"
+    assert repr(RangePool(1, X)) == "RangePool(1, Variable('X'))"
+    assert repr(ExplicitPool([1, 3, 5])) == "ExplicitPool([1, 3, 5])"
+    assert repr(ExplicitPool(["a", "b"])) == "ExplicitPool(['a', 'b'])"
+
+
 def test_explicit_pool_is_grounded() -> None:
     assert ExplicitPool([1, 2]).is_grounded is True
 

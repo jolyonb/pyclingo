@@ -4,7 +4,7 @@ import pickle
 
 import pytest
 
-from aspalchemy import ASPProgram, Comparison, DefaultNegation, Field, Number, Predicate, PredicateField, Variable, pool
+from aspalchemy import ASPProgram, Comparison, DefaultNegation, Field, Number, Predicate, PredicateArg, Variable, pool
 
 
 class CluePred(Predicate):
@@ -13,7 +13,7 @@ class CluePred(Predicate):
 
 
 class UntypedPkl(Predicate):
-    x: PredicateField
+    x: Field[PredicateArg]
 
 
 def test_definition_sites_are_recorded_for_both_syntaxes() -> None:

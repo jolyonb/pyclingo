@@ -10,11 +10,11 @@ aspalchemy program, start with [Your First Program](getting-started.md#solve-and
 instead.
 
 ```python
-from aspalchemy import Predicate, PredicateField
+from aspalchemy import Field, Predicate, PredicateArg
 
 class Person(Predicate):
-    name: PredicateField
-    age: PredicateField
+    name: Field[PredicateArg]
+    age: Field[PredicateArg]
 
 john = Person(name="john", age=30)
 mary = Person(name="mary", age=25)
@@ -122,7 +122,8 @@ answer set; a Consequences' are a statement about every answer set). `atoms(Cls)
 typed instances of one predicate class, `atoms()` with no argument returns
 everything, membership (`atom in model`) and iteration work as you'd expect.
 Reads are plain Python: a `Field[str]` field comes back as a real `str`, a
-`Field[int]` as a real `int` — the full field contract lives in
+`Field[int]` as a real `int`, and a `Field[PredicateArg]` slot the same way — the
+full field contract lives in
 [Writes and reads](predicates.md#writes-and-reads).
 
 ```python

@@ -25,11 +25,13 @@ from aspalchemy.core import (
 )
 from aspalchemy.source_location import SourceLocation, capture_location, capture_origin
 
-# Type aliases. PredicateField is any argument a predicate accepts, and doubles
-# as the field annotation for class-syntax predicates
-type PredicateField = int | str | Value | Predicate | Expression | Pool
+# Type aliases.
+# PredicateArg — every value a predicate argument can hold. The polymorphic
+# field slot is spelled Field[PredicateArg], so EVERY field is a Field[...];
+# _field_ground_types recognizes this exact alias as the polymorphic marker.
+type PredicateArg = int | str | Value | Predicate | Expression | Pool
 # The Term view of a stored field: primitives are wrapped by read_as_term,
-# so int/str never appear here (unlike PredicateField, the write union)
+# so int/str never appear here (unlike the PredicateArg write union)
 type FieldAsTermType = Value | Predicate | Expression | Pool
 # The tuple-term universe shared by aggregates, #minimize/#maximize, and weak
 # constraints — exactly coerce_tuple_term's domain
@@ -63,29 +65,29 @@ def coerce_tuple_term(term: object, noun: str) -> Value | Expression | Predicate
 class Field[T]:
     """
     A typed predicate field: annotate class-syntax fields as Field[int],
-    Field[str], or Field[SomePredicate].
+    Field[str], or Field[SomePredicate]; use Field[PredicateArg] for a slot that
+    must hold anything.
 
     A data descriptor with different read and write types. Writing accepts the
     ground type OR the rule-authoring terms (Variable, Expression, Pool,
-    DefinedConstant), so Person(age=N) works in rules; reading is typed as the
-    ground type, so model.atoms(Person)[0].age is an int to type checkers.
-    Ground values are stored as plain Python values (a Number written here is
-    unwrapped), and writes are validated against the ground type.
+    DefinedConstant), so Person(age=N) works in rules; ground writes are
+    validated and normalized to plain Python (a Number written to an int field
+    is unwrapped and stored as an int). Reading returns the stored plain value,
+    so model.atoms(Person)[0].age is a real int — for EVERY field, typed or
+    polymorphic. The Term view (Number/String wrapping) is reached through
+    square-bracket access (atom["x"]) and read_as_term(); attribute access is
+    always the plain-Python view.
 
     Note the read-type contract: fields are typed by their ground schema. A
     rule atom like Person(age=N) transiently holds the Variable, which a type
     checker will still call int — reads of non-ground atoms are the one place
     the static types overpromise.
-
-    Migration note: an UNTYPED field reads back as a wrapped term (atom.x is
-    a Number), a typed one as the plain Python value (atom.x is an int) — so
-    adding Field[...] to an existing schema changes every read site
-    (atom.x.value breaks). Migrate the reads together with the annotation.
     """
 
     __slots__ = ("_ground_type", "_name")
 
-    def __init__(self, name: str, ground_type: type) -> None:
+    def __init__(self, name: str, ground_type: type | None) -> None:
+        # ground_type is None for a polymorphic (Field[PredicateArg]) slot
         self._name = name
         self._ground_type = ground_type
 
@@ -114,6 +116,8 @@ class Field[T]:
         if isinstance(value, (Variable, Expression, Pool, DefinedConstant)):
             return value
         ground = self._ground_type
+        if ground is None:
+            return self._validated_polymorphic(value)
         if ground is int:
             if isinstance(value, Number):
                 return value.value
@@ -131,30 +135,82 @@ class Field[T]:
             return value
         raise TypeError(f"Field '{self._name}' expects {ground.__name__}, got {type(value).__name__}")
 
-
-def _field_ground_types(cls: type) -> dict[str, type]:
-    """Map field names annotated as Field[...] to their ground types, raising on bad ones."""
-    ground_types: dict[str, type] = {}
-    for field_name, annotation in (cls.__annotations__ or {}).items():
-        if isinstance(annotation, str) and annotation.replace(" ", "").startswith("Field["):
-            # "from __future__ import annotations" stringifies annotations, which
-            # would silently skip descriptor installation — no validation, no
-            # plain-Python reads. Refuse loudly; the future import is unnecessary
-            # on Python 3.14
+    def _validated_polymorphic(self, value: Any) -> Any:
+        """
+        A polymorphic (Field[PredicateArg]) slot: accept any predicate argument, unwrapping the
+        primitive wrappers so the read side is plain Python (Number(5) and 5
+        both store as the int 5), exactly as a typed field would.
+        """
+        if isinstance(value, Number):
+            return value.value
+        if isinstance(value, String):
+            return value.value
+        if isinstance(value, int):
+            return Number(value).value  # rejects bool, validates int32 range
+        if isinstance(value, str):
+            return String(value).value  # validates content
+        if isinstance(value, tuple):
+            # The read side teaches the same idiom for clingo tuples
             raise TypeError(
-                f"Field[...] annotation on {cls.__name__}.{field_name} is a string — "
+                f"Predicate argument {self._name} is the tuple {value!r}, which aspalchemy "
+                f"does not model — wrap it in a named predicate (pair(1, 2) instead of (1, 2))."
+            )
+        if isinstance(value, (Value, Predicate)):
+            return value
+        # The message names Expression and Pool as acceptable because they ARE
+        # valid on the field — but as rule terms they were returned by the guard
+        # at the top of _validated and never reach here, so this branch does not
+        # handle them. Only ground values (and stray types) land on this raise.
+        raise TypeError(
+            f"Predicate argument {self._name} must be a Value, Predicate, Expression, Pool, "
+            f"int or str, got {type(value).__name__}"
+        )
+
+
+# The ready-made Field[PredicateArg] object define() drops into annotations for a
+# polymorphic slot (a plain list, or a None-valued dict entry).
+_POLYMORPHIC_FIELD = Field[PredicateArg]
+
+
+def _field_ground_types(cls: type) -> dict[str, type | None]:
+    """
+    Map the Field[...]-annotated slots to their ground types (None = polymorphic,
+    i.e. Field[PredicateArg]), in declaration order, raising on bad ones. Only OWN
+    annotations are read — inherited fields keep the base's descriptors.
+    """
+    ground_types: dict[str, type | None] = {}
+    for field_name, annotation in (cls.__annotations__ or {}).items():
+        if isinstance(annotation, str):
+            # "from __future__ import annotations" stringifies every annotation,
+            # leaving field descriptors unwired and ClassVars unrecognized —
+            # Predicate needs real annotation objects. Refuse loudly; the future
+            # import is unnecessary on Python 3.14.
+            raise TypeError(
+                f"Annotation on {cls.__name__}.{field_name} is the string {annotation!r} — "
                 f"remove 'from __future__ import annotations' from the defining module "
-                f"(typed fields cannot be wired from stringified annotations)"
+                f"(predicate fields cannot be wired from stringified annotations)"
+            )
+        if annotation is Field:
+            # A bare, unsubscripted Field is always a mistake — it carries no
+            # ground type, so refuse it the way Field[Any] is refused.
+            raise TypeError(
+                f"{cls.__name__}.{field_name} is annotated with a bare Field — it needs a type "
+                f"argument: Field[int], Field[str], Field[SomePredicate], or Field[PredicateArg] "
+                f"for a polymorphic slot."
             )
         if get_origin(annotation) is Field:
             (ground,) = get_args(annotation)
-            if (
-                ground is not int
-                and ground is not str
-                and not (isinstance(ground, type) and issubclass(ground, Predicate))
-            ):
-                raise TypeError(f"Field[...] ground type must be int, str, or a Predicate subclass, got {ground!r}")
-            ground_types[field_name] = ground
+            if ground is int or ground is str or (isinstance(ground, type) and issubclass(ground, Predicate)):
+                ground_types[field_name] = ground
+            elif ground is PredicateArg:
+                ground_types[field_name] = None  # Field[PredicateArg]: a polymorphic slot
+            else:
+                raise TypeError(
+                    f"Field[...] ground type must be int, str, a Predicate subclass, or "
+                    f"PredicateArg (for a polymorphic slot): got {ground!r}. For a slot that "
+                    f"holds anything write Field[PredicateArg] — Field[Any] and hand-written "
+                    f"unions are not accepted."
+                )
     return ground_types
 
 
@@ -238,8 +294,8 @@ class Predicate(PredicateBase, Negatable, metaclass=_PredicateMeta):
     statically:
 
         class Person(Predicate):
-            name: PredicateField
-            age: PredicateField
+            name: Field[str]
+            age: Field[int]
 
     or dynamically via Predicate.define("person", ["name", "age"]) when the
     schema is only known at runtime. Class kwargs set the ASP name (defaults
@@ -264,9 +320,10 @@ class Predicate(PredicateBase, Negatable, metaclass=_PredicateMeta):
     # Default visibility, fixed at class creation. Per-program overrides live in
     # ASPProgram (show/hide/show_when); nothing may mutate this after creation.
     _show: ClassVar[bool] = True
-    # Names of Field[...]-typed slots, whose descriptors validate and store
-    # plain Python values; __post_init__ leaves them alone
-    _descriptor_fields: ClassVar[frozenset[str]] = frozenset()
+    # The argument names in declaration order (inherited + own), cached once at
+    # class creation so rendering/eq/repr never call dataclasses.fields() at
+    # runtime. Every argument is a Field[...] descriptor slot.
+    _field_names: ClassVar[tuple[str, ...]] = ()
     # in_namespace() clones, cached so repeated calls return the same class —
     # two distinct classes sharing a (name, arity) would be a collision. The
     # dict lives in each base class's OWN __dict__ (created on first use,
@@ -282,7 +339,7 @@ class Predicate(PredicateBase, Negatable, metaclass=_PredicateMeta):
     MAX_DEPTH: ClassVar[int] = 250
     _depth: ClassVar[int] = 0
 
-    def __init__(self, *args: PredicateField, **kwargs: PredicateField) -> None:
+    def __init__(self, *args: PredicateArg, **kwargs: PredicateArg) -> None:
         # Satisfies the type checker for dynamically defined classes (type[Predicate]),
         # whose fields checkers cannot know. Never runs for concrete subclasses:
         # the dataclass transform generates their real __init__ (and dataclass()
@@ -313,15 +370,44 @@ class Predicate(PredicateBase, Negatable, metaclass=_PredicateMeta):
         cls._predicate_name = name if name is not None else re.sub(r"(?<!^)(?=[A-Z])", "_", cls.__name__).lower()
         cls._namespace = namespace
         cls._show = show
-        # ClassVar annotations are class-level helpers, not fields: dataclass
-        # excludes them, and so does schema validation
-        declared_fields = [
-            field_name
-            for field_name, annotation in (cls.__annotations__ or {}).items()
-            if get_origin(annotation) is not ClassVar and annotation is not ClassVar
-        ]
-        _validate_schema(cls._predicate_name, namespace, declared_fields)
+        # A predicate's arguments are EXACTLY its Field[...] slots (Field[PredicateArg]
+        # included). ClassVars are class-level helpers, and must not shadow a
+        # Predicate member. ANY OTHER annotation is refused, naming the fix: an
+        # ambiguous `note: str = ...` attribute is a ClassVar or a bare
+        # (unannotated) assignment, never an argument — so nothing is ever
+        # silently dropped from the signature. Everything surviving here is a
+        # Field slot or a ClassVar, both of which dataclass() handles.
         ground_types = _field_ground_types(cls)
+        # A subclass may only ADD fields. Re-declaring an inherited field would
+        # make dataclass() read the base's descriptor (a class attribute) as a
+        # DEFAULT — yielding a leaky "non-default follows default" error, or a
+        # silently-optional field — so refuse it with a teaching message.
+        inherited_fields = {name for base in cls.__mro__[1:] for name in getattr(base, "_field_names", ())}
+        for field_name in ground_types:
+            if field_name in inherited_fields:
+                raise TypeError(
+                    f"{cls.__name__}.{field_name} re-declares the inherited field {field_name!r}; "
+                    f"a predicate subclass may only add fields, not re-type inherited ones."
+                )
+        # Validate all the dataclass fields
+        for field_name, annotation in (cls.__annotations__ or {}).items():
+            if field_name in ground_types:
+                continue
+            if annotation is ClassVar or get_origin(annotation) is ClassVar:
+                if field_name in _RESERVED_FIELD_NAMES:
+                    raise ValueError(f"ClassVar {field_name!r} would shadow a Predicate attribute")
+                continue
+            if annotation is PredicateArg:
+                raise TypeError(
+                    f"{cls.__name__}.{field_name}: a polymorphic slot is spelled Field[PredicateArg], "
+                    f"not a bare PredicateArg (every field is a Field[...])."
+                )
+            raise TypeError(
+                f"{cls.__name__}.{field_name} is annotated {annotation!r}, which is not a predicate "
+                f"field. Arguments must be Field[int], Field[str], Field[SomePredicate], or "
+                f"Field[PredicateArg]; other class data must be a ClassVar or an unannotated attribute."
+            )
+        _validate_schema(cls._predicate_name, namespace, list(ground_types))
         # dataclass() mutates cls in place (adding __init__ etc.) and returns it;
         # no reassignment is needed. repr=False: the generated __repr__ would
         # shadow Predicate's sign-aware one on every subclass
@@ -331,11 +417,13 @@ class Predicate(PredicateBase, Negatable, metaclass=_PredicateMeta):
         cls.__replace__ = Predicate.__replace__  # type: ignore[method-assign]
         # Install the Field descriptors only after dataclass() has run, so it
         # treats these as required fields rather than defaulted ones. Inherited
-        # descriptor fields stay registered so __post_init__ keeps skipping them.
+        # fields keep the base class's descriptors (resolved via the MRO).
         for field_name, ground in ground_types.items():
             descriptor: Field[Any] = Field(field_name, ground)
             setattr(cls, field_name, descriptor)
-        cls._descriptor_fields = cls._descriptor_fields | frozenset(ground_types)
+        # Cache the full ordered argument-name list (inherited + own) once, so no
+        # runtime path pays for dataclasses.fields() again.
+        cls._field_names = tuple(f.name for f in fields(cls))
 
     @classmethod
     def in_namespace(cls, namespace: str) -> type[Self]:
@@ -395,12 +483,13 @@ class Predicate(PredicateBase, Negatable, metaclass=_PredicateMeta):
 
         Args:
             name: The name of the predicate in ASP.
-            field_names: Names for the predicate's argument slots. Pass a dict
+            field_names: Names for the predicate's argument slots. A plain list
+                makes every slot polymorphic (Field[PredicateArg]). Pass a dict
                 mapping names to int, str, or a Predicate subclass to get
-                runtime-typed slots: writes are validated per field (a solution
-                atom carrying the wrong type fails loudly at load) and
-                attribute reads return plain Python values. A None value leaves
-                that slot untyped, for mixed schemas.
+                runtime-typed slots: writes are then validated against the
+                ground type (a solution atom carrying the wrong type fails
+                loudly at load). A None value leaves that slot polymorphic, for
+                mixed schemas. Reads are plain Python either way.
             namespace: Optional namespace prefix for the predicate.
             show: Whether this predicate should be included in the show directive.
 
@@ -439,12 +528,13 @@ class Predicate(PredicateBase, Negatable, metaclass=_PredicateMeta):
         if isinstance(field_names, dict):
             annotations = {
                 # Subscripting with a runtime value is meaningless to mypy but is
-                # exactly what __class_getitem__ does at runtime; None means untyped
-                field_name: Field[ground] if ground is not None else "PredicateField"  # type: ignore[valid-type]
+                # exactly what __class_getitem__ does at runtime; None means the
+                # polymorphic Field[PredicateArg] slot
+                field_name: Field[ground] if ground is not None else _POLYMORPHIC_FIELD  # type: ignore[valid-type]
                 for field_name, ground in field_names.items()
             }
         else:
-            annotations = dict.fromkeys(field_names, "PredicateField")
+            annotations = dict.fromkeys(field_names, _POLYMORPHIC_FIELD)
 
         def set_annotations(class_namespace: dict[str, Any]) -> None:
             class_namespace["__annotations__"] = annotations
@@ -465,31 +555,12 @@ class Predicate(PredicateBase, Negatable, metaclass=_PredicateMeta):
         return cast(type[Self], new_class)
 
     def __post_init__(self) -> None:
-        """Validate all field values and convert literals to appropriate terms."""
+        """Fix the sign and enforce the nesting cap; the Field descriptors already validated writes."""
         # Use object.__setattr__ since the dataclass is frozen. Atoms are born
-        # positive; __neg__ produces the classically negated copy
+        # positive; __neg__ produces the classically negated copy. Every argument
+        # was validated and normalized to plain Python by its Field descriptor on
+        # write, so there is nothing to convert here.
         object.__setattr__(self, "_negated", False)
-        for field_info in self.argument_fields():
-            if field_info.name in type(self)._descriptor_fields:
-                continue  # the Field descriptor already validated and stored this one
-            value = getattr(self, field_info.name)
-
-            # Convert literals to appropriate Value objects
-            if isinstance(value, int):
-                object.__setattr__(self, field_info.name, Number(value))
-            elif isinstance(value, str):
-                object.__setattr__(self, field_info.name, String(value))
-            elif isinstance(value, tuple):
-                # The read side teaches the same idiom for clingo tuples
-                raise TypeError(
-                    f"Predicate argument {field_info.name} is the tuple {value!r}, which aspalchemy "
-                    f"does not model — wrap it in a named predicate (pair(1, 2) instead of (1, 2))."
-                )
-            elif not isinstance(value, (Value, Predicate, Expression, Pool)):
-                raise TypeError(
-                    f"Predicate argument {field_info.name} must be a Value, Predicate, Expression, Pool, int or str, "
-                    f"got {type(value).__name__}"
-                )
 
         # Nesting cap, mirroring Expression.MAX_DEPTH: the tree walkers
         # recurse per level, and a linked-list encoding accumulated in a loop
@@ -497,8 +568,8 @@ class Predicate(PredicateBase, Negatable, metaclass=_PredicateMeta):
         depth = 1 + max(
             (
                 argument._depth
-                for field_info in self.argument_fields()
-                if isinstance(argument := getattr(self, field_info.name), (Predicate, ExplicitPool))
+                for field_name in type(self)._field_names
+                if isinstance(argument := getattr(self, field_name), (Predicate, ExplicitPool))
             ),
             default=0,
         )
@@ -513,22 +584,25 @@ class Predicate(PredicateBase, Negatable, metaclass=_PredicateMeta):
 
     @classmethod
     def argument_fields(cls) -> list[DataclassField]:
-        """Every dataclass field is a predicate argument (underscore names are rejected at class creation)."""
+        """
+        The dataclass Field objects for this predicate's arguments. Kept for
+        callers wanting the field metadata; the hot paths use the cached
+        _field_names tuple instead.
+        """
         return list(fields(cls))
 
     @classmethod
     def field_names(cls) -> list[str]:
         """The predicate's argument names, in declaration order."""
-        return [f.name for f in cls.argument_fields()]
+        return list(cls._field_names)
 
     def read_as_term(self, field_name: str) -> FieldAsTermType:
         """
-        Read a field as a Term: the plain int/str values that Field[...]-typed
-        slots store are wrapped back into Number/String (cached, so this is
-        cheap). All internal machinery and square-bracket access (pred["x"])
-        read through here, keeping everything downstream polymorphic over
-        Term; attribute access (pred.x) on Field-typed slots is the
-        plain-Python view.
+        Read a field as a Term: the plain int/str values that fields store are
+        wrapped back into Number/String (cached, so this is cheap). All internal
+        machinery and square-bracket access (pred["x"]) read through here,
+        keeping everything downstream polymorphic over Term; attribute access
+        (pred.x) is the plain-Python view.
         """
         value = getattr(self, field_name)
         if isinstance(value, int):
@@ -540,11 +614,11 @@ class Predicate(PredicateBase, Negatable, metaclass=_PredicateMeta):
     @property
     def arguments(self) -> list[FieldAsTermType]:
         """Get the values of all argument fields, as Terms."""
-        return [self.read_as_term(f.name) for f in self.argument_fields()]
+        return [self.read_as_term(name) for name in type(self)._field_names]
 
     def __getitem__(self, key: str) -> Any:
         """Access field values by name, as Terms; raises KeyError for unknown fields."""
-        if key not in type(self).__dataclass_fields__:
+        if key not in type(self)._field_names:
             raise KeyError(f"Predicate has no field named '{key}'")
         return self.read_as_term(key)
 
@@ -559,7 +633,7 @@ class Predicate(PredicateBase, Negatable, metaclass=_PredicateMeta):
     @classmethod
     def get_arity(cls) -> int:
         """Returns the arity of the predicate."""
-        return len(cls.argument_fields())
+        return len(cls._field_names)
 
     @classmethod
     def shown_by_default(cls) -> bool:
@@ -651,7 +725,7 @@ class Predicate(PredicateBase, Negatable, metaclass=_PredicateMeta):
         reconstruction is fields-based, no stdlib hook exists) and DOES
         drop the sign — use copy.replace. Both behaviors are pinned.
         """
-        merged = {f.name: getattr(self, f.name) for f in self.argument_fields()} | changes
+        merged = {name: getattr(self, name) for name in type(self)._field_names} | changes
         replaced = type(self)(**merged)
         return -replaced if self.negated else replaced
 
@@ -730,13 +804,13 @@ class Predicate(PredicateBase, Negatable, metaclass=_PredicateMeta):
         repr() is Python, canonical_str() is this explicit form.
         """
         sign = "-" if self.negated else ""
-        argument_fields = self.argument_fields()
-        if not argument_fields:
+        field_names = type(self)._field_names
+        if not field_names:
             return f"{sign}{self.get_name()}()"
         args = ", ".join(
-            f"{f.name}={value.canonical_str() if isinstance(value, Predicate) else value.render()}"
-            for f in argument_fields
-            for value in (self[f.name],)
+            f"{name}={value.canonical_str() if isinstance(value, Predicate) else value.render()}"
+            for name in field_names
+            for value in (self[name],)
         )
         return f"{sign}{self.get_name()}({args})"
 
@@ -747,10 +821,11 @@ class Predicate(PredicateBase, Negatable, metaclass=_PredicateMeta):
     def __repr__(self) -> str:
         """A Python-syntax representation that could recreate this predicate."""
         sign = "-" if self.negated else ""
-        if not self.argument_fields():
+        field_names = type(self)._field_names
+        if not field_names:
             return f"{sign}{self.__class__.__name__}()"
 
-        kwargs = ", ".join(f"{f.name}={self[f.name]!r}" for f in self.argument_fields())
+        kwargs = ", ".join(f"{name}={getattr(self, name)!r}" for name in field_names)
         return f"{sign}{self.__class__.__name__}({kwargs})"
 
 

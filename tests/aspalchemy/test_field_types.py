@@ -5,11 +5,11 @@ plain-Python values on read, rule authoring unimpeded.
 
 import dataclasses
 import types
-from typing import ClassVar
+from typing import Any, ClassVar
 
 import pytest
 
-from aspalchemy import ASPProgram, Field, Number, Predicate, PredicateField, String, Variable
+from aspalchemy import ASPProgram, Field, Number, Predicate, PredicateArg, String, Variable
 
 
 class Clue(Predicate):
@@ -99,11 +99,182 @@ def test_solve_round_trip_returns_plain_values() -> None:
 def test_mixed_field_kinds_in_one_class() -> None:
     class Mixed(Predicate, show=False):
         tag: Field[str]
-        anything: PredicateField  # classic slot keeps the old behavior
+        anything: Field[PredicateArg]  # polymorphic slot: any term in, plain read out
 
     m = Mixed(tag="t", anything=5)
     assert m.tag == "t"
-    assert isinstance(m["anything"], Number)  # classic slot wraps as before
+    assert m.anything == 5 and isinstance(m.anything, int)  # dot read is plain, like any field
+    assert isinstance(m["anything"], Number)  # the Term view stays on bracket access
+
+
+def test_polymorphic_slot_reads_plain_and_unwraps_written_wrappers() -> None:
+    # A Field[PredicateArg] slot reads back plain Python for every write shape: a bare
+    # int/str and an already-wrapped Number/String all land as plain values,
+    # exactly as a typed field would, while brackets keep the Term view.
+    class Poly(Predicate, show=False):
+        x: Field[PredicateArg]
+
+    assert Poly(x=5).x == 5 and isinstance(Poly(x=5).x, int)
+    assert Poly(x="a").x == "a" and isinstance(Poly(x="a").x, str)
+    assert Poly(x=Number(5)).x == 5 and isinstance(Poly(x=Number(5)).x, int)
+    assert Poly(x=String("a")).x == "a" and isinstance(Poly(x=String("a")).x, str)
+    assert isinstance(Poly(x=5)["x"], Number)  # bracket keeps the Term view
+
+
+def test_repr_is_plain_python_canonical_is_the_asp_named_form() -> None:
+    # repr() is what you'd type to recreate the atom — plain values, no Number/
+    # String wrappers leaking out. canonical_str() is the ASP named form. Both
+    # keep the internal wrappers hidden; they differ only in Python vs ASP shape.
+    class Poly(Predicate, show=False):
+        x: Field[PredicateArg]
+        y: Field[PredicateArg]
+
+    p = Poly(x=5, y="hi")
+    assert repr(p) == "Poly(x=5, y='hi')"
+    assert p.canonical_str() == 'poly(x=5, y="hi")'
+
+
+def test_repr_of_a_non_ground_field_uses_the_term_repr() -> None:
+    # A ground field reprs plain; a non-ground one (here a Variable) reprs by
+    # the term's own repr — so repr stays reconstructable in both cases.
+    class Poly(Predicate, show=False):
+        x: Field[PredicateArg]
+
+    assert repr(Poly(x=Variable("X"))) == "Poly(x=Variable('X'))"
+
+
+def test_polymorphic_slot_holds_a_nested_atom_and_rejects_bool() -> None:
+    class Poly(Predicate, show=False):
+        x: Field[PredicateArg]
+
+    inner = Clue(loc="a1", value=7)
+    holder = Poly(x=inner)
+    assert holder.x == inner  # a nested atom passes through and reads back
+    assert holder.render() == 'poly(clue("a1", 7))'
+    with pytest.raises(TypeError):  # bool is not a valid ASP integer, even here
+        Poly(x=True)
+
+
+def test_redeclaring_an_inherited_field_is_refused() -> None:
+    # A subclass may only ADD fields; re-typing an inherited one is refused with
+    # a teaching error (rather than a leaky dataclass "default" collision).
+    class Base(Predicate, show=False):
+        a: Field[int]
+        b: Field[int]
+
+    with pytest.raises(TypeError, match=r"re-declares the inherited field 'a'"):
+
+        class Sub(Base, show=False):
+            a: Field[str]  # type: ignore[assignment]
+
+
+def test_non_field_annotation_is_refused() -> None:
+    # A predicate's arguments are exactly its Field[...] slots. Any other
+    # annotation — a plain type a caller forgot to wrap, defaulted or not — is
+    # refused at class creation, naming the fix, rather than silently dropped
+    # from the signature.
+    with pytest.raises(TypeError, match=r"not a predicate field.*Field\[int\].*Field\[PredicateArg\]"):
+
+        class Tagged(Predicate, show=False):
+            loc: Field[int]
+            note: str = "hi"
+
+    with pytest.raises(TypeError, match="not a predicate field"):
+
+        class Sparse(Predicate, show=False):
+            loc: Field[int]
+            absent: int
+
+
+def test_non_argument_data_uses_classvar_or_a_bare_attribute() -> None:
+    # The supported ways to carry non-argument class data: a ClassVar (typed
+    # constant) or a bare unannotated assignment (which never enters
+    # __annotations__, so it is not a candidate field at all).
+    class Cfg(Predicate, show=False):
+        loc: Field[int]
+        KIND: ClassVar[str] = "grid"
+        helper = 42
+
+    assert Cfg.field_names() == ["loc"] and Cfg.get_arity() == 1
+    cfg = Cfg(loc=3)
+    assert cfg.render() == "cfg(3)"
+    assert Cfg.KIND == "grid" and cfg.helper == 42
+
+
+def test_classvar_shadowing_a_predicate_member_is_refused() -> None:
+    # A ClassVar is allowed, but not one whose name would shadow a Predicate
+    # method/attribute (which would silently break the API on instances).
+    with pytest.raises(ValueError, match=r"ClassVar 'render' would shadow"):
+
+        class Bad(Predicate, show=False):
+            loc: Field[int]
+            render: ClassVar[str] = "boom"  # type: ignore[assignment]
+
+
+def test_bare_field_annotation_is_refused() -> None:
+    # An unsubscripted Field carries no ground type and is always a mistake.
+    with pytest.raises(TypeError, match=r"bare Field.*needs a type argument"):
+
+        class Bad(Predicate, show=False):
+            x: Field
+
+
+def test_bare_predicatearg_annotation_points_at_field_predicatearg() -> None:
+    # PredicateArg is a type, not a field — a bare `x: PredicateArg` (forgetting
+    # the Field wrapper) is refused with a targeted pointer: every field is a
+    # Field[...].
+    with pytest.raises(TypeError, match=r"spelled Field\[PredicateArg\], not a bare PredicateArg"):
+
+        class Bad(Predicate, show=False):
+            x: PredicateArg
+
+
+def test_subclass_of_subclass_inherits_fields_in_mro_order() -> None:
+    # A Predicate subclass may itself be subclassed to add fields. The cached
+    # _field_names must list inherited fields first, then own, across every
+    # level — and inherited descriptors (typed AND polymorphic) keep working on
+    # the deeper instances.
+    class Base(Predicate, show=False):
+        a: Field[int]
+        b: Field[PredicateArg]  # polymorphic, inherited two levels down
+
+    class Middle(Base, show=False):
+        c: Field[str]
+
+    class Leaf(Middle, show=False):
+        d: Field[int]
+
+    assert Base.field_names() == ["a", "b"]
+    assert Middle.field_names() == ["a", "b", "c"]
+    assert Leaf.field_names() == ["a", "b", "c", "d"]
+    assert Leaf.get_arity() == 4
+
+    leaf = Leaf(a=1, b="poly", c="x", d=2)
+    assert leaf.render() == 'leaf(1, "poly", "x", 2)'
+    # inherited fields read plain — the typed one and the polymorphic one alike
+    assert leaf.a == 1 and isinstance(leaf.a, int)
+    assert leaf.b == "poly" and isinstance(leaf.b, str)
+    assert isinstance(leaf["b"], String)  # bracket keeps the Term view
+    # own field validation still fires through the inherited machinery
+    with pytest.raises(TypeError, match="Field 'd' expects int"):
+        Leaf(a=1, b="poly", c="x", d="two")  # type: ignore[arg-type]
+
+
+def test_argument_fields_returns_real_dataclass_fields() -> None:
+    # The public shim hands back genuine dataclasses.Field objects, in the same
+    # order as field_names() — a future name-only replacement would break this.
+    fields = Clue.argument_fields()
+    assert all(isinstance(f, dataclasses.Field) for f in fields)
+    assert [f.name for f in fields] == Clue.field_names()
+
+
+def test_field_any_is_refused() -> None:
+    # Field[PredicateArg] is the one polymorphic spelling; Field[Any] would erase the
+    # read typing, so it is refused with a pointer back to Field[PredicateArg].
+    with pytest.raises(TypeError, match=r"Field\[Any\] and hand-written unions are not accepted"):
+
+        class Bad(Predicate):
+            x: Field[Any]
 
 
 def test_unsupported_ground_type_rejected() -> None:
@@ -158,7 +329,8 @@ def test_define_mixed_schema_with_untyped_slots() -> None:
     Mixed = Predicate.define("mixed_schema", {"tag": str, "anything": None})
     m = Mixed(tag="t", anything=5)
     assert m.tag == "t"  # type: ignore[attr-defined]
-    assert isinstance(m["anything"], Number)  # untyped slot behaves classically
+    assert m.anything == 5  # type: ignore[attr-defined]  # untyped slot reads plain now
+    assert isinstance(m["anything"], Number)  # the Term view stays on bracket access
     with pytest.raises(TypeError, match="Field 'tag' expects str"):
         Mixed(tag=1, anything=5)
 

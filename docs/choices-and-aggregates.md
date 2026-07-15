@@ -210,11 +210,11 @@ and they all follow the same grammar as choice elements: an element (or tuple
 of terms) with an optional condition, plus `add()` for further elements.
 
 ```python
-from aspalchemy import Predicate, PredicateField
+from aspalchemy import Field, Predicate, PredicateArg
 
 class Person(Predicate):
-    name: PredicateField
-    age: PredicateField
+    name: Field[PredicateArg]
+    age: Field[PredicateArg]
 
 john = Person(name="john", age=30)
 mary = Person(name="mary", age=25)

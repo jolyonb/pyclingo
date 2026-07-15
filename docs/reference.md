@@ -120,8 +120,12 @@ All five are taught in [Source locations](diagnostics.md#source-locations).
 - **`Field`** — typed field annotations: `Field[int]`, `Field[str]`,
   `Field[SomePredicate]`; validated writes, plain typed reads.
   [Declaring predicates](predicates.md#declaring-predicates).
-- **`PredicateField`** — the untyped field form, when a slot must accept
-  any term. [Declaring predicates](predicates.md#declaring-predicates).
+- **`PredicateArg`** — the "any predicate argument" union; the polymorphic
+  field is spelled `Field[PredicateArg]`, so every field is a `Field[...]`. It
+  reads plain like any field, but skips the ground-type gate and static
+  narrowing — it reads as the value union, not a specific ground type (it still
+  validates int range, string content, and rejects bool/tuple).
+  [Declaring predicates](predicates.md#declaring-predicates).
 
 ## Rule-building objects
 

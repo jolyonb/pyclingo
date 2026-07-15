@@ -886,6 +886,12 @@ class RangePool(Pool):
     def render(self, context: RenderingContext = RenderingContext.DEFAULT) -> str:
         return f"{self.start.render()}..{self.end.render()}"
 
+    def __repr__(self) -> str:
+        """RangePool(1, 5) — reconstructable; Number bounds show as plain ints."""
+        start = self._start.value if isinstance(self._start, Number) else self._start
+        end = self._end.value if isinstance(self._end, Number) else self._end
+        return f"RangePool({start!r}, {end!r})"
+
     def collect_defined_constants(self) -> set[str]:
         constants = set()
 
@@ -968,6 +974,11 @@ class ExplicitPool(Pool):
         """Renders as e.g. "(1; 3; 5)"; parentheses are dropped as a lone predicate argument."""
         elements_str = "; ".join(element.render() for element in self._elements)
         return elements_str if context == RenderingContext.LONE_PREDICATE_ARGUMENT else f"({elements_str})"
+
+    def __repr__(self) -> str:
+        """ExplicitPool([1, 3, 5]) — reconstructable; Number/String elements show as plain values."""
+        plain = [e.value if isinstance(e, (Number, String)) else e for e in self._elements]
+        return f"ExplicitPool({plain!r})"
 
     def collect_defined_constants(self) -> set[str]:
         constants = set()
