@@ -30,16 +30,24 @@ copy), and the Control is freed last. Concretely:
   timeout demands it; without one, solving is synchronous and there is no
   second thread to race during teardown.
 
-Refcount order buys nothing at interpreter SHUTDOWN, though, and that is a
-second way to reach the same crash: a search still suspended when the
-interpreter exits is finalized by the GC, which throws GeneratorExit into it
-long after clingo's module state may have gone — so the cleanup's statistics
-read lands on a freed Control and segfaults, with no traceback and nothing on
-the stack that names the program. The generator therefore checks
-sys.is_finalizing() before touching the Control: at shutdown the snapshot is
-skipped (nobody could read it anyway), while the state flags still publish.
-Abandoning a search is a documented idiom — next(iter(result)) takes one model
-and walks away — so this path must be safe, not merely discouraged.
+Refcount order buys nothing when the GC is the one tearing the cluster down,
+though, and that reaches the same crash through two more doors. At
+interpreter SHUTDOWN, a search still suspended when the interpreter exits is
+finalized by the GC long after clingo's module state may have gone. And
+DURING a run, a caller's reference cycle that captures the cluster (an object
+in the cycle holding the grounding is enough) makes grounding, handle,
+generator, and Control garbage TOGETHER — the library's own graph being
+cycle-free cannot prevent that — and the GC runs finalizers over a garbage
+set in undefined order, so Control.__del__ can free the native object before
+GeneratorExit reaches the generator. Either way, the cleanup's native calls
+land on freed memory and segfault, with no traceback and nothing on the stack
+that names the program. The generator therefore guards EVERY native teardown
+call — cancel/get/core, the handle close, the statistics snapshot — with
+_control_finalized(): at shutdown or after the Control's finalizer has run,
+they are all skipped (nobody could observe their results anyway), while the
+state flags still publish. Abandoning a search is a documented idiom —
+next(iter(result)) takes one model and walks away — so these paths must be
+safe, not merely discouraged.
 
 One nuance: a GroundedProgram keeps a strong reference to its most recent
 handle (the sequential guard's _active), so an abandoned mid-flight handle
@@ -49,6 +57,7 @@ and the next solve attempt raises the loud still-open error.
 """
 
 import copy
+import gc
 import sys
 import time
 from abc import ABC, abstractmethod
@@ -109,11 +118,22 @@ class AtomCollection:
     statement about every answer set — this class only provides the access.
     """
 
-    def __init__(self, atoms: list[Predicate], hidden_classes: frozenset[type[Predicate]] = frozenset()) -> None:
+    def __init__(
+        self,
+        atoms: list[Predicate],
+        hidden_classes: frozenset[type[Predicate]] = frozenset(),
+        program_classes: frozenset[type[Predicate]] = frozenset(),
+    ) -> None:
         self._atoms = atoms
         # Classes whose atoms are never shown: asking for them teaches
         # instead of returning a silent [] (see _reject_hidden)
         self._hidden_classes = hidden_classes
+        # Every class the grounding declared (shown and hidden both — the
+        # raw_asp contract guarantees this is exhaustive). Queries for any
+        # OTHER class teach instead of quietly answering []/False (see
+        # _reject_unknown); empty means "no program knowledge", which
+        # turns that gate off — a hand-built collection stays permissive.
+        self._program_classes = program_classes
         self._by_class: dict[type[Predicate], list[Predicate]] = {}
         for atom in atoms:
             self._by_class.setdefault(type(atom), []).append(atom)
@@ -140,6 +160,35 @@ class AtomCollection:
                 f"show() the class, or define it with show=True, to read it."
             )
 
+    def _reject_unknown(self, predicate: type[Predicate]) -> None:
+        """
+        A class the grounding never declared can have no atoms here, so the
+        honest empty answer does not exist for it: a quiet []/False would
+        read as "none were derived" when the truth is "this was never part
+        of the program". The usual cause is querying a base class when the
+        program was built with its in_namespace() clone (or the reverse) —
+        lookup is by exact class — so the error names the related declared
+        class when there is one.
+        """
+        if not self._program_classes or predicate in self._program_classes:
+            return
+        related = sorted(
+            (cls for cls in self._program_classes if issubclass(cls, predicate) or issubclass(predicate, cls)),
+            key=lambda cls: (cls.get_name(), cls.__name__),
+        )
+        hint = (
+            f" The program was built with the distinct class rendering "
+            f"{related[0].get_name()}/{related[0].get_arity()} — in_namespace() clones "
+            f"are their own classes, and lookup is by exact class: query with the class "
+            f"the program used."
+            if related
+            else " atoms() with no argument returns everything that was read back."
+        )
+        raise ValueError(
+            f"{predicate.get_name()}/{predicate.get_arity()} never appears in this program, "
+            f"so a silent empty answer would be a lie.{hint}"
+        )
+
     @overload
     def atoms(self) -> list[Predicate]: ...
 
@@ -153,11 +202,13 @@ class AtomCollection:
         so filter on .negated if your program uses classical negation.
 
         Lookup is by EXACT class, and in_namespace() clones are distinct
-        classes: query with the clone you built the program with (atoms(Base)
-        is empty if the collection holds only clone atoms). When in doubt,
-        atoms() with no argument returns everything. Asking for a HIDDEN
-        class raises with the remedy: hidden atoms are never read back into
-        results, so an empty answer would be a lie (see _reject_hidden).
+        classes: query with the clone you built the program with. When in
+        doubt, atoms() with no argument returns everything. Asking for a
+        HIDDEN class raises with the remedy (hidden atoms are never read
+        back into results), and asking for a class the program never
+        declared at all — the base of a clone included — raises too,
+        naming the declared relative: in both cases an empty answer would
+        be a lie (see _reject_hidden and _reject_unknown).
         A class shown only through a show_when CONDITION returns just the
         condition-filtered atoms — a partial extension, by that directive's
         explicit intent.
@@ -174,6 +225,7 @@ class AtomCollection:
             described = predicate.__name__ if isinstance(predicate, type) else type(predicate).__name__
             raise TypeError(f"atoms() takes a Predicate class, got {described}")
         self._reject_hidden(predicate)
+        self._reject_unknown(predicate)
         return list(self._by_class.get(predicate, []))
 
     def __iter__(self) -> Iterator[Predicate]:
@@ -205,6 +257,7 @@ class AtomCollection:
                 f"Ask with the plain value instead (as in p(3) rather than p(c))."
             )
         self._reject_hidden(type(atom))
+        self._reject_unknown(type(atom))
         cls = type(atom)
         members = self._membership.get(cls)
         if members is None:
@@ -236,8 +289,9 @@ class Model(AtomCollection):
         atoms: list[Predicate],
         messages: Sequence[ClingoMessage] | None = None,
         hidden_classes: frozenset[type[Predicate]] = frozenset(),
+        program_classes: frozenset[type[Predicate]] = frozenset(),
     ) -> None:
-        super().__init__(atoms, hidden_classes)
+        super().__init__(atoms, hidden_classes, program_classes)
         # Diagnostics clingo emitted while searching for this model (usually empty).
         self.messages = tuple(messages) if messages is not None else ()
 
@@ -267,8 +321,9 @@ class CostedModel(Model):
         proven: bool = False,
         messages: Sequence[ClingoMessage] | None = None,
         hidden_classes: frozenset[type[Predicate]] = frozenset(),
+        program_classes: frozenset[type[Predicate]] = frozenset(),
     ) -> None:
-        super().__init__(atoms, messages, hidden_classes)
+        super().__init__(atoms, messages, hidden_classes, program_classes)
         self.cost = cost
         self.proven = proven
 
@@ -310,8 +365,9 @@ class Optimum(CostedModel):
         timed_out: bool = False,
         statistics: dict[str, Any] | None = None,
         hidden_classes: frozenset[type[Predicate]] = frozenset(),
+        program_classes: frozenset[type[Predicate]] = frozenset(),
     ) -> None:
-        super().__init__(atoms, cost, proven, messages, hidden_classes)
+        super().__init__(atoms, cost, proven, messages, hidden_classes, program_classes)
         self.path = path
         self.optima = optima
         self.complete = complete
@@ -355,8 +411,9 @@ class Consequences(AtomCollection):
         timed_out: bool = False,
         statistics: dict[str, Any] | None = None,
         hidden_classes: frozenset[type[Predicate]] = frozenset(),
+        program_classes: frozenset[type[Predicate]] = frozenset(),
     ) -> None:
-        super().__init__(atoms, hidden_classes)
+        super().__init__(atoms, hidden_classes, program_classes)
         self.path = path
         self.complete = complete
         self.messages = tuple(messages)
@@ -786,6 +843,23 @@ class OptimizeSteps(Search):
         return cast(Iterator[CostedModel], self._iterator)
 
 
+def _control_finalized(control: clingo.Control) -> bool:
+    """
+    Whether the Control's native object may already be freed — after which
+    every native call on it, or on a handle into it, is undefined behavior.
+
+    Two doors reach that state while a search generator still has cleanup
+    to run (the module docstring tells the whole story): interpreter
+    shutdown, and a mid-run cycle collection whose garbage set captured the
+    Control alongside the generator. gc.is_finalized is the exact test for
+    the second: within one collection, every finalizer in the garbage set
+    runs before any object's memory is cleared, so False means the native
+    object is still alive even when both are being collected — the order
+    problem is answered precisely, not approximated.
+    """
+    return sys.is_finalizing() or gc.is_finalized(control)
+
+
 def _search_generator(
     control: clingo.Control,
     predicate_types: PredicateTypes,
@@ -809,6 +883,9 @@ def _search_generator(
     """
     refining = mode.is_refinement
     optimizing = mode is SearchMode.OPTIMIZE
+    # The grounding's full declared-class universe, for the unknown-class
+    # teaching gate on every collection this search emits
+    program_classes = frozenset(predicate_types.values())
     # The timeout clock starts here — at first iteration — not at the
     # originating call: time between constructing the handle and consuming
     # it belongs to the caller, and clingo does no work until we resume
@@ -822,8 +899,12 @@ def _search_generator(
     try:
         # Async only when a wall-clock timeout demands it (see module
         # docstring): clingo has no timeout configuration key, so we wait on
-        # the handle and cancel at the deadline.
-        with control.solve(assumptions=assumptions, yield_=True, async_=deadline is not None) as handle:
+        # the handle and cancel at the deadline. The handle is managed by
+        # hand rather than `with`: SolveHandle.__exit__ closes the native
+        # handle, and like every other native teardown call it must be
+        # skippable once the Control is finalized (_control_finalized).
+        handle = control.solve(assumptions=assumptions, yield_=True, async_=deadline is not None)
+        try:
             try:
                 while True:
                     handle.resume()
@@ -874,7 +955,7 @@ def _search_generator(
                     # set, a refinement emission a claim-free approximation,
                     # a descent emission an answer set carrying its cost
                     if refining:
-                        yield AtomCollection(atoms, hidden_classes)
+                        yield AtomCollection(atoms, hidden_classes, program_classes)
                     elif optimizing:
                         yield CostedModel(
                             atoms,
@@ -882,37 +963,55 @@ def _search_generator(
                             proven=model.optimality_proven,
                             messages=new_messages,
                             hidden_classes=hidden_classes,
+                            program_classes=program_classes,
                         )
                     else:
-                        yield Model(atoms, messages=new_messages, hidden_classes=hidden_classes)
+                        yield Model(
+                            atoms,
+                            messages=new_messages,
+                            hidden_classes=hidden_classes,
+                            program_classes=program_classes,
+                        )
             finally:
-                # Also reached when the caller close()s mid-iteration and when
-                # an abandoned handle is torn down by refcount. Cancelling a
-                # finished search is a no-op.
-                handle.cancel()
-                # After a cancelled solve, satisfiability may be unknown (None);
-                # keep what we learned from any yielded emissions.
-                outcome: clingo.SolveResult = handle.get()
-                if outcome.satisfiable is not None:
-                    state.satisfiable = outcome.satisfiable
-                # A fast search can finish between resume() and the deadline
-                # check; a timed-out search must never claim exhaustion
-                state.exhausted = False if timed_out else outcome.exhausted
-                state.timed_out = timed_out
-                if outcome.satisfiable is False:
-                    # The culprits, in the shapes the caller gave: clasp's
-                    # core is solver literals, mapped back through the
-                    # assumption list (a core, not necessarily minimal)
-                    core = set(handle.core())
-                    conflicting: list[Predicate | DefaultNegation] = []
-                    for symbol, truth in assumptions:
-                        symbolic = control.symbolic_atoms[symbol]
-                        assert symbolic is not None  # existence-checked at conversion
-                        if (symbolic.literal if truth else -symbolic.literal) in core:
-                            atom = convert_symbol_to_predicate(symbol, predicate_types)
-                            conflicting.append(atom if truth else DefaultNegation(atom))
-                    state.unsat_core = tuple(conflicting)
-                final = outcome
+                # Also reached when the caller close()s mid-iteration, when an
+                # abandoned handle is torn down by refcount, and when the GC
+                # finalizes a suspended search. Everything below calls into
+                # native clingo, so the whole block is skipped once the
+                # Control is finalized: the memory is freed, and nobody could
+                # observe the results of a GC-initiated teardown anyway
+                # (`final` stays None, so the statistics snapshot below skips
+                # itself too).
+                if not _control_finalized(control):
+                    # Cancelling a finished search is a no-op.
+                    handle.cancel()
+                    # After a cancelled solve, satisfiability may be unknown
+                    # (None); keep what we learned from any yielded emissions.
+                    outcome: clingo.SolveResult = handle.get()
+                    if outcome.satisfiable is not None:
+                        state.satisfiable = outcome.satisfiable
+                    # A fast search can finish between resume() and the deadline
+                    # check; a timed-out search must never claim exhaustion
+                    state.exhausted = False if timed_out else outcome.exhausted
+                    state.timed_out = timed_out
+                    if outcome.satisfiable is False:
+                        # The culprits, in the shapes the caller gave: clasp's
+                        # core is solver literals, mapped back through the
+                        # assumption list (a core, not necessarily minimal)
+                        core = set(handle.core())
+                        conflicting: list[Predicate | DefaultNegation] = []
+                        for symbol, truth in assumptions:
+                            symbolic = control.symbolic_atoms[symbol]
+                            assert symbolic is not None  # existence-checked at conversion
+                            if (symbolic.literal if truth else -symbolic.literal) in core:
+                                atom = convert_symbol_to_predicate(symbol, predicate_types)
+                                conflicting.append(atom if truth else DefaultNegation(atom))
+                        state.unsat_core = tuple(conflicting)
+                    final = outcome
+        finally:
+            # The close the `with` used to provide, guarded the same way
+            # (SolveHandle exposes it only as __exit__)
+            if not _control_finalized(control):
+                handle.__exit__(None, None, None)
     except BaseException:
         # A generator dead from an exception can only StopIteration on
         # resume, which a retained iterator would read as clean exhaustion —
@@ -934,15 +1033,16 @@ def _search_generator(
             state.messages.extend(message_handler.messages[messages_seen:])
             # `final is not None` skips a handle closed before solving began.
             #
-            # is_finalizing() is the crash guard, and it is not paranoia: an
-            # abandoned search (never exhausted, never closed) is finalized by
-            # the GC during interpreter shutdown, which throws GeneratorExit in
-            # here — and by then clingo's module state may already be torn down,
-            # so reading native statistics off the Control dereferences freed
-            # memory and SEGFAULTS the process, nowhere near the code at fault.
-            # Nobody can read the snapshot at that point anyway: the interpreter
-            # is going away. Skip it, and let the flag below still publish.
-            if final is not None and not sys.is_finalizing():
+            # _control_finalized() is the crash guard, and it is not paranoia:
+            # when the GC finalizes an abandoned search — at interpreter
+            # shutdown, or mid-run because a caller's cycle captured the whole
+            # cluster — the Control's native object may already be freed, and
+            # reading native statistics off it dereferences freed memory and
+            # SEGFAULTS the process, nowhere near the code at fault (the
+            # module docstring tells the whole story). Nobody can read the
+            # snapshot at that point anyway. Skip it, and let the flag below
+            # still publish.
+            if final is not None and not _control_finalized(control):
                 # clingo raises if statistics are not ready; none beats raising.
                 with suppress(RuntimeError):
                     statistics = dict(control.statistics)

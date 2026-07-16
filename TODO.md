@@ -2,20 +2,48 @@
 
 This is a wishlist of items.
 
-- **Read-path performance at scale: reconstruction is what remains.** The
-  1.4.1 round fixed the two hot spots — `render()` caches on the frozen
-  instance (so render-based eq/hash stopped rebuilding strings: hashing
-  100k atoms into a set 0.68s → 0.016s) and `AtomCollection.__contains__`
-  answers from a lazily-built per-class set (one membership check at 100k
-  atoms 1.25s → microseconds). What's left is construction: reconstruction
-  builds a validated dataclass instance per atom, ~10 µs each (~1s per
-  100k atoms) — profile it if 10^6-atom models become real. Slots were
-  investigated and rejected (2026-07-16): ~40 B/atom ceiling, zero read
-  speedup on CPython 3.14, and dataclass(slots=True) returns a new class,
-  which the __init_subclass__ creation path cannot swap in; if atom memory
-  ever matters at 10^7 scale, columnar storage in AtomCollection is the
-  lever, not per-instance slots. Keep any "fast at scale" claims scoped to
-  what they mean (hidden atoms are never read back at all).
+- **Read-path performance at scale: reconstruction is what remains, now
+  profiled (2026-07-16).** The 1.4.1 round fixed the two hot spots —
+  `render()` caches on the frozen instance (hashing 100k atoms into a set
+  0.68s → 0.016s) and `AtomCollection.__contains__` answers from a
+  lazily-built per-class set (one membership check at 100k atoms 1.25s →
+  microseconds). Reconstruction was then profiled at 19.4 µs/atom
+  (cell/3, 100k atoms; ~99% of first-model latency at that scale). Key
+  finding: THE CHECKS ARE NEARLY FREE — skipping all validation buys only
+  2.5% — the cost is machinery: the biggest item (~26%) is
+  `Field._validated` round-tripping every int/str through the interning
+  `Number()`/`String()` constructors purely to reuse their checks
+  (throwaway objects, guaranteed cache misses); then descriptor/dataclass
+  dispatch, clingo's cffi property reads (~3.7 µs, irreducible), the
+  `__post_init__` depth walk, and a per-atom `dataclasses.fields()` call
+  in the converter that `_field_names` exists to avoid. The adjudicated
+  menu:
+  - TO DO, low-risk: (P1) converter uses `cls._field_names` + positional
+    construction (19.4 → 16.6 µs, solve_result.py only); (P2) `_validated`
+    calls the range/content validators directly instead of building
+    Numbers/Strings — 10.4 µs, same semantics, speeds `fact()` writes too
+    (keep the int/str-subclass normalization the metaclass performed).
+  - HELD until 10^6-atom models are real: (P3) a checked fast-path
+    constructor for solver-returned symbols (`object.__new__` + direct
+    dict fill, ALL validation retained; 5.6 µs, first-model 1.94s → 0.63s).
+    Design when taken: per-class `_fast_path_ok` stamped at class creation
+    (a subclass with a user `__init__`/`__post_init__` falls back to the
+    normal path), parity tests same-atom/same-errors on both paths,
+    `_negated`/`_depth` set exactly as `__post_init__` does, never pre-set
+    `_render_cache`. int32 range checks are skippable there (clingo
+    numbers are int32 by representation).
+  - REJECTED permanently: (P4) unvalidated construction — silently accepts
+    raw_asp strings with quotes/backslashes and type-mismatched atoms, for
+    2.5%. (Slots also rejected, same date: ~40 B/atom ceiling, zero read
+    speedup on CPython 3.14, and dataclass(slots=True) returns a new class
+    the __init_subclass__ creation path cannot swap in; columnar storage in
+    AtomCollection is the 10^7-scale memory lever if ever needed.)
+  - SET ASIDE: (P5) lazy materialization from stored Symbols — relocates
+    read-back teaching errors from iteration time to first-access time,
+    and P3 removes most of its motivation; composable with P3 later.
+  Realistic floor: ~5–6 µs/atom fully validated. Keep any "fast at scale"
+  claims scoped to what they mean (hidden atoms are never read back at
+  all).
 
 - **Model two-sided aggregate guards internally.** A
   first-class banded form could also steer users away from the real trap,

@@ -76,10 +76,13 @@ def test_grounding_is_an_independent_snapshot() -> None:
     after = program.ground()
     assert "p_extra" not in before.text
     assert "p_extra" in after.text
-    # Both handles solve their own program — side-by-side comparison works
+    # Both handles solve their own program — side-by-side comparison works.
+    # The old grounding does not merely lack Q atoms; it never knew the
+    # class at all, and says so instead of answering a quiet []
     model_before = next(iter(before.solve()))
     model_after = next(iter(after.solve()))
-    assert model_before.atoms(Q) == []
+    with pytest.raises(ValueError, match=r"q_extra/1 never appears in this program"):
+        model_before.atoms(Q)
     assert len(model_after.atoms(Q)) == 1
 
 

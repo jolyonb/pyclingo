@@ -1,6 +1,6 @@
 [project]
 name = "aspalchemy"
-version = "1.4.1"
+version = "1.4.2"
 description = "A Python ORM interface for building and solving clingo ASP programs"
 license = "MIT"
 license-files = ["LICENSE.txt"]

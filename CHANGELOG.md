@@ -1,5 +1,41 @@
 # Changelog
 
+## 1.4.2 — 2026-07-16
+
+### Fixed
+
+- **A reference cycle in caller code capturing an abandoned search no longer
+  risks a segfault.** The 1.2.0 fix covered interpreter shutdown, but the
+  same crash had a second door: a caller-side cycle holding a grounding with
+  a suspended search makes grounding, handle, generator, and Control garbage
+  *together*, and cycle collection runs finalizers over a garbage set in
+  undefined order — so `Control.__del__` could free the native object before
+  `GeneratorExit` reached the generator, whose cleanup then called native
+  clingo on freed memory (deterministically reproducible; SIGSEGV with no
+  traceback, mid-run, nowhere near the code at fault). Every native teardown
+  call — cancel/get/core, the handle close, the statistics snapshot — is now
+  guarded by a single finalization check; `gc.is_finalized` answers the
+  ordering question exactly, so a normal refcount teardown still records
+  statistics as before, and a GC-initiated one skips what nobody could
+  observe anyway.
+
+### Breaking
+
+- **Querying a result for a predicate class the program never declared now
+  raises a teaching error instead of answering a quiet `[]`/`False`.** The
+  house rule has always been that an empty answer which reads as "none were
+  derived" must never be a lie — hidden classes, class-instead-of-atom
+  probes, and `#const`-bearing atoms already raised — but a class that was
+  never part of the program at all still answered quietly. That silence hid
+  the commonest mix-up: querying a base class when the program was built
+  with its `in_namespace()` clone (or the reverse) — lookup is by exact
+  class, so the answer was always empty no matter what was derived. Both
+  `atoms(Cls)` and `atom in collection` now raise for never-declared
+  classes, naming the declared relative when there is one. The honest
+  empties are untouched: a *declared* class with no derived atoms still
+  answers `[]`, and a hand-built `AtomCollection` (which carries no program
+  knowledge) stays permissive.
+
 ## 1.4.1 — 2026-07-16
 
 ### Performance

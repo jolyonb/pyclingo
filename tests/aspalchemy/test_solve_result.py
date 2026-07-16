@@ -7,6 +7,7 @@ from aspalchemy import (
     ASPAlchemyError,
     ASPProgram,
     AtomCollection,
+    Choice,
     CostedModel,
     DefinedConstant,
     Model,
@@ -212,6 +213,50 @@ def test_model_membership_rejects_what_could_never_be_present() -> None:
         "p_member_guard(1)" in model  # type: ignore[operator]  # noqa: B015
     with pytest.raises(ValueError, match="contains variables"):
         P(x=Variable("X")) in model  # noqa: B015
+
+
+def test_unknown_class_queries_teach_instead_of_answering_empty() -> None:
+    # A class the program never declared can have no atoms in any of its
+    # results, so a quiet []/False would read as "none were derived" — the
+    # same policy hidden classes already get. The commonest spelling is the
+    # base-vs-clone mix-up (lookup is by exact class), so the error names
+    # the declared relative, in both directions.
+    P = Predicate.define("p_known", ["x"])
+    Stranger = Predicate.define("p_stranger", ["x"])
+    program = ASPProgram()
+    program.fact(P(x=1))
+    model = program.solve().first()
+    with pytest.raises(ValueError, match=r"p_stranger/1 never appears in this program"):
+        model.atoms(Stranger)
+    with pytest.raises(ValueError, match=r"never appears in this program"):
+        Stranger(x=1) in model  # noqa: B015 (the membership test is the act under test)
+
+    Clone = P.in_namespace("grid")
+    clone_program = ASPProgram()
+    clone_program.fact(Clone(x=1))
+    clone_model = clone_program.solve().first()
+    with pytest.raises(ValueError, match=r"p_known/1 never appears.*grid_p_known/1"):
+        clone_model.atoms(P)
+    with pytest.raises(ValueError, match=r"grid_p_known/1 never appears.*p_known/1"):
+        model.atoms(Clone)
+
+
+def test_honest_empty_answers_survive_the_unknown_class_gate() -> None:
+    # The gate must not outlaw the truthful empties: a DECLARED class whose
+    # atoms simply were not derived answers [] (that is the honest answer),
+    # and a hand-built AtomCollection carries no program knowledge, so it
+    # stays permissive rather than guessing.
+    P = Predicate.define("p_gate_known", ["x"])
+    Q = Predicate.define("q_gate_declared", ["z"])
+    program = ASPProgram()
+    program.fact(P(x=1))
+    program.choose(Choice(Q(z=1)))
+    program.forbid(Q(z=1))  # declared and derivable, but excluded from every model
+    model = program.solve().first()
+    assert model.atoms(Q) == []
+    assert Q(z=1) not in model
+    standalone = AtomCollection([P(x=1)])
+    assert standalone.atoms(Q) == []
 
 
 def test_membership_teaches_on_const_bearing_atoms() -> None:

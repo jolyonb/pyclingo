@@ -260,6 +260,46 @@ def test_an_abandoned_search_does_not_crash_the_interpreter() -> None:
         )
 
 
+def test_a_user_cycle_capturing_an_abandoned_search_does_not_crash() -> None:
+    """
+    Regression, the mid-run sibling of the shutdown crash above: a caller's
+    reference cycle that captures a grounding with a suspended search makes
+    grounding, handle, generator, and Control garbage TOGETHER, and cycle
+    collection runs their finalizers in undefined order — Control.__del__
+    could free the native object before GeneratorExit reached the generator,
+    whose cleanup then called native clingo on freed memory. SIGSEGV, no
+    traceback, deterministic. Every native teardown call is now guarded by
+    _control_finalized() (gc.is_finalized answers the ordering question
+    exactly), so this exits cleanly.
+    """
+    script = textwrap.dedent("""
+        import gc
+
+        from aspalchemy import ASPProgram, Field, Predicate
+
+        class Seed(Predicate):
+            x: Field[int]
+
+        def one_round():
+            program = ASPProgram()
+            program.fact(Seed(x=1), Seed(x=2))
+            grounding = program.ground()
+            next(iter(grounding.solve()))    # suspend the search, then abandon it
+            holder = {}
+            holder["self"] = holder          # the user cycle...
+            holder["grounding"] = grounding  # ...capturing the whole cluster
+
+        for _ in range(25):
+            one_round()
+            gc.collect()
+    """)
+    completed = subprocess.run([sys.executable, "-c", script], capture_output=True, timeout=60)
+    assert completed.returncode == 0, (
+        f"cycle-captured abandoned search crashed the interpreter: exit {completed.returncode} "
+        f"(negative or >=128 means a signal; SIGSEGV is the regression)"
+    )
+
+
 # --- builders: Choice and Aggregate -----------------------------------------
 #
 # A builder is the one mutable thing a rule can record, so its copy semantics

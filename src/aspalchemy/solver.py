@@ -1349,6 +1349,10 @@ class GroundedProgram:
         # Classes whose atoms are never shown: read surfaces teach instead
         # of returning a silent empty
         self._hidden_classes = hidden_classes
+        # The grounding's full declared-class universe (shown and hidden;
+        # exhaustive by the raw_asp contract) — collections use it to teach
+        # on queries for classes that were never in the program at all
+        self._program_classes = frozenset(predicate_types.values())
         # Ground truth from the minimize observer: the surviving priority
         # levels, highest first — bool(levels) IS "does this program optimize?"
         self._ground_levels = ground_levels
@@ -1945,6 +1949,7 @@ class GroundedProgram:
             levels=dict(zip(self._ground_levels, best.cost, strict=True)),
             timed_out=steps.timed_out,
             hidden_classes=self._hidden_classes,
+            program_classes=self._program_classes,
         )
 
     def _refine_eagerly[C: Consequences](
@@ -2002,4 +2007,5 @@ class GroundedProgram:
             timed_out=steps.timed_out,
             statistics=steps.statistics,
             hidden_classes=self._hidden_classes,
+            program_classes=self._program_classes,
         )
