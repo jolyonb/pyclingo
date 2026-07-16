@@ -64,7 +64,7 @@ all of them are scaffolding except the last one we declare, which describes the 
 
 Before we get to describing the rules of the puzzle, we need to describe the grid that it operates
 on. The first question we need to answer is "which cells exist?", and we define `cell` atoms for
-each cell in the grid. Two [ranges](rules.md#pools-and-ranges) and a single rule derive every one of
+each cell in the grid. Two [ranges](statements.md#pools-and-ranges) and a single rule derive every one of
 them:
 
 ```python
@@ -230,7 +230,7 @@ to connect cells in the grid, so this will never choose a path segment that woul
 The use of `ANY` here is interesting: we use it to discard information. We don't care what number
 is (or is not) in a cell, and we don't care what the adjacent cell is in the menu. Note that we
 also snuck in a negation here. `~Clue(loc=cell, number=ANY)` is
-[default negation](rules.md#default-negation): it is not an atom we assert, it is a *condition on
+[default negation](statements.md#default-negation): it is not an atom we assert, it is a *condition on
 the body*, and it holds for a cell precisely when no `Clue` atom mentions it. So the second rule
 fires exactly for the cells with no number on them — the empty cells, which get two exits.
 
@@ -319,7 +319,7 @@ while the second is the recursive constraint: if cell 1 has a number, and cell 1
 to cell 2, then cell 2 also has that number.
 
 Next, we put in place a count constraint: each cell must see exactly one number propagating along
-its path. This is our first use of [`require()`](rules.md#the-verbs) — the positive twin of
+its path. This is our first use of [`require()`](statements.md#the-verbs) — the positive twin of
 `forbid()`. Where `forbid()` states what must *never* hold, `require()` states what *must* hold, and
 the library turns it into the constraint forbidding the opposite. That is why the Python below reads
 `== 1` while the ASP it renders reads `!= 1`: the same rule, stated from the two sides.
@@ -367,7 +367,7 @@ class CellDirections(Predicate):
 Each path cell has two exits, and we want them together in one atom. Deriving `CellDirections` from
 two `PathSegment` atoms naively would give us every pair twice, once as `(e, w)` and once as
 `(w, e)`, because nothing says which of the two exits comes first. So the body orders them with a
-[comparison](rules.md#comparisons): `D1 < D2` keeps one of the two orderings and discards its
+[comparison](statements.md#comparisons): `D1 < D2` keeps one of the two orderings and discards its
 mirror.
 
 ```python
@@ -520,6 +520,6 @@ cell_directions(cell(R, C), D1, D2) :- cell(R, C), not clue(cell(R, C), _), path
 
 Every technique on this page has a home page that teaches it properly: nested fields and atom
 identity in [Predicates and Data](predicates.md); rule shapes, negation and pools in
-[Rules and Terms](rules.md); choices and guard idioms in
+[Statements and Terms](statements.md); choices and guard idioms in
 [Choices and Aggregates](choices-and-aggregates.md); and model consumption in
 [Solving and Results](solving.md). We recommend reading the Guide in the navigation order.

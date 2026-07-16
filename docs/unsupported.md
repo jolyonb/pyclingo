@@ -178,7 +178,7 @@ Python line, with the diagnosis, instead of at grounding or (worse) never.
 
 **Bare pools as rule elements.** A pool standing alone in a rule is a clingo
 syntax error. Pools belong inside predicate arguments and on the right of
-comparisons — [Pools and ranges](rules.md#pools-and-ranges).
+comparisons — [Pools and ranges](statements.md#pools-and-ranges).
 
 **`Number(True)`.** A boolean is never a valid ASP term, but `bool`
 subclasses `int`, so it is exactly the kind of value that slips through
@@ -224,7 +224,7 @@ means anonymous, full stop. Use `ANY` for don't-care positions.
 **Singleton variables.** A variable used exactly once in a rule is usually a
 typo, so it fails a lint here (gringo itself stays silent). The demo and the
 `ASPProgram(allow_singletons=True)` switch live in
-[Variables](rules.md#variables).
+[Variables](statements.md#variables).
 
 **Braces in rule bodies.** `2 { p(X) } 4` in a body is a cardinality *test*,
 not a choice — same syntax, different semantics. Spell tests as `Count`

@@ -1,10 +1,9 @@
-# Rules and Terms
+# Statements and Terms
 
-If predicates are your data, rules are how you compute with it: what to derive, what to rule out, what
+If predicates are your data, statements are how you compute with it: what to derive, what to rule out, what
 must hold. This page is the vocabulary for writing them, and it comes in two halves — the handful of
-*verbs* that put statements into a program, and the *terms* those verbs accept: variables, comparisons,
-negation, conditional literals, pools, and constants. We'll walk the verbs first, then each kind of term
-in turn. (For the predicates these rules
+*verbs* that put statements into a program, and the *terms* those verbs accept. We'll walk the verbs 
+first, then each kind of term in turn. (For the predicates these rules
 operate on, see [Predicates and Data](predicates.md).)
 
 ## The verbs
@@ -13,10 +12,10 @@ A program is built from three kinds of statement — **facts**, **rules**, and *
 one distinction to hold onto is what each does to the answer set. **Facts and rules construct it**: a fact
 puts an atom in unconditionally, a rule puts one in whenever its conditions hold. A **constraint constructs
 nothing** — it only takes answer sets away, ruling out any in which a forbidden situation occurs. Nothing
-but a fact or a rule head ever makes an atom true.
+but a fact or a rule ever makes an atom true.
 
 Each kind is written with its own verb: `fact()` asserts a fact, `when(...).derive(...)` builds a rule,
-and a constraint is a `forbid()` or a `require()`. (Letting the *solver* choose what to construct, and
+and a constraint is a `forbid()` or a `require()`. (Letting the solver *choose* what to construct, and
 ranking the solutions it finds, are separate verbs on their own pages —
 [Choices and Aggregates](choices-and-aggregates.md) and [Solving and Results](solving.md#optimization).)
 
@@ -24,9 +23,9 @@ If you've written raw clingo, two things may feel unfamiliar. First, the verbs d
 with those three kinds: a rule isn't a single call but a `when()` — the conditions — closed with
 `.derive()` — what they produce, and a constraint is a deliberate `forbid()` or `require()` rather than a
 headless line. Second, there are more verbs than kinds: constraints alone come as `forbid()`, `require()`,
-and their `when()` forms, and choices and preferences bring their own later. Each verb names an intent you'd
-otherwise infer from the shape of a clingo line, and the constraint forms beyond `forbid()` are readable
-sugar over it.
+and their `when()` forms, and choices and preferences bring their own later. The reason for these new verbs 
+is simply that we want to make the code readable — when you read a rule constructed in Python, its intent 
+should be obvious. Under the hood, everything is converted appropriately and renders in standard clingo notation.
 
 We'll build one small program to demonstrate each verb — a guest list:
 
@@ -63,7 +62,7 @@ guests = [("carol", 41), ("dan", 12)]
 party.fact(*(Guest(name=n, age=a) for n, a in guests))
 ```
 
-An atom with a variable in it isn't data, though, so `fact()` refuses it and points at the line:
+An atom with a variable in it isn't data though, so `fact()` refuses it:
 
 ```python
 >>> party.fact(Guest(name=X, age=30))
@@ -77,17 +76,18 @@ ValueError: fact() requires grounded predicates, but guest(X, 30) contains varia
 Rules derive an atom when a set of conditions holds. Sometimes you'll see the derived atom called a "head" and
 the conditions called a "body", named after the ASP code `head :- body.` that describes a rule.
 
-ASPAlchemy splits rules into their two separate components. We start by stating `when(*conditions)`, which takes one
-or more conditions and constructs a rule body, and then closing the rule with `.derive(head)`. Let's see it
-in action, where we wish to specify that guests 18 years or older are adults.
+ASPAlchemy splits rules into their two separate components. We start by stating `when(*conditions)`, which
+takes one or more conditions, then close the rule with `.derive(atom)` — the atom to derive when they
+hold. Let's see it in action, where we wish to specify that guests 18 years or older are adults.
 
 ```python
 party.when(Guest(name=X, age=Y), Y >= 18).derive(Adult(name=X))
 ```
 
+Our `when()` holds two conditions: a `Guest` atom — matched for every guest that exists — and the comparison `Y >= 18`.
 Because `alice` is 30 (and `carol` 41), the rule **derives** `adult("alice")` and `adult("carol")` —
-atoms the facts never contained. `bob` and `dan` are under 18, so no `adult` for them. Solve it and you
-can see the rule's handiwork:
+atoms the facts never contained. `bob` and `dan` are under 18, so no `adult` for them. Solving the program
+shows the rule's handiwork:
 
 ```python
 >>> sorted(a.render() for a in party.solve().first().atoms(Adult))
@@ -108,30 +108,34 @@ ValueError: Segment 'Rules' has incomplete when() statements: when(guest(X, Y), 
 >>> pending.derive(Minor(name=X))  # closed; the program renders again
 ```
 
-`derive()` is one way to close a `when()`; other options let you create a **conditional
-constraint** (`require`/`forbid`, next). Two more closers, `choose` and `penalize`, belong to
-[choices](choices-and-aggregates.md#choice-rules) and [optimization](solving.md#optimization). Exactly one
+`derive()` is one way to close a `when()`; another option lets you create a **constraint**, as we'll see below.
+Two more closers, `choose` and `penalize`, belong to [choices](choices-and-aggregates.md#choice-rules) and [optimization](solving.md#optimization). Exactly one
 closer finishes each `when()`, and closing it twice is an error, the same as never closing it.
 
 ### Constraints: forbid() and require()
 
 Now the third kind of statement — the one that constructs nothing. `forbid(*conditions)` bans a
 combination outright: no answer set may satisfy all its conditions at once. It renders as a headless rule,
-`:- conditions.` — clingo's own way of writing "this must never happen".
+`:- conditions.` which is clingo's own way of writing "this must never happen".
 
 `require(target)` says it the other way round: you name the thing that must *hold*, and the library
 forbids its opposite. Requiring an atom forbids its default negation — `require(p)` renders `:- not p` —
 and requiring a comparison flips it to the inverse. A bare `require(target)` is a whole constraint on its
-own, so the target *is* the entire body — though that form is fairly rare; most constraints use the
-compound `when(*conditions).require(target)`.
+own, so the target *is* the entire body — though that form is fairly rare.
 
 Closing a `when()` with `.require()` is a different statement: `when(*conditions).require(target)` asks that
 `target` hold **whenever** the conditions do, rendering `:- conditions, <target's opposite>`. The
 conditions become the body — and, crucially, they *bind* the variables the target uses: `Y` draws its
 values from the `guest` condition rather than appearing from nowhere.
 
+The final form of constraint that you can use is `when(*conditions).forbid(target)`, which is just an
+alias for `forbid(*conditions, target)`. However, being able to write it as `when().forbid()` gives you
+an option to organize your thoughts around "what is the condition" and "what am I actually forbidding".
+
+Let's see a couple of these in action.
+
 ```python
-party.forbid(Guest(name=ANY, age=Y), Y < 0)          # ban: a negative age
+party.when(Guest(name=ANY, age=Y)).forbid(Y < 0)     # ban: a negative age
 party.when(Guest(name=ANY, age=Y)).require(Y < 150)  # every guest: age under 150
 ```
 
@@ -154,16 +158,14 @@ minor(X) :- guest(X, Y), Y < 18.
 #show guest/2.
 ```
 
-And here is the payoff for the construct-versus-constrain distinction: those constraints derived
-**nothing**. The answer
-set holds exactly the atoms the facts and rules put there; the constraints only stand guard. You feel
-them only when the data breaks a promise — add a guest who's 300 and the whole program has no answer set
-at all:
+None of our guests break those constraints, so the program is satisfiable. Solving it returns a single
+answer set — the guests, plus the two adults the rule derived (the minors are derived too, but `show=False`
+keeps them out of the report):
 
 ```python
->>> party.fact(Guest(name="ghost", age=300))
->>> next(iter(party.solve()), None) is None   # unsatisfiable — a constraint removed it
-True
+>>> model = party.solve().first()
+>>> sorted(atom.render() for atom in model.atoms())
+['adult("alice")', 'adult("carol")', 'guest("alice", 30)', 'guest("bob", 17)', 'guest("carol", 41)', 'guest("dan", 12)']
 ```
 
 ## Variable binding

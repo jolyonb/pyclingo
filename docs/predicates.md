@@ -4,7 +4,7 @@ Predicates are the basic building block of ASP programs, and they lie at the hea
 guarantees that ASPAlchemy provides. This page walks from
 declaring predicates and giving them data, through naming and hiding them in the ASP output, to the finer
 points — symbolic constants, negation, declaration fine print, and atoms as first-class Python
-values. For using predicates in rules, see [Rules and Terms](rules.md).
+values. For using predicates in rules, see [Statements and Terms](statements.md).
 
 ## Declaring predicates
 
@@ -224,7 +224,7 @@ class Scratch(Predicate, show=False):
 You can also override visibility per program, without touching the class — useful when a predicate is
 output in one program and scaffolding in another. `program.show(P)` and `program.hide(P)` flip a class's
 default for that program, and `program.show_when(cond)` shows a predicate only where a condition holds
-(its argument is a [conditional literal](rules.md#conditional-literals)).
+(its argument is a [conditional literal](statements.md#conditional-literals)).
 
 The rendered program makes visibility explicit: ASPAlchemy emits a bare `#show.` — which tells clingo to
 hide everything by default — followed by one `#show name/arity.` line for each predicate that should be
@@ -303,7 +303,7 @@ because they're easy to mix up. *Classical negation* makes a
 **positive** claim that something is false: `-p` is the negated atom asserting that `p` does not hold. *Default negation*
 (negation as failure) is weaker — `not p` means only that `p` is not *known* to be true, which isn't the
 same as knowing it's false. Default negation is something you reach for in rule bodies, so it lives in
-[Rules and Terms](rules.md#default-negation). Classical negation is a property of an atom itself, so it
+[Statements and Terms](statements.md#default-negation). Classical negation is a property of an atom itself, so it
 belongs here, and it's what the rest of this section covers.
 
 Classical negation is written as a unary minus on an atom: `-p`. The sign becomes part of the atom —

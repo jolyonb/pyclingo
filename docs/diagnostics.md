@@ -444,7 +444,7 @@ the `raw_asp` call's line.
 
 The INFO promotion you will actually meet first is quieter: **"atom does
 not occur in any rule head"**. A predicate used only under
-[default negation](rules.md#default-negation) — the everyday shape being
+[default negation](statements.md#default-negation) — the everyday shape being
 input facts loaded from data that happens to be empty today — has no head
 anywhere in the program, gringo flags it at INFO, and under the default
 threshold `solve()` raises. The program below is perfectly sensible; it

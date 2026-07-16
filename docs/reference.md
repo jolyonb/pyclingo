@@ -22,13 +22,13 @@ section that teaches it.
 
 - **`ASPProgram`** — the program you build and solve: every verb hangs off
   it. Taught end to end in [Your First Program](getting-started.md); the
-  verbs are cataloged in [Rules and Terms](rules.md#the-verbs).
+  verbs are cataloged in [Statements and Terms](statements.md#the-verbs).
 - **`Segment`** — a named slice of a program for organizing large builds;
   every building verb also lives on a segment.
   [Organizing output](diagnostics.md#organizing-output).
 - **`When`** — the builder `when(...)` returns; close it with `derive()`,
   `choose()`, `forbid()`, `require()`, or `penalize()`.
-  [Rules: when().derive()](rules.md#rules-whenderive).
+  [Rules: when().derive()](statements.md#rules-whenderive).
 - **`GroundedProgram`** — `ground()`'s immutable snapshot, for asking many
   questions of one grounding (assumptions, lazy verbs, inspection).
   [Ground once, solve many](solving.md#ground-once-solve-many).
@@ -129,25 +129,25 @@ All five are taught in [Source locations](diagnostics.md#source-locations).
 ## Rule-building objects
 
 - **`Variable`** — an ASP variable; supports arithmetic, comparisons, and
-  `.in_(pool)` binding. [Variables](rules.md#variables).
+  `.in_(pool)` binding. [Variables](statements.md#variables).
 - **`ANY`** — the don't-care variable (clingo's `_`), for slots whose value
-  is irrelevant. [Variables](rules.md#variables).
+  is irrelevant. [Variables](statements.md#variables).
 - **`V`** — variables by attribute: `V.Cell` is `Variable("Cell")`, no
-  declaration needed. [Variables](rules.md#variables).
+  declaration needed. [Variables](statements.md#variables).
 - **`Vars`** — the class behind `V`: variables by attribute access, with
-  `V.C[1]` for indexed names. [Variables](rules.md#variables).
+  `V.C[1]` for indexed names. [Variables](statements.md#variables).
 - **`Choice`** — the choice-rule builder: the solver's decision space, with
   `exactly()`/`at_least()`/`at_most()` bounds.
   [Choice rules](choices-and-aggregates.md#choice-rules).
 - **`ConditionalLiteral`** — `p(X) : q(X)` for rule bodies and
-  `show_when()`. [Conditional literals](rules.md#conditional-literals).
+  `show_when()`. [Conditional literals](statements.md#conditional-literals).
 - **`RangePool`** — a contiguous range, rendering `1..5`.
-  [Pools and ranges](rules.md#pools-and-ranges).
+  [Pools and ranges](statements.md#pools-and-ranges).
 - **`ExplicitPool`** — an explicit alternative set, rendering `(1;3;5)`.
-  [Pools and ranges](rules.md#pools-and-ranges).
+  [Pools and ranges](statements.md#pools-and-ranges).
 - **`SUP`** / **`INF`** — clingo's `#sup`/`#inf`, the greatest and least
   elements of the term ordering.
-  [Constants and extremes](rules.md#constants-and-extremes).
+  [Constants and extremes](statements.md#constants-and-extremes).
 
 ## Aggregates
 
@@ -164,10 +164,10 @@ put one in a comparison to make a guard —
 ## Rule-building utilities
 
 - **`pool()`** — build the right pool automatically from a Python range,
-  list, or tuple. [Pools and ranges](rules.md#pools-and-ranges).
+  list, or tuple. [Pools and ranges](statements.md#pools-and-ranges).
 - **`Not()`** — default negation as a function (the `~` operator's
   spelling for expressions); on a plain comparison it builds the
-  complement. [Default negation](rules.md#default-negation).
+  complement. [Default negation](statements.md#default-negation).
 - **`Compl()`** — bitwise complement, rendering clingo's `~` (the Python
   `~` operator is reserved for negation). Doubled, it collapses and hands
   back the inner term. [Operator table](math.md#operator-table),
@@ -224,14 +224,14 @@ One line per exported symbol, in `__all__` order:
 | `Negatable` | You accept anything `~` applies to. |
 | `ProgramElement` | You hold one rendered statement of a program — a rule, comment, or blank line (see `RenderedLine`). |
 | `Expression` | You hold arithmetic built from operators on values, like `X + Y * 2` — see [Arithmetic](math.md). |
-| `Comparison` | You hold what a comparison operator on terms builds — see [Comparisons](rules.md#comparisons). |
+| `Comparison` | You hold what a comparison operator on terms builds — see [Comparisons](statements.md#comparisons). |
 | `ComparisonOperator` | You name one of the six comparison operators. |
 | `Operation` | You name an arithmetic or bitwise operation. |
 | `RenderingContext` | You call a term's `render()` yourself and must say where its output lands. |
-| `DefaultNegation` | You hold a `not p(X)` literal, built by `Not()`/`~` — see [Default negation](rules.md#default-negation). |
-| `DefinedConstant` | You hold what `define_constant()` returns — see [Constants and extremes](rules.md#constants-and-extremes). |
+| `DefaultNegation` | You hold a `not p(X)` literal, built by `Not()`/`~` — see [Default negation](statements.md#default-negation). |
+| `DefinedConstant` | You hold what `define_constant()` returns — see [Constants and extremes](statements.md#constants-and-extremes). |
 | `Aggregate` | You accept any of the five aggregates. |
-| `Pool` | You accept either pool kind — see [Pools and ranges](rules.md#pools-and-ranges). |
+| `Pool` | You accept either pool kind — see [Pools and ranges](statements.md#pools-and-ranges). |
 | `Number` | You hold an integer constant term (plain `int`s auto-coerce on write). |
 | `String` | You hold a quoted-string constant term (plain `str`s auto-coerce on write). |
 | `Supremum` / `Infimum` | You annotate the types of the `SUP` and `INF` singletons. |

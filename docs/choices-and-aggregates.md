@@ -12,7 +12,7 @@ executes and checks in CI.
 A choice rule hands a decision to the solver: from a set of candidate atoms,
 make some subset true. `Choice(element, condition=...)` builds one — the
 element is the atom being chosen, and the condition says where the candidates
-come from (it is a [conditional literal](rules.md#conditional-literals): one
+come from (it is a [conditional literal](statements.md#conditional-literals): one
 choice element per way the condition can be satisfied). Cap the decision with
 `exactly()`, `at_least()`, or `at_most()`, and attach it to a body with
 `when(...).derive(...)`:

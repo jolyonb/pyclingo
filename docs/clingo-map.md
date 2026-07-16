@@ -20,19 +20,19 @@ construct anyway.
 
 | clingo | ASPAlchemy | details |
 |--------|------------|---------|
-| `X`, `Node` (variables) | `Variable("X")`, or `V.X` for inline use | [Variables](rules.md#variables) |
-| `_` (don't-care) | `ANY` | [Variables](rules.md#variables) |
+| `X`, `Node` (variables) | `Variable("X")`, or `V.X` for inline use | [Variables](statements.md#variables) |
+| `_` (don't-care) | `ANY` | [Variables](statements.md#variables) |
 | `_X` (named don't-warn variable) | **refused** — use `ANY` | [Deliberate strictness](unsupported.md#deliberate-strictness) |
-| `42` | Python `int`, auto-coerced (`Number` is the explicit form) | [Constants and extremes](rules.md#constants-and-extremes) |
+| `42` | Python `int`, auto-coerced (`Number` is the explicit form) | [Constants and extremes](statements.md#constants-and-extremes) |
 | `"hello"` | Python `str`, auto-coerced — a `str` always means a quoted ASP string | [One text type](predicates.md#bare-predicates) |
 | `n` (symbolic constant / bare atom) | a zero-arity predicate: `Predicate.define("n", [])()` | [Bare atoms](predicates.md#bare-predicates) |
-| `1..5` | `RangePool(1, 5)` or `pool(range(1, 6))` | [Pools and ranges](rules.md#pools-and-ranges) |
-| `(a; b; c)` | `ExplicitPool([...])` or `pool([...])` | [Pools and ranges](rules.md#pools-and-ranges) |
-| `X = 1..5` in a body | `X.in_(RangePool(1, 5))` — also accepts a Python `range`, list, or tuple | [Pools and ranges](rules.md#pools-and-ranges) |
-| `X = Y + 1` (binding assignment in a body) | `X == Y + 1` — a comparison; the equality binds the variable, so it satisfies the safety check | [Comparisons](rules.md#comparisons) |
-| `p(X) : q(X)` (conditional literal in a body) | `ConditionalLiteral(P(x=X), Q(x=X))` | [Conditional literals](rules.md#conditional-literals) |
-| `#sup` / `#inf` | `SUP` / `INF` | [Constants and extremes](rules.md#constants-and-extremes) |
-| `#const n = 5.` | `program.define_constant("n", 5)` — returns the `DefinedConstant` term to use in rules | [Constants and extremes](rules.md#constants-and-extremes) |
+| `1..5` | `RangePool(1, 5)` or `pool(range(1, 6))` | [Pools and ranges](statements.md#pools-and-ranges) |
+| `(a; b; c)` | `ExplicitPool([...])` or `pool([...])` | [Pools and ranges](statements.md#pools-and-ranges) |
+| `X = 1..5` in a body | `X.in_(RangePool(1, 5))` — also accepts a Python `range`, list, or tuple | [Pools and ranges](statements.md#pools-and-ranges) |
+| `X = Y + 1` (binding assignment in a body) | `X == Y + 1` — a comparison; the equality binds the variable, so it satisfies the safety check | [Comparisons](statements.md#comparisons) |
+| `p(X) : q(X)` (conditional literal in a body) | `ConditionalLiteral(P(x=X), Q(x=X))` | [Conditional literals](statements.md#conditional-literals) |
+| `#sup` / `#inf` | `SUP` / `INF` | [Constants and extremes](statements.md#constants-and-extremes) |
+| `#const n = 5.` | `program.define_constant("n", 5)` — returns the `DefinedConstant` term to use in rules | [Constants and extremes](statements.md#constants-and-extremes) |
 | `p(f(X, Y))` (nested function terms) | predicate-valued fields: `Field[F]` — nested atoms travel as typed compound terms | [Declaring predicates](predicates.md#declaring-predicates) |
 | `p((1, 2))` (anonymous tuples) | **refused** (teaching error) — wrap in a named predicate: `pair(1, 2)`, i.e. a nested `Field[Pair]` | [Excluded by philosophy](unsupported.md#excluded-by-philosophy) |
 
@@ -40,11 +40,11 @@ construct anyway.
 
 | clingo | ASPAlchemy | details |
 |--------|------------|---------|
-| `p(3).` | `program.fact(P(x=3))` — ground atoms only, any number per call | [The verbs](rules.md#the-verbs) |
+| `p(3).` | `program.fact(P(x=3))` — ground atoms only, any number per call | [The verbs](statements.md#the-verbs) |
 | `p(a).` (symbolic-constant argument) | the argument is a zero-arity atom: `fact(P(x=a()))` with `a = Predicate.define("a", [])` — a Python `str` would render the quoted string `"a"`, a different value | [Bare atoms](predicates.md#bare-predicates) |
-| `h :- b1, b2.` | `program.when(b1, b2).derive(h)` | [The verbs](rules.md#the-verbs) |
-| `:- b1, b2.` | `program.forbid(b1, b2)` | [The verbs](rules.md#the-verbs) |
-| a comparison or atom that must hold | `program.require(cmp)` / `program.require(p)` — the constraint forbidding the opposite; `require(p)` renders `:- not p` | [The verbs](rules.md#the-verbs) |
+| `h :- b1, b2.` | `program.when(b1, b2).derive(h)` | [The verbs](statements.md#the-verbs) |
+| `:- b1, b2.` | `program.forbid(b1, b2)` | [The verbs](statements.md#the-verbs) |
+| a comparison or atom that must hold | `program.require(cmp)` / `program.require(p)` — the constraint forbidding the opposite; `require(p)` renders `:- not p` | [The verbs](statements.md#the-verbs) |
 | `% comment` | `program.comment(...)`, `section(...)`, `blank_line()` | [Organizing output](diagnostics.md#organizing-output) |
 | `a; b :- c.` (disjunctive heads) | **refused** | [Excluded by philosophy](unsupported.md#excluded-by-philosophy) |
 
@@ -52,9 +52,9 @@ construct anyway.
 
 | clingo | ASPAlchemy | details |
 |--------|------------|---------|
-| `not p(X)` | `Not(P(x=X))` or `~P(x=X)` | [Default negation](rules.md#default-negation) |
-| `not not p(X)` | `~~P(x=X)` — preserved, not collapsed (stable-model semantics): default negation is no involution, unlike arithmetic's `-(-x)` | [Default negation](rules.md#default-negation) |
-| `not X != Y` (negated plain comparison) | `~(X != Y)` — normalized to the complement `X = Y` at construction, gringo's own rewrite done visibly | [Default negation](rules.md#default-negation) |
+| `not p(X)` | `Not(P(x=X))` or `~P(x=X)` | [Default negation](statements.md#default-negation) |
+| `not not p(X)` | `~~P(x=X)` — preserved, not collapsed (stable-model semantics): default negation is no involution, unlike arithmetic's `-(-x)` | [Default negation](statements.md#default-negation) |
+| `not X != Y` (negated plain comparison) | `~(X != Y)` — normalized to the complement `X = Y` at construction, gringo's own rewrite done visibly | [Default negation](statements.md#default-negation) |
 | `-p(X)` (classical negation) | `-P(x=X)` — unary minus on the atom; the sign is part of the atom | [Classical negation](predicates.md#classical-and-default-negation) |
 | `-p` in output declarations | `-P` on the class (a `NegatedSignature`), e.g. in `raw_asp(predicates=[P, -P])` | [The predicates= seatbelt](escape-hatches.md#the-predicates-seatbelt) |
 | `not p :- b.` (negated head) | **refused** (teaching error) — gringo rewrites it into a constraint anyway; spell `forbid(b, p)` | [Deliberate strictness](unsupported.md#deliberate-strictness) |
@@ -116,7 +116,7 @@ normalizations in the last two rows, both cosmetic and value-preserving.
 |--------|------------|---------|
 | `#show p/2.` | shown by default; `show=False` on the class hides, `program.show()` / `hide()` override per class | [Names and visibility](predicates.md#predicate-visibility) |
 | `#show p(X) : cond.` (conditional show) | `program.show_when(ConditionalLiteral(head, condition))` | [Names and visibility](predicates.md#predicate-visibility) |
-| `#const` | `define_constant()` — refused inside raw blocks, same redirect | [Constants and extremes](rules.md#constants-and-extremes) |
+| `#const` | `define_constant()` — refused inside raw blocks, same redirect | [Constants and extremes](statements.md#constants-and-extremes) |
 | `#project` / `#heuristic` | via `raw_asp()` — silently inert until the matching `grounded.control` knob is set | [Solver options](escape-hatches.md#solver-options-and-the-raw-control) |
 | `#script (python) ... #end.` | supported inside ONE self-contained `raw_asp()` block | [Lexical rules](escape-hatches.md#blocks-are-lexically-self-contained) |
 | `@f(X)` terms | supported through the hatch: `raw_asp()` text + `ground(context=obj)` — `@stone(...)` calls `context.stone(...)` | [Calling Python during grounding](escape-hatches.md#calling-python-during-grounding) |

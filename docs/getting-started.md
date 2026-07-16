@@ -192,7 +192,7 @@ for that state*; and `condition=Color(color=C)` — *drawing the candidate value
 `C` from the colors we declared*. That last argument is the piece worth slowing down
 for: the condition doesn't test anything, it *supplies the menu* — the choice ranges
 over exactly the colors the program declared, however many there are. This shape is
-called a [conditional literal](rules.md#conditional-literals), and it reappears
+called a [conditional literal](statements.md#conditional-literals), and it reappears
 inside aggregates later. Cardinalities other than "exactly one" — at least, at most,
 between — are covered in [Choices and Aggregates](choices-and-aggregates.md).
 
@@ -359,7 +359,7 @@ the aggregate is the *how many*.
 This is why `Color(color=C)` cannot simply be dropped. Take it away and `C` appears
 exactly once, inside the aggregate — so the library refuses the rule on the spot, at the
 line that built it, because a variable used exactly once is nearly always a typo
-([variables and safety](rules.md#variables)).
+([variables and safety](statements.md#variables)).
 
 We can solve again, and see that the tins of paint are satisfied:
 
@@ -438,7 +438,7 @@ Everything above transfers mechanically. To model your own problem:
   API responses.
 - **Decisions** → `Choice`, with `condition=` supplying the menu.
 - **Requirements** → `forbid()` for what must never happen, `derive()` for
-  what follows ([Rules and Terms](rules.md)).
+  what follows ([Statements and Terms](statements.md)).
 - **Limits, totals, extremes** → an aggregate (`Count`, `Sum`, `SumPlus`, `Min`, `Max`)
   compared against a bound ([Choices and Aggregates](choices-and-aggregates.md)).
 - **Want every solution, not just one?** Iterate `solve()` instead of

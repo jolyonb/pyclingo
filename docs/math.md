@@ -3,7 +3,7 @@
 *How Python operators become ASP arithmetic, and where the two languages
 disagree about what numbers mean.*
 
-Expressions here appear in rules through [comparisons](rules.md#comparisons);
+Expressions here appear in rules through [comparisons](statements.md#comparisons);
 for the operator-by-operator clingo spelling, see the
 [translation map](clingo-map.md#arithmetic).
 
@@ -97,7 +97,7 @@ X, Y = Variable("X"), Variable("Y")
 ```
 
 The fold happens at construction, like [`Not()` on a plain
-comparison](rules.md#default-negation), so it is visible in the tree you get
+comparison](statements.md#default-negation), so it is visible in the tree you get
 back: an expression built as an addition of a negative reports `SUBTRACT`, and
 holds the positive term.
 
@@ -174,7 +174,7 @@ see *which* operator you passed, so `Expression(None, op, x)` with a computed
 `op` no longer type-checks. Build terms with the operators, not the
 constructor.
 
-The contrast to keep in mind is [default negation](rules.md#default-negation):
+The contrast to keep in mind is [default negation](statements.md#default-negation):
 `not not p` is *preserved*, because default negation is not an involution on
 literals — under stable-model semantics `not not p` is a genuinely different
 literal from `p`. What collapses here is arithmetic on *terms*, where the

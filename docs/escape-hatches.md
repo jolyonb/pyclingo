@@ -143,7 +143,7 @@ Four directives are refused inside raw blocks, each with a redirect in its
 error message:
 
 - `#const` — register it with
-  [`define_constant()`](rules.md#constants-and-extremes) instead. Registered
+  [`define_constant()`](statements.md#constants-and-extremes) instead. Registered
   constants are always emitted, so raw text may use them freely; registration
   is the only door because the const-vs-atom collision checks see registered
   constants only.

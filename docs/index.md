@@ -224,7 +224,7 @@ class per geometry and pick between them at runtime. Static *and* polymorphic.
 - **The code reads as English.** `program.when(...).derive(...)`,
   `program.forbid(...)`, `Choice(...).exactly(1)` — the queens program above
   can be read aloud, roughly correctly, by someone who has never seen ASP.
-  The verbs live in [Rules and Terms](rules.md).
+  The verbs live in [Statements and Terms](statements.md).
 - **You never need to see the clingo code.** The whole loop — express the
   rules, solve, consume typed answers — happens in Python; the generated ASP
   is one `render()` away whenever you want it.
