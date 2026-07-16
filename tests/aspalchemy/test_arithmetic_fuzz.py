@@ -4,10 +4,11 @@ rendered by aspalchemy and evaluated by clingo, must match Python's evaluation
 of the same tree.
 
 The generator avoids clingo/Python semantic divergences
-so any mismatch is a RENDERING bug: division and modulo are
-excluded (truncation vs floor on negatives), ** keeps small non-negative
-exponents on positive bases (no negative-exponent or overflow cases), and
-operand magnitudes are bounded well inside 32 bits.
+so any mismatch is a RENDERING bug: division and modulo appear only with a
+non-negative dividend and positive divisor (where clingo's truncation and
+Python's floor agree; any other operands collapse to a leaf), ** keeps small
+non-negative exponents on positive bases (no negative-exponent or overflow
+cases), and operand magnitudes are bounded well inside 32 bits.
 """
 
 import random
@@ -56,6 +57,20 @@ def build_tree(rng: random.Random, depth: int) -> tuple[Any, Any]:
         base = rng.randint(1, 6)
         exponent = rng.randint(0, 3)
         return Number(base) ** Number(exponent), base**exponent
+    if shape < 0.40:
+        # Division and modulo — the operators whose regrouping is NOT
+        # value-preserving, so they are what makes multiplicative-level
+        # parenthesization observable (a * (b / c * d) vs a * b / c * d).
+        # Only a non-negative dividend and positive divisor are usable
+        # (there clingo's truncation and Python's floor agree); any other
+        # draw collapses to a leaf, like an overflowing subtree.
+        left_term, left_value = build_tree(rng, depth - 1)
+        right_term, right_value = build_tree(rng, depth - 1)
+        if left_value < 0 or right_value <= 0:
+            return _leaf(rng)
+        if rng.random() < 0.5:
+            return left_term // right_term, left_value // right_value
+        return left_term % right_term, left_value % right_value
     _name, op = BINARY_OPS[rng.randrange(len(BINARY_OPS))]
     left_term, left_value = build_tree(rng, depth - 1)
     right_term, right_value = build_tree(rng, depth - 1)

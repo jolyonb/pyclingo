@@ -4,6 +4,23 @@
 
 ### Fixed
 
+- **A right operand at the multiplicative level always keeps its
+  parentheses; regrouping there could silently change the computed value.**
+  The renderer parenthesized a division/modulo child under `*` only when the
+  child *itself* was `/` or `\`, so a `*` child on the right of a `*` parent
+  rendered bare — and any division on that child's left spine was regrouped
+  by gringo's left-associative parse: `5 * ((7 / 3) * 2)` (which is 20)
+  rendered as `5 * 7 / 3 * 2` (which is 22). Integer division truncates, so
+  the regrouping is not value-preserving. The direct spelling had rendered
+  this way since 1.0.0; 1.4.0's involution collapse widened the exposure by
+  also stripping the protective parentheses from `a * -(-(b // c * d))` and
+  the `Compl(Compl(...))` equivalent, which had rendered correctly before.
+  Right-grouped trees at the multiplicative level now always render their
+  parentheses (`5 * (7 / 3 * 2)`), left-nested chains stay minimal, and the
+  differential fuzz suite now generates division and modulo nodes (with
+  operands constrained to where clingo and Python agree), so it would catch
+  this whole class.
+
 - **Name collisions between subclass class data and inherited fields are now
   refused at class creation.** Three spellings used to slip past the
   re-declaration guard and corrupt the schema silently: a `ClassVar`

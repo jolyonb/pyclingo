@@ -58,6 +58,11 @@ CASES = [
     ("sums of products", lambda a, b, c: a * b + c * (a - b), (5, 3, 2)),
     ("deep mix", lambda a, b, c: a + b * (c - a) // (b + c), (2, 7, 5)),
     ("nested division", lambda a, b, c: a * (b // (c * a)), (2, 30, 3)),
+    # The multiplicative-level regrouping trap: a right * operand hiding a
+    # division (or modulo) on its left spine. Regrouped left-associatively
+    # these compute different values, so the parentheses are load-bearing.
+    ("mul right nested hiding div", lambda a, b, c: a * (b // c * a), (5, 7, 3)),
+    ("mul right nested hiding mod", lambda a, b, c: a * (b % c * a), (5, 7, 3)),
     ("unary minus", lambda a, b, c: -a + b * c, (5, 2, 3)),
     ("negated sum", lambda a, b, c: -(a + b) * c, (5, 2, 3)),
     # Modulo
@@ -103,6 +108,11 @@ CASES = [
     ("triple negation", lambda a, b, c: a + neg(neg(neg(b))), (5, 3, 0)),
     ("doubled abs", lambda a, b, c: a + abs(abs(b)), (5, -3, 0)),
     ("mixed unary stack", lambda a, b, c: a + neg(compl(compl(b))), (5, 3, 0)),
+    # The collapse must not discard load-bearing parentheses: before 1.4.1,
+    # collapsing the doubled unary here handed the bare div-hiding tree to
+    # the outer *, which rendered it unparenthesized — a different value
+    ("double negation over the mul trap", lambda a, b, c: a * neg(neg(b // c * a)), (5, 7, 3)),
+    ("double complement over the mul trap", lambda a, b, c: a * compl(compl(b // c * a)), (5, 7, 3)),
 ]
 
 
@@ -234,6 +244,27 @@ def test_multiplication_division_interaction() -> None:
     # Case 4: A complicated case
     expr4 = 2 + (X - 2) // 3 + 3 * ((Y - 2) // 3)
     assert expr4.render() == "2 + (X - 2) / 3 + 3 * ((Y - 2) / 3)"
+
+
+def test_multiplicative_right_operand_keeps_its_parentheses() -> None:
+    # A right operand at the multiplicative level always keeps its
+    # parentheses — not only a / or \ child, but a * child too, whose left
+    # spine may hide a division: 5 * ((7 / 3) * 2) is 20, while regrouped
+    # 5 * 7 / 3 * 2 is 22. Checking only the immediate child's operator
+    # missed this class entirely (fixed in 1.4.1).
+    inner = (Number(7) // Number(3)) * Number(2)
+    assert (Number(5) * inner).render() == "5 * (7 / 3 * 2)"
+    # The involution collapse must land on this same render: before 1.4.1,
+    # collapsing -(-x)/Compl(Compl(x)) discarded the doubled unary's
+    # protective parentheses along with the operators, changing the value.
+    assert (Number(5) * neg(neg(inner))).render() == "5 * (7 / 3 * 2)"
+    assert (Number(5) * Compl(Compl(inner))).render() == "5 * (7 / 3 * 2)"
+    # A right-grouped pure * chain keeps the caller's grouping (regrouping
+    # it would be value-safe, but the parentheses echo the tree built)...
+    assert (Number(5) * (Number(3) * Number(2))).render() == "5 * (3 * 2)"
+    # ...and left-nested chains stay minimal, division included.
+    assert (Number(5) * Number(3) * Number(2)).render() == "5 * 3 * 2"
+    assert inner.render() == "7 / 3 * 2"
 
 
 def test_deeply_nested_expressions() -> None:

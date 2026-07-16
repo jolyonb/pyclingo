@@ -1316,9 +1316,16 @@ class Expression(ComparableTerm, ArithmeticOps, metaclass=_ExpressionMeta):
                     # e.g., a - (b - c)
                     needs_parentheses = is_right_operand
 
-                # Special case: division or modulo within multiplication
-                # (X * Y) / Z differs from X * (Y / Z), and likewise for modulo
-                if self.operator in (Operation.INTEGER_DIVIDE, Operation.MODULO) and parent_op == Operation.MULTIPLY:
+                # The multiplicative level regroups UNSAFELY: gringo parses
+                # a * b / c * d left-associatively, and integer division
+                # truncates, so a right operand at this level always keeps
+                # its parentheses — not only a / or \ child ((X * Y) / Z
+                # differs from X * (Y / Z)), but a * child too, whose left
+                # spine may hide a division: a * (b / c * d) regrouped is
+                # ((a * b) / c) * d, a different value. The additive level
+                # needs no such rule: + and - regroup value-preservingly in
+                # a ring (wrapping included).
+                if parent_op == Operation.MULTIPLY:
                     needs_parentheses = is_right_operand
 
         # Apply parentheses if needed
