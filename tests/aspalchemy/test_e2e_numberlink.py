@@ -233,8 +233,8 @@ def _build_program() -> tuple[ASPProgram, type[Predicate]]:
         OrthogonalDir(cell1=Cell1, direction=D, cell2=Cell2),
     ).derive(PropagatedSymbol(loc=Cell2, sym=Sym))
 
-    rules.section("Symbols cannot be connected to different symbols")
-    rules.when(Symbol(loc=Cell_, sym=ANY)).require(Count(Sym, condition=PropagatedSymbol(loc=Cell_, sym=Sym)) == 1)
+    rules.section("Every cell sees exactly one symbol: no stray loops, no paths between different symbols")
+    rules.when(cell).require(Count(Sym, condition=PropagatedSymbol(loc=cell, sym=Sym)) == 1)
 
     rules.section("Define connected relationship")
     rules.when(
