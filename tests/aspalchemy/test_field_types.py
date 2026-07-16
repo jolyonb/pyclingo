@@ -155,6 +155,31 @@ def test_polymorphic_slot_holds_a_nested_atom_and_rejects_bool() -> None:
         Poly(x=True)
 
 
+def test_field_defaults_are_used_and_validated() -> None:
+    # A field may carry a default value, assigned beside the annotation (the
+    # dataclass spelling, documented in docs/predicates.md). It fills in when
+    # the argument is omitted, an explicit value overrides it, and BOTH routes
+    # pass the same per-field write validation — a wrong-typed default is
+    # caught at the first construction that relies on it.
+    class Tagged(Predicate, show=False):
+        loc: Field[int]
+        kind: Field[str] = "plain"  # type: ignore[assignment]
+
+    assert Tagged(loc=1).kind == "plain"
+    assert Tagged(loc=1).render() == 'tagged(1, "plain")'
+    assert Tagged(loc=1, kind="x").render() == 'tagged(1, "x")'
+    with pytest.raises(TypeError, match="Field 'kind' expects str"):
+        Tagged(loc=1, kind=7)  # type: ignore[arg-type]
+
+    class BadDefault(Predicate, show=False):
+        loc: Field[int]
+        kind: Field[str] = 7  # type: ignore[assignment]
+
+    with pytest.raises(TypeError, match="Field 'kind' expects str"):
+        BadDefault(loc=1)
+    assert BadDefault(loc=1, kind="x").render() == 'bad_default(1, "x")'
+
+
 def test_redeclaring_an_inherited_field_is_refused() -> None:
     # A subclass may only ADD fields; re-typing an inherited one is refused with
     # a teaching error (rather than a leaky dataclass "default" collision).
@@ -166,6 +191,46 @@ def test_redeclaring_an_inherited_field_is_refused() -> None:
 
         class Sub(Base, show=False):
             a: Field[str]  # type: ignore[assignment]
+
+
+def test_class_data_shadowing_an_inherited_field_is_refused() -> None:
+    # The other spellings of a re-declaration: a ClassVar re-annotating an
+    # inherited field would make dataclass() silently DELETE it from the
+    # signature (wrong arity, wrong render), and a bare assignment would
+    # shadow the base's Field descriptor in the MRO, so writes to that field
+    # would skip validation entirely. Both are refused at class creation.
+    class Base(Predicate, show=False):
+        a: Field[int]
+        b: Field[int]
+
+    with pytest.raises(TypeError, match=r"shadows the inherited field 'a'"):
+
+        class ViaClassVar(Base, show=False):
+            a: ClassVar[int] = 5  # type: ignore[misc]
+
+    with pytest.raises(TypeError, match=r"shadows the inherited field 'a'"):
+
+        class ViaBareValue(Base, show=False):
+            a = 99  # type: ignore[assignment]
+
+
+def test_new_field_shadowing_inherited_class_data_is_refused() -> None:
+    # The mirror collision: a subclass field named after inherited class data
+    # would make dataclass() read the base's value as a silent default nobody
+    # wrote. An explicit default assigned in the subclass body stays legal.
+    class Base(Predicate, show=False):
+        a: Field[int]
+        tag: ClassVar[int] = 7
+
+    with pytest.raises(TypeError, match=r"'tag' is inherited class data"):
+
+        class Sub(Base, show=False):
+            tag: Field[int]  # type: ignore[misc]
+
+    class Deliberate(Base, show=False):
+        tag: Field[int] = 7  # type: ignore[assignment, misc]
+
+    assert Deliberate(a=1).render() == "deliberate(1, 7)"
 
 
 def test_non_field_annotation_is_refused() -> None:

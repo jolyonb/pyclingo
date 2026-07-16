@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.4.1 — 2026-07-16
+
+### Fixed
+
+- **Name collisions between subclass class data and inherited fields are now
+  refused at class creation.** Three spellings used to slip past the
+  re-declaration guard and corrupt the schema silently: a `ClassVar`
+  re-annotating an inherited field made `dataclass()` silently *delete* that
+  field from the signature (wrong arity, wrong render, the constant
+  masquerading as field data); a bare assignment (or `def`) reusing an
+  inherited field's name shadowed the base's `Field` descriptor, so every
+  write to that field skipped validation entirely; and a new subclass
+  `Field[...]` named after an inherited `ClassVar`/attribute made
+  `dataclass()` read the base's value as a silent default nobody wrote. All
+  three now raise a teaching `TypeError` at class creation. Explicit field
+  defaults assigned in the subclass's own body remain legal and are now
+  pinned by tests: a default fills in when omitted, an explicit value
+  overrides it, and both routes pass the same per-field write validation.
+
 ## 1.4.0 — 2026-07-15
 
 ### Breaking

@@ -389,6 +389,28 @@ class Predicate(PredicateBase, Negatable, metaclass=_PredicateMeta):
                     f"{cls.__name__}.{field_name} re-declares the inherited field {field_name!r}; "
                     f"a predicate subclass may only add fields, not re-type inherited ones."
                 )
+            # The mirror collision: a NEW field whose name is INHERITED class
+            # data (a base ClassVar or attribute). dataclass() would read that
+            # value as the field's DEFAULT — a silently-optional field whose
+            # default nobody wrote. A value assigned in THIS class body is the
+            # documented spelling of a deliberate default and stays legal;
+            # reserved names fall through to _validate_schema's refusal below.
+            if field_name not in _RESERVED_FIELD_NAMES and field_name not in vars(cls) and hasattr(cls, field_name):
+                raise TypeError(
+                    f"{cls.__name__}.{field_name} is declared Field[...], but {field_name!r} is inherited "
+                    f"class data (a base-class ClassVar or attribute), which dataclass() would read as a "
+                    f"silent default. Rename the field, or assign a default explicitly if one is intended."
+                )
+        # The same re-declaration refusal, for the other spellings: a ClassVar,
+        # a bare (unannotated) assignment, or a def reusing an inherited field's
+        # name would corrupt the schema silently — dataclass() DELETES a field
+        # re-annotated as ClassVar, and any plain class attribute shadows the
+        # base's Field descriptor in the MRO, so writes skip all validation.
+        for member_name in sorted(inherited_fields & (set(cls.__annotations__ or ()) | set(vars(cls)))):
+            raise TypeError(
+                f"{cls.__name__}.{member_name} shadows the inherited field {member_name!r}; "
+                f"class data may not reuse an inherited field's name. Rename one of them."
+            )
         # Validate all the dataclass fields
         for field_name, annotation in (cls.__annotations__ or {}).items():
             if field_name in ground_types:
