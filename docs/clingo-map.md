@@ -3,7 +3,7 @@
 *Translation table: every clingo construct → its spelling here or its refusal link; CI-pinned by a trailing block of verified transcripts.*
 
 You already write clingo. This page answers, construct by construct, how each
-thing you write is spelled in aspalchemy — or that it is deliberately refused,
+thing you write is spelled in ASPAlchemy — or that it is deliberately refused,
 with a link to [why](unsupported.md). Every supported row links the guide page
 that owns it, and the [Receipts](#receipts) section shows the load-bearing
 renderings as executed transcripts, so if a table entry drifts from the
@@ -18,7 +18,7 @@ construct anyway.
 
 ## Terms and literals
 
-| clingo | aspalchemy | details |
+| clingo | ASPAlchemy | details |
 |--------|------------|---------|
 | `X`, `Node` (variables) | `Variable("X")`, or `V.X` for inline use | [Variables](rules.md#variables) |
 | `_` (don't-care) | `ANY` | [Variables](rules.md#variables) |
@@ -38,7 +38,7 @@ construct anyway.
 
 ## Facts, rules, constraints
 
-| clingo | aspalchemy | details |
+| clingo | ASPAlchemy | details |
 |--------|------------|---------|
 | `p(3).` | `program.fact(P(x=3))` — ground atoms only, any number per call | [The verbs](rules.md#the-verbs) |
 | `p(a).` (symbolic-constant argument) | the argument is a zero-arity atom: `fact(P(x=a()))` with `a = Predicate.define("a", [])` — a Python `str` would render the quoted string `"a"`, a different value | [Bare atoms](predicates.md#bare-predicates) |
@@ -50,7 +50,7 @@ construct anyway.
 
 ## Negation
 
-| clingo | aspalchemy | details |
+| clingo | ASPAlchemy | details |
 |--------|------------|---------|
 | `not p(X)` | `Not(P(x=X))` or `~P(x=X)` | [Default negation](rules.md#default-negation) |
 | `not not p(X)` | `~~P(x=X)` — preserved, not collapsed (stable-model semantics): default negation is no involution, unlike arithmetic's `-(-x)` | [Default negation](rules.md#default-negation) |
@@ -62,7 +62,7 @@ construct anyway.
 
 ## Choices and cardinality
 
-| clingo | aspalchemy | details |
+| clingo | ASPAlchemy | details |
 |--------|------------|---------|
 | `{ h : c } = 1 :- b.` | `program.when(b).derive(Choice(h, condition=c).exactly(1))` | [Choice rules](choices-and-aggregates.md#choice-rules) |
 | `2 { h : c } 4` (head bounds) | `Choice(h, condition=c).at_least(2).at_most(4)` | [Choice rules](choices-and-aggregates.md#choice-rules) |
@@ -71,7 +71,7 @@ construct anyway.
 
 ## Aggregates
 
-| clingo | aspalchemy | details |
+| clingo | ASPAlchemy | details |
 |--------|------------|---------|
 | `#count{...}` / `#sum{...}` / `#sum+{...}` / `#min{...}` / `#max{...}` | `Count` / `Sum` / `SumPlus` / `Min` / `Max` — tuple terms and conditions as arguments, more elements via `add()` | [Aggregates](choices-and-aggregates.md#aggregates) |
 | `#count{...} > 3` (one-sided guard) | one comparison: `Count(...) > 3` | [Guards, the right way](choices-and-aggregates.md#guards-the-right-way) |
@@ -84,7 +84,7 @@ Same tree, different spellings — Python builds the expression with Python
 operators, and the renderer emits clingo's. Semantics (division sign quirks,
 precedence, overflow) live in [Arithmetic](math.md).
 
-| clingo | aspalchemy | details |
+| clingo | ASPAlchemy | details |
 |--------|------------|---------|
 | `x / y` (integer division) | `x // y` | [Arithmetic](math.md#operator-table) |
 | `x \ y` (modulo) | `x % y` | [Arithmetic](math.md#operator-table) |
@@ -100,7 +100,7 @@ normalizations in the last two rows, both cosmetic and value-preserving.
 
 ## Optimization
 
-| clingo | aspalchemy | details |
+| clingo | ASPAlchemy | details |
 |--------|------------|---------|
 | `#minimize{ w@p, t : c }.` | `program.minimize(w, *terms, condition=c, priority=p)` | [Optimization](solving.md#optimization) |
 | `#maximize{ w@p, t : c }.` | `program.maximize(w, *terms, condition=c, priority=p)` | [Optimization](solving.md#optimization) |
@@ -112,7 +112,7 @@ normalizations in the last two rows, both cosmetic and value-preserving.
 
 ## Directives
 
-| clingo | aspalchemy | details |
+| clingo | ASPAlchemy | details |
 |--------|------------|---------|
 | `#show p/2.` | shown by default; `show=False` on the class hides, `program.show()` / `hide()` override per class | [Names and visibility](predicates.md#predicate-visibility) |
 | `#show p(X) : cond.` (conditional show) | `program.show_when(ConditionalLiteral(head, condition))` | [Names and visibility](predicates.md#predicate-visibility) |
@@ -127,7 +127,7 @@ normalizations in the last two rows, both cosmetic and value-preserving.
 
 ## Solving modes
 
-| clingo | aspalchemy | details |
+| clingo | ASPAlchemy | details |
 |--------|------------|---------|
 | `--models 0` (enumerate all) | iterate `solve()` — the stream is lazy and unbounded; take what you need | [The model stream](solving.md#the-model-stream) |
 | `--enum-mode=brave` / `--enum-mode=cautious` | `brave()` / `cautious()` — note the one-sided partial-certification contract | [Brave and cautious](solving.md#brave-and-cautious) |
@@ -278,7 +278,7 @@ p(X) :- q(X).
 
 ## Positioning
 
-aspalchemy types the *program*: rules, choices, and constraints are validated
+ASPAlchemy types the *program*: rules, choices, and constraints are validated
 Python objects before clingo ever parses a line. clorm types the *data
 boundary* — facts in, models out, with a relational query layer over
 solutions — and by design leaves the rules themselves as ASP text. The two
@@ -286,5 +286,5 @@ tools solve different problems: if you want to keep writing rules in `.lp`
 and query solutions relationally, clorm is the right tool; if you want the
 program itself to be typed Python, you are in the right docs. Solution
 handling here is deliberately minimal — typed atoms, loud failures
-([Solving and Results](solving.md)) — and the two compose: aspalchemy to
+([Solving and Results](solving.md)) — and the two compose: ASPAlchemy to
 define the program, clorm to handle the data.

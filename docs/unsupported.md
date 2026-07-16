@@ -14,7 +14,7 @@ supported spelling.
 A library that emits a language it doesn't fully admit owes you two things:
 the boundary must be principled, and there must be a door through it. The
 boundary is principled because it is one-sided — nothing on this page is a
-construct that clingo accepts, aspalchemy could model cleanly, and we simply
+construct that clingo accepts, ASPAlchemy could model cleanly, and we simply
 didn't get to. Each exclusion is here because clingo would reject it, because
 clingo would silently misread it, or because a design decision (recorded
 below) keeps it out. And the door exists: everything excluded can be written
@@ -31,7 +31,7 @@ expects. See [Arithmetic](math.md).
 
 These constructs are outside the typed model on purpose.
 
-**Disjunctive heads** (`a ; b :- c.`). The generate step in aspalchemy is
+**Disjunctive heads** (`a ; b :- c.`). The generate step in ASPAlchemy is
 spelled `Choice`: `Choice(...).at_least(1)` covers what a disjunctive head is
 nearly always used for, and `raw_asp()` covers the rest. Trying to build one
 (`p | q` on atoms, or a conditional literal in a head) raises with exactly
@@ -72,7 +72,7 @@ is the full story.
 
 clingo's incremental workflow — `#program` parts grounded onto one Control
 across successive solves, the iterative-deepening and planning idiom — is
-entirely unmodeled: aspalchemy grounds a single base part, and `raw_asp()`
+entirely unmodeled: ASPAlchemy grounds a single base part, and `raw_asp()`
 rejects `#program` outright. Supporting it is a genuine design project, not a
 feature bolt-on. It breaks `GroundedProgram`'s core promise — an immutable
 snapshot that solves the same program forever — in favor of a handle that
@@ -173,7 +173,7 @@ objectives themselves, see [Optimization](solving.md#optimization).
 ## Better errors, not restrictions
 
 These are not subset boundaries. Each construct here is something clingo
-would reject or silently misread anyway — aspalchemy just fails at your
+would reject or silently misread anyway — ASPAlchemy just fails at your
 Python line, with the diagnosis, instead of at grounding or (worse) never.
 
 **Bare pools as rule elements.** A pool standing alone in a rule is a clingo
@@ -218,7 +218,7 @@ the site's single-demo rule, the executable demos live in the guide pages
 linked below, not here.
 
 **`_X` don't-warn variables.** gringo allows underscore-prefixed names to
-suppress its own warnings; aspalchemy's rule is narrower — one underscore
+suppress its own warnings; ASPAlchemy's rule is narrower — one underscore
 means anonymous, full stop. Use `ANY` for don't-care positions.
 
 **Singleton variables.** A variable used exactly once in a rule is usually a

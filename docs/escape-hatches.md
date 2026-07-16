@@ -62,7 +62,7 @@ line, so even errors only gringo can catch come home to your source. See
 ## The predicates= seatbelt
 
 Raw text is invisible to the program's tree walkers, so `predicates=` is how
-a raw block tells aspalchemy what it produces — and the contract is
+a raw block tells ASPAlchemy what it produces — and the contract is
 exhaustive, enforced at `ground()` against gringo's own signature table.
 Declaring a class does two jobs: it emits the `#show` directive that lets the
 predicate reach the model, and it gives model atoms of that signature a typed
@@ -109,7 +109,7 @@ ValueError: The grounded program contains predicates never declared to aspalchem
 Visibility stays under your control as usual: declare the class with
 `show=False` (or `hide()` it on the program) to keep a scaffolding predicate
 out of the model. One genuine exception: atoms carrying escaped strings
-cannot round-trip — aspalchemy has no escaping support — so if a raw block
+cannot round-trip — ASPAlchemy has no escaping support — so if a raw block
 produces them, `hide()` that class and the rest of the model stays readable.
 
 ## Blocks are lexically self-contained
@@ -149,7 +149,7 @@ error message:
   constants only.
 - `#program` and `#external` — the program grounds a single `base` part, so
   statements after a part directive would land in an unloaded part and
-  silently vanish, and no aspalchemy verb speaks `Control.assign_external`.
+  silently vanish, and no ASPAlchemy verb speaks `Control.assign_external`.
   This is the [multi-shot story](unsupported.md#multi-shot-solving-a-future-design-project);
   for a per-solve switch, state the atom with a choice and pin it with
   `assumptions=`.
@@ -198,7 +198,7 @@ The `@double(N)` term is called during grounding, once per `base` fact:
 [(2, 4), (21, 42)]
 ```
 
-Honest caveats. This is raw-clingo territory: aspalchemy does not model
+Honest caveats. This is raw-clingo territory: ASPAlchemy does not model
 `@`-terms, so the text and the context must agree on their own — context
 methods take and return `clingo.Symbol` values, with no typed layer between.
 And the [ground-program views](diagnostics.md#seeing-the-ground-program)
@@ -217,7 +217,7 @@ block is also accepted — same territory, same caveats.
 observers — at your own risk. ASPAlchemy's guarantees stop here: direct
 mutations bypass the sequential-solve guard and the per-solve settings the
 verbs restate on every entry. Reconfigure between solves, never during one,
-and prefer the aspalchemy verbs where they exist.
+and prefer the ASPAlchemy verbs where they exist.
 
 This is where a daily clingo user's command-line questions land. `-t 4`,
 `--seed`, `--configuration=jumpy`: set the matching key on
@@ -229,7 +229,7 @@ documentation is the option inventory — we deliberately don't mirror it).
 [clingo-map](clingo-map.md#solving-modes) has the full row.
 
 The worked example is the pair of directives that ground *silently inert*
-under the aspalchemy verbs: `#project` does nothing until the solve actually
+under the ASPAlchemy verbs: `#project` does nothing until the solve actually
 projects, and `#heuristic` does nothing until the Domain heuristic is on.
 Set the knob through the control, or the directive quietly changes nothing:
 

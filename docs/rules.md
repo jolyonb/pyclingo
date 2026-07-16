@@ -191,7 +191,7 @@ and nothing else: those are the substitutions where a bound `Y` also cleared the
 The flip side is the rule you *can't* ground. A variable that shows up only in places that read — in the
 head, under a `not`, or in a comparison — with no positive atom to bind it is **unsafe**: clingo has no
 set of values to range it over. So the discipline is a one-liner: every variable must appear in at least
-one positive body atom. aspalchemy enforces it and flags a violation at the line that built the rule — the
+one positive body atom. ASPAlchemy enforces it and flags a violation at the line that built the rule — the
 [next section](#variables) shows it happening. (One term does both: an equality is clingo's *assignment*
 and binds — `X == Y + 1`, or a domain `X.in_(...)` — so it counts as positive too; see
 [Comparisons](#comparisons).)
@@ -206,7 +206,7 @@ module-level `V` (a ready-made `Vars` instance) mints variables by attribute acc
 `Variable("Room")` with no declaration first; and `ANY` is the anonymous variable `_` for a don't-care
 position, as in the `Edge(a=N, b=ANY)` rules of
 [the tutorial](getting-started.md#derive-new-facts-with-rules). gringo (clingo's grounder — the part that
-instantiates your rules) accepts `_X`-style "don't warn" names, but aspalchemy refuses them: one
+instantiates your rules) accepts `_X`-style "don't warn" names, but ASPAlchemy refuses them: one
 underscore means anonymous, full stop. Use `ANY`.
 
 ```python
@@ -217,7 +217,7 @@ underscore means anonymous, full stop. Use `ANY`.
 '_'
 ```
 
-A variable that appears exactly once in a rule is almost always a typo, so aspalchemy rejects it — a lint
+A variable that appears exactly once in a rule is almost always a typo, so ASPAlchemy rejects it — a lint
 gringo itself doesn't do (it stays quiet about singletons; this is one of the library's
 [deliberate strictnesses](unsupported.md#deliberate-strictness)). The fix is either the variable you
 actually meant, or `ANY` to say the don't-care out loud. And if you really do mean it, the lint is
@@ -267,7 +267,7 @@ table and the clingo-vs-Python fine print are in [Arithmetic](math.md)), and the
 be a whole atom: `X == Cell(row=1, col=2)` compares against — and destructures — a nested term.
 
 There's a catch that falls out of `==` building a term: a comparison has no truth value. So `if X == Y:`
-is almost always a bug, and aspalchemy makes it a *loud* one rather than letting you take a silently wrong
+is almost always a bug, and ASPAlchemy makes it a *loud* one rather than letting you take a silently wrong
 branch. Chained comparisons like `X < Y < Z` hit the same wall — Python evaluates them as
 `(X < Y) and (Y < Z)`, which needs a truth value in the middle — so pass each one separately:
 `when(X < Y, Y < Z)`. (Atoms are the exception: they're ordinary data, so `==` between two atoms is plain
@@ -341,7 +341,7 @@ rule negating the only occurrence of a variable is unsafe. One practical note: t
 `Booked(room=2)` fact is load-bearing. If a default-negated predicate is never derived *anywhere* — no
 fact, no rule head — gringo flags it ("atom does not occur in any rule head"). Raw clingo shrugs and
 grounds anyway (the negation trivially holds), but a never-derivable atom in a body is usually a
-misspelled predicate name, so aspalchemy [makes that message loud](diagnostics.md#clingos-messages) at
+misspelled predicate name, so ASPAlchemy [makes that message loud](diagnostics.md#clingos-messages) at
 solve time by default.
 
 `~` and the named form `Not()` are the same operation — use whichever reads better. (The *other* negation,
@@ -454,7 +454,7 @@ restriction:
 ```
 
 Those two are the only legal positions. A bare pool sitting alone as a rule element is a clingo syntax
-error, so aspalchemy refuses it at construction — along with the subtler shapes (a negated pool
+error, so ASPAlchemy refuses it at construction — along with the subtler shapes (a negated pool
 comparison, a pool inside `require()`) whose clingo reading is never what the code seems to say: see
 [better errors, not restrictions](unsupported.md#better-errors-not-restrictions).
 

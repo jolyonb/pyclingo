@@ -306,7 +306,7 @@ isn't: gringo (clingo's grounder — the half that instantiates your rules
 over the actual data) recognizes the shared aggregate, and the
 two-comparison band grounds to the same solver input as its native
 two-guard interval literal (`3 <= #count{ ... } <= 6` as one body literal —
-the form aspalchemy [deliberately doesn't
+the form ASPAlchemy [deliberately doesn't
 model](unsupported.md#deliberate-strictness)). Probed against clingo 5.8:
 on a 100-element band, 3,858 bytes of aspif (the ground
 statement stream that clasp — the search engine consuming the ground
@@ -394,7 +394,7 @@ gap grows with it.
 In clingo, braces in a rule *head* choose. The same braces in a rule *body* —
 `2 { p(X) } 4 :- q.` — are a different construct wearing the same syntax: a
 cardinality **test** that checks how many `p(X)` are true. Nothing is chosen.
-aspalchemy refuses a `Choice` in body position, and the error says how to
+ASPAlchemy refuses a `Choice` in body position, and the error says how to
 spell what the body braces actually mean:
 
 ```python

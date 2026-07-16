@@ -226,7 +226,7 @@ output in one program and scaffolding in another. `program.show(P)` and `program
 default for that program, and `program.show_when(cond)` shows a predicate only where a condition holds
 (its argument is a [conditional literal](rules.md#conditional-literals)).
 
-The rendered program makes visibility explicit: aspalchemy emits a bare `#show.` — which tells clingo to
+The rendered program makes visibility explicit: ASPAlchemy emits a bare `#show.` — which tells clingo to
 hide everything by default — followed by one `#show name/arity.` line for each predicate that should be
 visible:
 

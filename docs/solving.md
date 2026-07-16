@@ -6,7 +6,7 @@
 
 The examples on this page need a program to solve. Here is a small one — the
 verbs are covered in [Rules and Terms](rules.md); if this is your first
-aspalchemy program, start with [Your First Program](getting-started.md#solve-and-read-back)
+ASPAlchemy program, start with [Your First Program](getting-started.md#solve-and-read-back)
 instead.
 
 ```python
