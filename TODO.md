@@ -2,16 +2,20 @@
 
 This is a wishlist of items.
 
-- **Read-path performance at scale.** The model-read path is tuned for
-  puzzle-sized models, not industrial ones: `Predicate.__eq__`/`__hash__` go
-  through `render()` (every set/dict operation on atoms builds strings),
-  `AtomCollection.__contains__` is a linear scan over a per-class list with
-  that render-based equality inside, and reconstruction builds a validated
-  dataclass instance per atom. Fine at 10^4 atoms; will hurt at 10^5–10^6.
-  Options when it matters: cache the rendered form on the atom, back
-  membership with a set, profile reconstruction. Until then, keep any
-  "fast at scale" claims scoped to what they mean (hidden atoms are never
-  read back at all).
+- **Read-path performance at scale: reconstruction is what remains.** The
+  1.4.1 round fixed the two hot spots — `render()` caches on the frozen
+  instance (so render-based eq/hash stopped rebuilding strings: hashing
+  100k atoms into a set 0.68s → 0.016s) and `AtomCollection.__contains__`
+  answers from a lazily-built per-class set (one membership check at 100k
+  atoms 1.25s → microseconds). What's left is construction: reconstruction
+  builds a validated dataclass instance per atom, ~10 µs each (~1s per
+  100k atoms) — profile it if 10^6-atom models become real. Slots were
+  investigated and rejected (2026-07-16): ~40 B/atom ceiling, zero read
+  speedup on CPython 3.14, and dataclass(slots=True) returns a new class,
+  which the __init_subclass__ creation path cannot swap in; if atom memory
+  ever matters at 10^7 scale, columnar storage in AtomCollection is the
+  lever, not per-instance slots. Keep any "fast at scale" claims scoped to
+  what they mean (hidden atoms are never read back at all).
 
 - **Model two-sided aggregate guards internally.** A
   first-class banded form could also steer users away from the real trap,

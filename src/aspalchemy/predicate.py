@@ -668,17 +668,40 @@ class Predicate(PredicateBase, Negatable, metaclass=_PredicateMeta):
         return all(arg.is_grounded for arg in self.arguments)
 
     def render(self, context: RenderingContext = RenderingContext.DEFAULT) -> str:
+        # The rendered form is the atom's canonical identity (__eq__ and
+        # __hash__ compare it), so it is computed once and stashed on the
+        # instance — hashing a large model's atoms into sets must not
+        # re-walk the tree every time. The stash is sound ONLY because
+        # atoms are FROZEN: no field can change after construction, so the
+        # string can never go stale, and everything that produces a
+        # different atom hands back a fresh instance with no cache —
+        # constructors and __replace__ rebuild from scratch, and __neg__'s
+        # field-sharing duplicate (the one path that copies the __dict__ of
+        # a live atom) deliberately skips the stash, because the sign
+        # changes the render. If atoms ever stop being frozen, this cache
+        # must go. Cacheable without a context key: the output never
+        # depends on `context` (the parameter is Term-interface uniformity;
+        # the lone-argument context is what this node passes DOWN). A
+        # first-render race under threads is benign: every thread computes
+        # the same string, and a plain attribute store is atomic.
+        try:
+            return self._render_cache  # type: ignore[attr-defined, no-any-return]
+        except AttributeError:
+            pass
+
         sign = "-" if self.negated else ""
         arguments = self.arguments
         if not arguments:
-            return f"{sign}{self.get_name()}"
-
-        if len(arguments) == 1:
-            args_str = arguments[0].render(context=RenderingContext.LONE_PREDICATE_ARGUMENT)
+            rendered = f"{sign}{self.get_name()}"
         else:
-            args_str = ", ".join(arg.render() for arg in arguments)
+            if len(arguments) == 1:
+                args_str = arguments[0].render(context=RenderingContext.LONE_PREDICATE_ARGUMENT)
+            else:
+                args_str = ", ".join(arg.render() for arg in arguments)
+            rendered = f"{sign}{self.get_name()}({args_str})"
 
-        return f"{sign}{self.get_name()}({args_str})"
+        object.__setattr__(self, "_render_cache", rendered)
+        return rendered
 
     def validate_in_context(self, is_in_head: bool) -> None:
         """Predicates are valid in both heads and bodies."""
@@ -734,6 +757,8 @@ class Predicate(PredicateBase, Negatable, metaclass=_PredicateMeta):
         # object the sign flip needs
         negation = object.__new__(type(self))
         for key, value in self.__dict__.items():
+            if key == "_render_cache":
+                continue  # the sign changes the render; the duplicate re-renders fresh
             object.__setattr__(negation, key, value)
         object.__setattr__(negation, "_negated", not self.negated)
         return negation

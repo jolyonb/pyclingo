@@ -2,6 +2,20 @@
 
 ## 1.4.1 — 2026-07-16
 
+### Performance
+
+- **Atom equality, hashing, and membership no longer re-render on every
+  comparison.** An atom's rendered form is its canonical identity (`==` and
+  `hash()` compare it), and it was recomputed from the term tree on every
+  call — so set/dict workloads over large models paid a full re-render per
+  operation, and one `atom in collection` check at 100k atoms took over a
+  second. `render()` now computes once and caches on the frozen instance
+  (lazily — atoms that are only field-read pay nothing), and
+  `AtomCollection` membership answers from a per-class set built on the
+  first `in` query instead of scanning a list. Measured at 100k atoms:
+  hashing the model into a set 0.68s → 0.016s; a single membership check
+  1.25s → microseconds. Construction and plain field reads are unchanged.
+
 ### Fixed
 
 - **A right operand at the multiplicative level always keeps its

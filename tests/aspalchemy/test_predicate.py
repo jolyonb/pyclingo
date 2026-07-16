@@ -92,6 +92,36 @@ def test_negation_builds_a_distinct_atom_despite_copy_identity() -> None:
     assert negated.negated is True and atom.negated is False
 
 
+def test_render_is_cached_on_the_frozen_instance() -> None:
+    # render() stashes its result on first call — the rendered form is the
+    # atom's canonical identity (eq/hash compare it), so repeated hashing
+    # must not re-walk the tree. Identity of the returned string pins that
+    # the second call is the stash, not a recomputation; frozenness is what
+    # makes the stash sound (fields can never change under it).
+    atom = CluePred(loc="a1", value=7)
+    first = atom.render()
+    assert atom.render() is first
+
+
+def test_render_cache_never_leaks_through_atom_producing_paths() -> None:
+    # Every path that hands back a DIFFERENT atom must not inherit the
+    # cached render of the atom it came from: __neg__'s field-sharing
+    # duplicate skips the stash (the sign changes the render), double
+    # negation re-renders the positive form, copy.replace() rebuilds
+    # through the constructor, and a pickle round trip must still render
+    # correctly whether or not the cache was populated when pickled.
+    atom = CluePred(loc="a1", value=7)
+    assert atom.render() == 'clue_pred("a1", 7)'  # populate the cache
+    negated = -atom
+    assert negated.render() == '-clue_pred("a1", 7)'
+    assert (-negated).render() == 'clue_pred("a1", 7)'
+    assert copy.replace(atom, value=8).render() == 'clue_pred("a1", 8)'
+    assert copy.replace(negated, value=8).render() == '-clue_pred("a1", 8)'
+    assert pickle.loads(pickle.dumps(atom)).render() == 'clue_pred("a1", 7)'
+    fresh = pickle.loads(pickle.dumps(CluePred(loc="b2", value=1)))  # cache never populated
+    assert fresh.render() == 'clue_pred("b2", 1)'
+
+
 def test_predicate_default_negation_operator() -> None:
     """Test the ~ operator creates DefaultNegation."""
     Person = Predicate.define("person", ["name"])

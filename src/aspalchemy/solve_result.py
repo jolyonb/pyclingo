@@ -117,6 +117,13 @@ class AtomCollection:
         self._by_class: dict[type[Predicate], list[Predicate]] = {}
         for atom in atoms:
             self._by_class.setdefault(type(atom), []).append(atom)
+        # Membership sets, built lazily per class on the first `in` query
+        # (see __contains__): building one hashes every atom of the class
+        # (each hash renders once, cached on the atom), and a collection
+        # whose membership is never asked should not pay that. Sound
+        # because the collection is immutable after construction — nothing
+        # ever adds to or removes from _by_class.
+        self._membership: dict[type[Predicate], set[Predicate]] = {}
 
     def _reject_hidden(self, predicate: type[Predicate]) -> None:
         """
@@ -198,7 +205,14 @@ class AtomCollection:
                 f"Ask with the plain value instead (as in p(3) rather than p(c))."
             )
         self._reject_hidden(type(atom))
-        return atom in self._by_class.get(type(atom), [])
+        cls = type(atom)
+        members = self._membership.get(cls)
+        if members is None:
+            # First query for this class: create a set,
+            # once. Later queries are a single hash + lookup.
+            members = set(self._by_class.get(cls, ()))
+            self._membership[cls] = members
+        return atom in members
 
     def __len__(self) -> int:
         return len(self._atoms)

@@ -195,6 +195,10 @@ def test_model_iterates_and_answers_membership() -> None:
     assert sorted(str(atom) for atom in model) == ["p_member(1)", "p_member(2)"]
     assert P(x=1) in model
     assert P(x=3) not in model
+    # Repeated queries answer from the lazily-built per-class membership
+    # set (the first `in` above built it); same answers, sign included
+    assert P(x=1) in model and P(x=2) in model and P(x=3) not in model
+    assert -P(x=1) not in model  # the negated atom is a DIFFERENT atom
 
 
 def test_model_membership_rejects_what_could_never_be_present() -> None:
