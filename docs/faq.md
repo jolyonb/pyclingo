@@ -1,7 +1,5 @@
 # FAQ
 
-*Short answers, with links to the long ones.*
-
 While nobody has actually ever asked these questions, we hope that they might be useful
 to someone, or at least interesting...
 
@@ -21,12 +19,11 @@ validation is hyper-specific to clingo: the safety analysis models gringo's
 binding rules, the [arithmetic semantics](math.md) are pinned against
 gringo's actual evaluation, every refusal
 encodes what *this* grounder accepts or silently misreads, and the empirical
-claims are probed against the exact statement stream clasp receives. A second
-engine wouldn't dilute those guarantees — it would falsify them.
+claims are probed against the exact statement stream clasp receives.
 
 ## Can I render to the clingo AST directly?
 
-No — text is the interface, and that's not a limitation: clingo parses its
+No. Text is the interface, but it's not a limitation: clingo parses its
 own language natively, so `program.render()` followed by clingo reading the
 text does everything an AST bridge would (it is exactly what
 [`ground()`](solving.md#ground-once-solve-many) does internally). If you're
@@ -38,9 +35,9 @@ cross the atom boundary in both directions with the
 
 Yes — as text. Read the file with ordinary Python and pass its contents to
 [`raw_asp()`](escape-hatches.md), declaring the predicates it produces via
-`predicates=` so its atoms round-trip typed. Or, might we suggest
-translating your files to Python using ASPAlchemy? [Claude](https://claude.ai) 
-is very good at doing this...
+`predicates=` so its atoms round-trip typed. Or — might we suggest —
+translate your files to Python with ASPAlchemy instead?
+[Claude](https://claude.ai) is very good at exactly that...
 
 ## What about multi-shot solving and `#external`?
 
@@ -51,22 +48,25 @@ story: [Multi-shot solving](unsupported.md#multi-shot-solving-a-future-design-pr
 
 ## How large a problem can ASPAlchemy handle?
 
-We are confident that clingo will always be the bottleneck, not ASPAlchemy.
-Even stating millions of facts and reading out millions of atoms from a
-solution happens in seconds. [A note on scale](solving.md#a-note-on-scale) has the honest numbers and the
-knobs that matter (chiefly: [hide](predicates.md) what you don't need to read back).
+clingo will always be the bottleneck long before ASPAlchemy is. The
+programs you write stay small, so the only place ASPAlchemy could itself
+slow you down is moving data across the boundary — and even stating
+millions of facts and reading millions of atoms back out of a solution
+happens in seconds. If you genuinely have that much data, one nice split
+is to let ASPAlchemy define the program and render the `.lp` files, then
+hand the data boundary to clorm — which types exactly that, facts in and
+models out.
 
 ## Why "ASPAlchemy"?
 
 An homage to SQLAlchemy, and a claim to the same trade: the generated
 language becomes an implementation detail while the program becomes typed
-objects — what SQLAlchemy did for SQL, done for ASP. The transmutation
-imagery comes free.
+objects — what SQLAlchemy did for SQL, done for ASP.
 
 ## I have a request / found a bug!
 
 Open an issue at
 [github.com/jolyonb/aspalchemy](https://github.com/jolyonb/aspalchemy/issues).
-And by our policy, a confusing error message *is* a bug: every refusal is
+As far as we're concerned, a confusing error message *is* a bug: every refusal is
 supposed to teach the fix, so if one left you stuck, please report the
 message that failed you.
