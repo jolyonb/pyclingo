@@ -18,7 +18,7 @@ a different library.
 
 `raw_asp(text, predicates=())` adds a verbatim block of ASP text to the
 program. It is available on the program (which writes to the default segment)
-and on any [named segment](rules.md#organizing-output), so raw blocks slot
+and on any [named segment](diagnostics.md#organizing-output), so raw blocks slot
 into the same rendered structure as everything else. Here it carries a
 disjunctive head — a construct the typed layer deliberately does not model —
 and the solutions still come back as typed atoms:
@@ -296,9 +296,7 @@ True
 ```
 
 The reverse direction takes a `(name, arity) -> class` mapping and returns a
-fully typed instance — the same machinery model reads use. On why there is no
-Symbol type on the aspalchemy side at all, see
-[the one-text-type design](predicates.md#bare-predicates).
+fully typed instance — the same machinery model reads use.
 
 ## Incremental-ish solving today
 

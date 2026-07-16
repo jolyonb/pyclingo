@@ -45,7 +45,7 @@ construct anyway.
 | `h :- b1, b2.` | `program.when(b1, b2).derive(h)` | [The verbs](rules.md#the-verbs) |
 | `:- b1, b2.` | `program.forbid(b1, b2)` | [The verbs](rules.md#the-verbs) |
 | a comparison or atom that must hold | `program.require(cmp)` / `program.require(p)` — the constraint forbidding the opposite; `require(p)` renders `:- not p` | [The verbs](rules.md#the-verbs) |
-| `% comment` | `program.comment(...)`, `section(...)`, `blank_line()` | [Organizing output](rules.md#organizing-output) |
+| `% comment` | `program.comment(...)`, `section(...)`, `blank_line()` | [Organizing output](diagnostics.md#organizing-output) |
 | `a; b :- c.` (disjunctive heads) | **refused** | [Excluded by philosophy](unsupported.md#excluded-by-philosophy) |
 
 ## Negation

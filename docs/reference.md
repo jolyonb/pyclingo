@@ -25,7 +25,7 @@ section that teaches it.
   verbs are cataloged in [Rules and Terms](rules.md#the-verbs).
 - **`Segment`** — a named slice of a program for organizing large builds;
   every building verb also lives on a segment.
-  [Organizing output](rules.md#organizing-output).
+  [Organizing output](diagnostics.md#organizing-output).
 - **`When`** — the builder `when(...)` returns; close it with `derive()`,
   `choose()`, `forbid()`, `require()`, or `penalize()`.
   [Rules: when().derive()](rules.md#rules-whenderive).
