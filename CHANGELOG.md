@@ -2,6 +2,15 @@
 
 ## 1.4.2 — 2026-07-16
 
+### Performance
+
+- **Solution-atom reconstruction dropped its per-atom bookkeeping.** The
+  converter called `dataclasses.fields()` for every atom read back from a
+  model and built a keyword dict to construct it; it now uses the cached
+  field order and constructs positionally (the name/arity lookup already
+  proves the argument count). Roughly a 10% cut in per-atom reconstruction
+  cost; teaching errors for unreadable atoms are unchanged.
+
 ### Fixed
 
 - **A reference cycle in caller code capturing an abandoned search no longer

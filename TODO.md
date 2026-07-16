@@ -18,11 +18,12 @@ This is a wishlist of items.
   `__post_init__` depth walk, and a per-atom `dataclasses.fields()` call
   in the converter that `_field_names` exists to avoid. The adjudicated
   menu:
-  - TO DO, low-risk: (P1) converter uses `cls._field_names` + positional
-    construction (19.4 → 16.6 µs, solve_result.py only); (P2) `_validated`
-    calls the range/content validators directly instead of building
-    Numbers/Strings — 10.4 µs, same semantics, speeds `fact()` writes too
-    (keep the int/str-subclass normalization the metaclass performed).
+  - DONE in 1.4.2: (P1) converter uses positional construction with no
+    per-atom `dataclasses.fields()` walk (19.4 → ~17 µs).
+  - TO DO, low-risk: (P2) `_validated` calls the range/content validators
+    directly instead of building Numbers/Strings — ~10.4 µs, same
+    semantics, speeds `fact()` writes too (keep the int/str-subclass
+    normalization the metaclass performed).
   - HELD until 10^6-atom models are real: (P3) a checked fast-path
     constructor for solver-returned symbols (`object.__new__` + direct
     dict fill, ALL validation retained; 5.6 µs, first-model 1.94s → 0.63s).

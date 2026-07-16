@@ -1148,20 +1148,24 @@ def convert_symbol_to_predicate(symbol: clingo.Symbol, predicate_types: Predicat
         )
 
     pred_class = predicate_types[key]
-    field_names = [f.name for f in pred_class.argument_fields()]
 
-    kwargs: dict[str, Predicate | int | str | ExtremeConstant] = {}
-    for i, (arg, field_name) in enumerate(zip(symbol.arguments, field_names, strict=True)):
+    # Hot path: one instance per solution atom. Arguments are built
+    # positionally in field order (the (name, arity) key already proved the
+    # count matches the class's fields), and no per-atom dataclasses.fields()
+    # walk — cls._field_names is the cached order, and here even the names
+    # are unnecessary.
+    values: list[Predicate | int | str | ExtremeConstant] = []
+    for i, arg in enumerate(symbol.arguments):
         if arg.type == clingo.SymbolType.Number:
-            kwargs[field_name] = arg.number
+            values.append(arg.number)
         elif arg.type == clingo.SymbolType.String:
-            kwargs[field_name] = arg.string
+            values.append(arg.string)
         elif arg.type == clingo.SymbolType.Supremum:
             # #sup/#inf are clingo's greatest/least terms — usually the value
             # of a #min/#max over an EMPTY set (the min of nothing is #sup)
-            kwargs[field_name] = SUP
+            values.append(SUP)
         elif arg.type == clingo.SymbolType.Infimum:
-            kwargs[field_name] = INF
+            values.append(INF)
         else:
             # Function is the last symbol type; tuples are its nameless form
             if arg.name == "":
@@ -1172,10 +1176,10 @@ def convert_symbol_to_predicate(symbol: clingo.Symbol, predicate_types: Predicat
                     f"does not model — wrap it in a named predicate (pair{arg} instead of {arg})."
                 )
             # Recursively convert nested predicates; bare atoms are nullary predicates
-            kwargs[field_name] = convert_symbol_to_predicate(arg, predicate_types)
+            values.append(convert_symbol_to_predicate(arg, predicate_types))
 
     try:
-        instance = pred_class(**kwargs)
+        instance = pred_class(*values)
     except (TypeError, ValueError) as e:
         # The solver produced a value aspalchemy never validated on the way in
         # (raw_asp text or an @-function): name the atom and its class, not
