@@ -68,7 +68,7 @@ Declaring a class does two jobs: it emits the `#show` directive that lets the
 predicate reach the model, and it gives model atoms of that signature a typed
 class to round-trip into. One wrinkle: declaring `P` covers *both* signs for
 round-trip purposes but emits only `#show p/n.` — if the block also derives
-[classically negated](predicates.md#classical-negation) atoms, declare `-P`
+[classically negated](predicates.md#classical-and-default-negation) atoms, declare `-P`
 as well (a `NegatedSignature`), or the `-p` atoms stay absent from output:
 
 ```python
@@ -298,7 +298,7 @@ True
 The reverse direction takes a `(name, arity) -> class` mapping and returns a
 fully typed instance — the same machinery model reads use. On why there is no
 Symbol type on the aspalchemy side at all, see
-[the one-text-type design](predicates.md#bare-atoms-and-the-one-text-type-design).
+[the one-text-type design](predicates.md#bare-predicates).
 
 ## Incremental-ish solving today
 

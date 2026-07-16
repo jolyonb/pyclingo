@@ -124,7 +124,7 @@ everything, membership (`atom in model`) and iteration work as you'd expect.
 Reads are plain Python: a `Field[str]` field comes back as a real `str`, a
 `Field[int]` as a real `int`, and a `Field[PredicateArg]` slot the same way — the
 full field contract lives in
-[Writes and reads](predicates.md#writes-and-reads).
+[Declaring predicates](predicates.md#declaring-predicates).
 
 ```python
 >>> model = menu.solve().first()
@@ -148,10 +148,10 @@ ValueError: item/1 is hidden (show=False and never shown): hidden atoms are not 
 ```
 
 Lookup is by exact class (an
-[`in_namespace()` clone](predicates.md#names-namespaces-and-visibility) is a
+[`in_namespace()` clone](predicates.md#names-and-namespaces) is a
 distinct class), and both signs of a classically negated predicate come back
 from the same `atoms(Cls)` call — filter on `.negated` if your program uses
-[classical negation](predicates.md#classical-negation).
+[classical negation](predicates.md#classical-and-default-negation).
 
 ## Brave and cautious
 

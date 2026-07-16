@@ -128,7 +128,7 @@ program.fact(*[
 Now that we're armed with the grid geometry, we can ask which cells are adjacent to each other, and
 in which direction. This brings in two moves we'll lean on for the rest of the page. Field values
 can hold [arithmetic](math.md) expressions, so `Cell(row=R + DR, col=C + DC)` names the neighboring
-cell. And atoms are [values](predicates.md#atoms-as-values), so we can build `Cell(row=R, col=C)`
+cell. And atoms are [values](predicates.md#predicate-instances-as-python-values), so we can build `Cell(row=R, col=C)`
 once, bind it to the Python name `cell`, and reuse that template in rule after rule for the rest of
 the page.
 

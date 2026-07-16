@@ -229,7 +229,7 @@ on the same error (Python evaluates them as `(X < Y) and (Y < Z)`, which
 needs a truth value halfway through) — pass each comparison separately:
 `when(X < Y, Y < Z)`. Atoms, by contrast, are ordinary data: `==` between two
 atoms is plain Python equality — see
-[atom identity](predicates.md#atoms-as-values).
+[atom identity](predicates.md#predicate-instances-as-python-values).
 
 ```python
 >>> comparison = X < Y  # a term, not a bool
@@ -305,7 +305,7 @@ loud](diagnostics.md#clingos-messages) at solve time.
 
 `~` and the named form `Not()` are the same operation. (The *other* negation
 — the classical minus sign, which is part of the atom itself — lives in
-[Predicates and Data](predicates.md#classical-negation).)
+[Predicates and Data](predicates.md#classical-and-default-negation).)
 
 The fine print, for when you nest negations or negate comparisons — each
 claim shown below in a verified transcript, and each row of the
@@ -365,7 +365,7 @@ all_covered :- covered(X) : cell(X).
 
 You construct `ConditionalLiteral` directly in exactly two places: rule
 bodies (as above) and `show_when()`
-([conditional visibility](predicates.md#names-namespaces-and-visibility)).
+([conditional visibility](predicates.md#predicate-visibility)).
 The other places conditional structure appears — the elements of
 [choices and aggregates](choices-and-aggregates.md) — build their own
 elements through their `add()` methods, so you never hand one to them.

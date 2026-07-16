@@ -1,18 +1,23 @@
-# Predicates and Data
+# Predicates
 
-*The data boundary: declaring, typed fields, naming/visibility, dynamic definition, classical negation, atom identity.*
-
-Predicates are where your problem's data crosses into ASP and back: every fact
-you write and every atom you read out of a solution is an instance of a
-`Predicate` class. This page covers declaring those classes and what their
-instances do; for using them in rules, see [Rules and Terms](rules.md).
+Predicates are the basic building block of ASP programs, and they lie at the heart of the typing
+guarantees that ASPAlchemy provides. This page walks from
+declaring predicates and giving them data, through naming and hiding them in the ASP output, to the finer
+points — symbolic constants, negation, declaration fine print, and atoms as first-class Python
+values. For using predicates in rules, see [Rules and Terms](rules.md).
 
 ## Declaring predicates
 
-Declare a predicate as a class; each annotated field is one argument slot.
-Fields are statically checked, so a misspelled field or a missing argument is
-a type error before clingo ever runs — and the generated `__init__` refuses
-both at runtime too, on the Python line at fault:
+In ASPAlchemy, a predicate is a Python class — a subclass of `Predicate`, a frozen dataclass under the
+hood — and an **atom** is an instance of one. The mental model to hold:
+
+> **class is to instance as predicate is to atom**
+
+The predicate is the schema; an atom is one filled-in instance of it, and the unit of data that crosses
+into ASP and back — every fact you assert and everything you read out of a solution is an atom.
+
+In ASP a predicate holds a tuple of values, which we model as fields on the class — going beyond what ASP
+requires by giving each field both a name and a data type. Here is a predicate and a couple of atoms:
 
 ```python
 from aspalchemy import Field, Predicate
@@ -28,144 +33,329 @@ mary = Person(name="mary", age=25)
 ```python
 >>> john.render()
 'person("john", 30)'
->>> john.age  # reads back as a plain int
-30
+>>> mary.age
+25
+>>> mary.name
+'mary'
 ```
 
-This is the typed form from [the tutorial](getting-started.md), and it is the
-default: annotate every field whose ground type you know. When a slot
-genuinely has to hold *anything* — ints, strs, variables, expressions, pools,
-other atoms — the polymorphic spelling is `Field[PredicateArg]`. Every field is
-a `Field[...]`; `PredicateArg` is just the "any predicate argument" type:
+This should look almost exactly like a dataclass to those familiar with Python. Note that the order
+of the arguments corresponds to the order in which the values are rendered in the tuple. The one difference
+is the use of `Field[...]` in the parameter annotations: this is where we hide all the typing magic.
+The fields defined above are literal strings and integers, and you can set them and read them off
+as such. The field names provide a basic spell check: if you mistype a field name, Python will raise
+an exception when you attempt to run that line.
+
+The parameter annotations accept two more types. The first is another Predicate subclass — a field can
+hold a whole atom, which then acts as a *function term* rather than standing alone as a top-level atom:
 
 ```python
-from aspalchemy import Field, PredicateArg
+class Grade(Predicate):
+    person: Field[Person]
+    grade: Field[int]
 
-class Waypoint(Predicate):
-    label: Field[PredicateArg]
-    order: Field[PredicateArg]
-
-stop = Waypoint(label="dock", order=1)
+grade_john = Grade(person=Person(name="john", age=30), grade=100)
 ```
 
 ```python
->>> stop.render()
-'waypoint("dock", 1)'
+>>> grade_john.render()
+'grade(person("john", 30), 100)'
 ```
 
-The open slot costs you static typing and write-time validation — not the read
-shape. `stop.order` reads back as a plain `int`, exactly as a typed field
-would, and the `Number`/`String` term view is always one bracket away:
+Note that this is written `Field[OtherPredicate]` — every annotation on a `Predicate` subclass has to be
+wrapped in `Field[...]`. The remaining option is for a field whose type is unknown or polymorphic: write
+`Field[PredicateArg]`, and it will accept an int, a str, or any predicate.
 
 ```python
->>> stop.order            # plain Python, like every field
-1
->>> stop["order"]         # the Term view stays a bracket away
-Number(1)
+from aspalchemy import PredicateArg
+
+class Order(Predicate):
+    item: Field[PredicateArg]
+    number: Field[int]
+
+order1 = Order(item="box", number=1)
+order2 = Order(item=23, number=2)
 ```
 
-The full declaration surface is catalogued in the
-[API reference](reference.md#declaring-predicates).
+The unknown type costs you static typing and write-time validation, though the field still reads back
+as a plain Python int, string, or atom.
 
-## Writes and reads
+Any other type inside `Field[...]` is refused at class creation. And because these annotations are
+ordinary types, mypy and pyright understand them — you get real static checking on the values you write
+to a field and read back from it.
 
-Every `Field[int]`, `Field[str]`, or `Field[SomePredicate]` annotation gives
-its slot a contract that a `Field[PredicateArg]` slot does not: writes are
-validated against the ground type, and a read is statically that ground type
-rather than the open union. What it does *not* change is the read shape — plain-Python reads
-are uniform across every field. Writes accept the ground type *or* rule terms
-(Variables, Expressions), so the same class serves in facts and in rules; ground
-writes are validated per field. A solution atom's fields come back as real ints
-and strs, no unwrapping:
+So why the `Field[...]` wrapper at all? Everything above has been a *ground* predicate — every argument a
+concrete value. But ASP also lets you build predicates out of variables, defined constants, and
+expressions, and a field has to hold those too. A field is typed by its *ground* schema, yet `Field` lets
+it transiently carry a variable or expression that a type checker still treats as an `int`. So the
+annotations can overpromise when you read a non-ground atom — but by the time you reach a solution,
+everything is ground and the promises hold.
 
 ```python
-from aspalchemy import ASPProgram, Field, Predicate
+from aspalchemy import Variable
 
-class Score(Predicate):
-    player: Field[str]
-    points: Field[int]
+X, A = Variable("X"), Variable("A")
 
+person = Person(name=X, age=A+1)
+```
+
+```python
+>>> person.render()
+'person(X, A + 1)'
+>>> person.name
+Variable('X')
+```
+
+When you try to write to a field, ASPAlchemy checks that the value is the right type — writing a variable
+or expression is exempt, since rule terms pass straight through.
+
+```python
+>>> Person(name=5, age=2)
+Traceback (most recent call last):
+  ...
+TypeError: Field 'name' expects str, got int
+```
+
+This also applies when solutions are read out of a model: the data types in the solution are checked
+against the types you've defined.
+
+## Dynamic predicates
+
+Subclassing `Predicate` is all well and good when you know the structure in advance, but what about when
+the fields are only known at runtime? To help out here, we have a dynamic predicate creation helper.
+
+```python
+>>> Edge = Predicate.define("edge", ["a", "b"])
+>>> Edge(a=1, b=2).render()
+'edge(1, 2)'
+```
+
+The first argument is the predicate's name as it will render in ASP (it must start with a lowercase
+letter); the second is the list of field names to create. Fields made this way are `Field[PredicateArg]`.
+If you want to be more precise, pass a dict mapping each name to `int`, `str`, or a predicate class —
+`{"a": str, "b": int}` — where a value of `None` leaves that field polymorphic.
+
+Predicates constructed in this manner are almost entirely equivalent to statically-defined predicates. You can
+even construct inheritance chains of predicates dynamically:
+
+```python
+>>> ColoredEdge = Edge.define("colored_edge", ["color"])
+>>> ColoredEdge(a=1, b=2, color="red").render()
+'colored_edge(1, 2, "red")'
+```
+
+The cost is that you lose static type analysis — mypy and pyright have no idea what fields a dynamically
+built class has. Everything at runtime is unchanged, though: writes are still validated, and reads still
+come back as plain ints and strs. One further caveat: because a dynamically-defined class can't be found
+by name on import, its atoms can't be pickled.
+
+## Names and namespaces
+
+However you declared it — as a class or via `define()` — a predicate needs a name to render under in ASP,
+and there's a small mismatch to bridge: Python classes are conventionally CamelCase, but ASP wants a
+predicate name to start with a lowercase letter.
+So a class-syntax predicate takes its ASP name by snake-casing its class name:
+
+```python
+class HasSymbol(Predicate):
+    loc: Field[int]
+```
+
+```python
+>>> HasSymbol(loc=3).render()
+'has_symbol(3)'
+```
+
+If the snake-cased name isn't what you want, override it with the `name=` class keyword:
+
+```python
+class Node(Predicate, name="vertex"):
+    id: Field[int]
+```
+
+```python
+>>> Node(id=1).render()
+'vertex(1)'
+```
+
+(Dynamically-declared predicates skip the snake-casing: the name you pass to `define()` is used verbatim,
+as both the ASP name and the class name.)
+
+Now suppose you're writing a reusable module that declares its own predicates. There's a real chance one
+of your names collides with a predicate the caller already uses for something unrelated. To keep yours
+distinct, a predicate can be *namespaced*. `in_namespace("ns")` clones a predicate class under a
+namespace: the clone renders with the namespace as a prefix, while its Python class name stays the same.
+
+```python
+class Pipe(Predicate):
+    length: Field[int]
+
+GridPipe = Pipe.in_namespace("grid")
+```
+
+```python
+>>> Pipe(length=4).render()
+'pipe(4)'
+>>> GridPipe(length=4).render()
+'grid_pipe(4)'
+>>> Pipe.in_namespace("grid") is GridPipe   # asking twice returns the same clone
+True
+```
+
+The clone is cached — asking for the same namespace again hands back the very same class — because the
+namespace is part of the predicate's identity. `Pipe` and `GridPipe` are genuinely different predicates,
+and their atoms never compare equal.
+
+## Predicate visibility
+
+A name settles how a predicate renders; visibility settles whether it renders at all. By default, every
+atom your program derives appears in its solutions. Often you don't want all of them —
+input facts and scratch predicates are scaffolding, and you only care about the answer. A predicate's
+`show` setting controls this: `show=True` (the default) includes the predicate in the output, and
+`show=False` hides it. It's a property of the class, not of any single instance:
+
+```python
+from aspalchemy import ASPProgram
+
+class Scratch(Predicate, show=False):
+    val: Field[int]
+```
+
+You can also override visibility per program, without touching the class — useful when a predicate is
+output in one program and scaffolding in another. `program.show(P)` and `program.hide(P)` flip a class's
+default for that program, and `program.show_when(cond)` shows a predicate only where a condition holds
+(its argument is a [conditional literal](rules.md#conditional-literals)).
+
+The rendered program makes visibility explicit: aspalchemy emits a bare `#show.` — which tells clingo to
+hide everything by default — followed by one `#show name/arity.` line for each predicate that should be
+visible:
+
+```python
+class Guess(Predicate):          # shown by default
+    val: Field[int]
+
+viz = ASPProgram()
+viz.fact(Guess(val=1), Scratch(val=2))
+viz.hide(Guess)     # shown by default, hidden here
+viz.show(Scratch)   # hidden by default, shown here
+```
+
+```python
+>>> print(viz.render())
+% Generated by aspalchemy ...
+guess(1).
+scratch(2).
+
+#show.
+#show scratch/1.
+```
+
+The facts are always in the rendered program — visibility only governs what clingo reports back. One
+guardrail worth knowing: calling `show()` on a predicate the program can never derive is an error at
+render. Showing states an expectation, and a signature that can't exist usually means something is
+misspelled.
+
+## Bare predicates
+
+Everything so far has been about declaring predicates and controlling how they appear; the rest of the
+page turns to the data model itself, and it opens with a small surprise. Let's look at how a string value
+in a predicate renders in ASP.
+
+```python
+class Name(Predicate):
+    name: Field[PredicateArg]
+
+bob = Name(name="bob")
+```
+
+```python
+>>> bob.render()
+'name("bob")'
+```
+
+That's just the string `"bob"` sitting in the atom's one argument slot. If you've worked with raw ASP,
+though, you probably expected `name(bob)` instead — and those are two structurally different things. Here
+`"bob"` is a string; in the raw-ASP idiom, `bob` is a *zero-arity predicate* (a name with no arguments).
+To render without the quotation marks, define `bob` as exactly that:
+
+```python
+class Bob(Predicate):
+    pass
+
+bob2 = Name(name=Bob())
+```
+
+```python
+>>> bob2.render()
+'name(bob)'
+```
+
+This works because `Name`'s field is a `Field[PredicateArg]`, so it accepts a predicate as happily as a
+string. It looks odd, but it's exactly clingo's own data model, where a symbolic constant *is* a
+zero-arity function. Unless you specifically need the unquoted form, we suggest sticking with plain
+strings.
+
+## Classical and default negation
+
+If a bare atom is a wrinkle in what a field *holds*, negation is a wrinkle in the atom itself. ASP has two
+kinds of negation, and they mean genuinely different things — worth pinning down the difference up front,
+because they're easy to mix up. *Classical negation* makes a
+**positive** claim that something is false: `-p` is the negated atom asserting that `p` does not hold. *Default negation*
+(negation as failure) is weaker — `not p` means only that `p` is not *known* to be true, which isn't the
+same as knowing it's false. Default negation is something you reach for in rule bodies, so it lives in
+[Rules and Terms](rules.md#default-negation). Classical negation is a property of an atom itself, so it
+belongs here, and it's what the rest of this section covers.
+
+Classical negation is written as a unary minus on an atom: `-p`. The sign becomes part of the atom —
+not a wrapper around it, and not a different predicate — mirroring clingo's own symbol model.
+The `.negated` property reads it back:
+
+```python
+class Safe(Predicate):
+    node: Field[str]
+```
+
+```python
+>>> a = -Safe(node="b")
+>>> a.render()
+'-safe("b")'
+>>> a.negated
+True
+```
+
+Because the sign is just part of the atom, both signs of a predicate come back together from `atoms(Safe)`
+when you read a solution — filter on `.negated` to tell them apart. Both are also declared
+and shown in the rendered program:
+
+```python
 program = ASPProgram()
-program.fact(Score(player="ada", points=3), Score(player="ben", points=5))
-model = program.solve().first()  # raises UnsatisfiableError if there is no model
-total = sum(score.points for score in model.atoms(Score))  # plain ints
-assert total == 8
-```
-
-This is the typed round trip at its smallest; here is
-what each half of the contract looks like at the boundary. A rule term passes
-straight through, a wrong-typed ground value is refused at construction:
-
-```python
->>> from aspalchemy import Variable
->>> P, N = Variable("P"), Variable("N")
->>> Score(player=P, points=N).render()  # rule terms pass through
-'score(P, N)'
->>> Score(player="ada", points="three")
-Traceback (most recent call last):
-  ...
-TypeError: Field 'points' expects int, got str
-```
-
-One footnote on the static types: fields are typed by their *ground* schema,
-so a rule atom like `Score(points=N)` transiently holds a Variable that a type
-checker still calls `int` — reads of non-ground atoms are the one place the
-annotations overpromise. Because reads are uniform, narrowing an existing
-`Field[PredicateArg]` slot to a typed `Field[...]` only tightens its writes and
-static type — no read site changes. Reading solutions in bulk is covered in
-[Solving and Results](solving.md#reading-models).
-
-The third form, `Field[SomePredicate]`, makes a slot hold another atom, so a
-predicate's argument can itself be a predicate. It is validated and read like
-any field: the write is checked against the nested class, and the read hands
-back a typed instance — `piece.at` is a `Cell`, so `piece.at.row` is a plain
-`int`. This is how a named nested term (`piece(cell(1, 2), ...)`) is modelled,
-rather than an anonymous tuple, which aspalchemy
-[does not admit](unsupported.md#excluded-by-philosophy).
-
-```python
-class Cell(Predicate):
-    row: Field[int]
-    col: Field[int]
-
-class Piece(Predicate):
-    at: Field[Cell]
-    kind: Field[str]
-
-piece = Piece(at=Cell(row=1, col=2), kind="rook")
+program.fact(Safe(node="a"), -Safe(node="b"))
 ```
 
 ```python
->>> piece.render()
-'piece(cell(1, 2), "rook")'
->>> piece.at.row                  # the nested atom reads back typed
-1
->>> Piece(at=5, kind="rook")      # a wrong-typed nested slot is refused
-Traceback (most recent call last):
-  ...
-TypeError: Field 'at' expects Cell, got int
+>>> print(program.render())
+% Generated by aspalchemy ...
+safe("a").
+-safe("b").
+
+#show.
+#show -safe/1.
+#show safe/1.
 ```
 
-## What counts as a field
+The two signs are a real contradiction: since `-safe("x")` asserts that `safe("x")` is false, any program
+that derives both `safe("x")` and `-safe("x")` has no answer sets at all.
 
-A predicate's arguments are exactly its `Field[...]` slots (`Field[PredicateArg]`
-included). Every *other* annotation on the class is refused at creation, naming
-the fix — a field you forgot to wrap in `Field[...]` fails loudly here instead
-of silently vanishing from the signature:
+## The fine print
 
-```python
->>> class Broken(Predicate):
-...     name: Field[str]
-...     age: int                  # forgot Field — refused, not dropped
-Traceback (most recent call last):
-  ...
-TypeError: Broken.age is annotated <class 'int'>, which is not a predicate field. ...
-```
+Back at the start we glossed over a few finer points of *declaring* a predicate; here they are collected
+in one place. A predicate's arguments are exactly its `Field[...]` slots, in the order you declare them —
+nothing else.
+Any other annotation on the class is refused at creation, so a field you forgot to wrap in `Field[...]`
+fails loudly right there rather than silently vanishing from the signature.
 
-Non-argument class data has two supported homes, both untouched by that rule: a
-`ClassVar` for a typed constant, and a bare (unannotated) assignment for
-anything else — an unannotated attribute never enters `__annotations__`, so it
-is never a candidate field:
+Genuinely non-argument data has two homes, neither touched by that rule: a `ClassVar` for a typed
+constant, and a bare (unannotated) assignment for anything else:
 
 ```python
 from typing import ClassVar
@@ -187,216 +377,24 @@ task = Task(name="dishes")
 (1, 'chore')
 ```
 
-A `ClassVar` may not shadow a `Predicate` member (`render`, `arguments`, and
-the like) — that too is refused, so a helper can never silently break the
-atom's own API.
+Neither a field nor a `ClassVar` may take a name that would shadow one of `Predicate`'s own methods or
+attributes; try it and you'll get an exception naming the collision, so you can never quietly break the
+interface an atom relies on.
 
-## Names, namespaces, and visibility
+Two more conveniences carry over from dataclasses. A field may have a **default value** — validated
+against its type when an instance is constructed without it, and subject to the usual rule that defaulted
+fields come after undefaulted ones. And predicates support **inheritance**: a subclass appends its own
+fields to the ones it inherits (you may add fields, but not redefine an inherited one), and a field typed
+as a superclass accepts any of its subclasses.
 
-The ASP name defaults to the class name, snake-cased (`HasSymbol` becomes
-`has_symbol`). Class keyword arguments override the name, add a namespace
-prefix, and set default visibility — `show=False` is the standard idiom for
-input and scaffolding predicates, so that only the solution shape reaches the
-model. `in_namespace("ns")` clones a class under a namespace: the clone is
-cached (repeated calls return the same class), inherits the fields and their
-typing, and its instances are never equal to the original's — the namespace is
-part of a predicate's identity:
+## Predicate instances as Python values
 
-```python
-class HasSymbol(Predicate):
-    loc: Field[int]
-
-class Pipe(Predicate, name="pipe_seg", show=False):
-    length: Field[int]
-
-GridSymbol = HasSymbol.in_namespace("grid")
-```
+One last property, and a convenient one: an atom is an ordinary Python value — assign it to a variable,
+pass it around, reuse it. Two atoms compare
+equal with `==` when they're the same predicate, the same sign, and carry the same data — and they hash to
+match, so you can put them in sets and use them as dictionary keys:
 
 ```python
->>> HasSymbol(loc=3).render()
-'has_symbol(3)'
->>> Pipe(length=4).render()
-'pipe_seg(4)'
->>> GridSymbol(loc=3).render()
-'grid_has_symbol(3)'
->>> HasSymbol.in_namespace("grid") is GridSymbol  # clones are cached
-True
-```
-
-Visibility can also be overridden per program, without touching the class:
-`program.show(P)` and `program.hide(P)` flip one predicate's visibility for
-that program, and `program.show_when(cond)` shows a predicate only where a
-condition holds — its argument is a
-[conditional literal](rules.md#conditional-literals). The rendered program
-makes visibility explicit: aspalchemy always emits a bare `#show.` (hide
-everything by default) followed by one `#show name/arity.` line per visible
-predicate:
-
-```python
-viz = ASPProgram()
-viz.fact(HasSymbol(loc=3), Pipe(length=4))
-viz.hide(HasSymbol)  # default-shown, hidden here
-viz.show(Pipe)       # default-hidden, shown here
-```
-
-```python
->>> print(viz.render())
-% Generated by aspalchemy ...
-has_symbol(3).
-pipe_seg(4).
-
-#show.
-#show pipe_seg/1.
-```
-
-One guardrail worth knowing: `show()` of a predicate the program provably
-never derives is an error at render — showing states an expectation, and a
-signature that cannot exist means something is misspelled.
-
-## Bare atoms and the one-text-type design
-
-Plain Python literals coerce automatically wherever terms are expected — an
-int becomes an ASP number, a str becomes a quoted ASP string. Variables you
-construct by hand, and bare atoms (the `n` in `direction(n)`) are zero-arity
-predicates:
-
-```python
-from aspalchemy import Predicate, Variable
-
-X = Variable("X")  # an ASP variable
-n = Predicate.define("n", [], show=False)()  # a bare atom: n, distinct from the string "n"
-```
-
-Zero-arity is not a workaround — it is clingo's own data model, where a
-symbolic constant *is* a function of arity zero. (`Predicate.define` is
-covered [below](#dynamic-predicates).) The receipt, side by side:
-
-```python
->>> Direction = Predicate.define("direction", ["d"], show=False)
->>> Direction(d=n).render()
-'direction(n)'
->>> Direction(d="n").render()
-'direction("n")'
-```
-
-There is deliberately no Symbol type: a Python `str` always means a quoted ASP
-string, and a symbolic constant is always a bare atom you declared. One text
-type, no ambiguity — you never have to guess whether `"n"` will render quoted.
-This is one of the [design stances](unsupported.md) the library holds
-throughout; if you drive the clingo API directly and need to cross between
-typed atoms and `clingo.Symbol` objects, see
-[symbol interop](escape-hatches.md#clingo-symbol-interop).
-
-## Dynamic predicates
-
-When the schema is only known at runtime — generated programs, schemas read
-from configuration — build the same thing dynamically:
-
-```python
->>> Edge = Predicate.define("edge", ["a", "b"])
->>> Edge(a=1, b=2).render()
-'edge(1, 2)'
-```
-
-This is not a second-class citizen: `define()` and the class statement share a
-single creation path, so the resulting classes behave identically —
-`namespace=` and `show=` are keyword arguments, and passing a dict such as
-`Predicate.define("clue", {"loc": str, "value": int})` gives runtime-typed
-slots with the same write validation and plain-Python reads as `Field[...]`.
-The one caveat: a `define()`-built class cannot be found by name on import, so
-its atoms don't pickle — the refusal is a teaching error, and the remedy is to
-transport such atoms as rendered text. `copy.deepcopy` still works fine:
-
-```python
->>> import copy
->>> import pickle
->>> atom = Edge(a=1, b=2)
->>> pickle.dumps(atom)
-Traceback (most recent call last):
-  ...
-TypeError: edge atoms do not pickle: the class was built at runtime ...
->>> copy.deepcopy(atom) is atom  # atoms are immutable; deepcopy is free
-True
-```
-
-## Classical negation
-
-Unary minus on an atom flips its sign: `-Safe(node="b")` renders as
-`-safe("b")`. The sign is part of the atom, exactly as in clingo's own symbol
-model — a negated atom is *not* a different predicate, and not a wrapper: it
-is the same class, and `atoms()` returns both signs together, with `.negated`
-telling them apart:
-
-```python
-from aspalchemy import UnsatisfiableError
-
-class Safe(Predicate):
-    node: Field[str]
-
-signs = ASPProgram()
-signs.fact(Safe(node="a"), -Safe(node="b"))
-```
-
-Both signs are declared and both are shown:
-
-```python
->>> print(signs.render())
-% Generated by aspalchemy ...
-safe("a").
--safe("b").
-
-#show.
-#show -safe/1.
-#show safe/1.
-```
-
-```python
-model = signs.solve().first()
-assert sorted(a.render() for a in model.atoms(Safe)) == ['-safe("b")', 'safe("a")']
-negated = next(a for a in model.atoms(Safe) if a.negated)
-assert negated.node == "b"
-```
-
-Because the sign is part of the atom, `safe("x")` and `-safe("x")` are a
-genuine contradiction: any program that derives both has no answer sets.
-
-```python
-clash = ASPProgram()
-clash.fact(Safe(node="x"), -Safe(node="x"))
-```
-
-```python
->>> clash.solve().first()
-Traceback (most recent call last):
-  ...
-aspalchemy.exceptions.UnsatisfiableError: first() found no model: the program is unsatisfiable. ...
-```
-
-(This is different from default negation `~Safe(...)` — "not known to be safe"
-— which lives in [Rules and Terms](rules.md#default-negation).)
-
-Minus also works on the *class*: `-Safe` builds a `NegatedSignature`, a
-declaration rather than an atom. You only need it when a `raw_asp()` block
-derives negated atoms that aspalchemy can't see — declaring `-Safe` in the
-block's `predicates=` list gets the `#show -safe/1.` directive emitted. See
-[the predicates= seatbelt](escape-hatches.md#the-predicates-seatbelt).
-
-## Atoms as values
-
-Identity has two layers here, and both are guarantees you can lean on. Values
-(numbers, strings, variables) *intern*: equal live values are the same
-object, and they hash by identity. That is what makes sets and dicts
-containing them work at all, because `==` on a Value doesn't answer a question
-— it builds a Comparison term for use in rules. Atoms are the deliberate
-exception: predicates round-trip through the solver as data, so `==` on a
-Predicate instance is real equality (same class, same sign, identically
-rendered arguments), and atoms work directly as set members and dict keys:
-
-```python
-from aspalchemy import String
-
-assert String("hello") is String("hello")  # equal live values intern to one object
-
 class Cell(Predicate):
     row: Field[int]
     col: Field[int]
@@ -405,18 +403,7 @@ assert Cell(row=1, col=2) == Cell(row=1, col=2)          # atoms compare as data
 assert len({Cell(row=1, col=2), Cell(row=1, col=2)}) == 1  # sets and dict keys work
 ```
 
-Atoms are immutable, so "editing" one means building a changed copy — and
-there is exactly one right tool. `copy.replace(atom, field=...)` preserves the
-classical-negation sign. `dataclasses.replace()` looks equivalent, cannot be
-hooked, and silently drops the sign — never use it on atoms:
-
-```python
-import dataclasses
-
-flagged = -Cell(row=1, col=2)
-moved = copy.replace(flagged, col=3)
-assert moved.render() == "-cell(1, 3)"  # the sign survives
-
-dropped = dataclasses.replace(flagged, col=3)
-assert dropped.render() == "cell(1, 3)"  # sign silently gone — never do this
-```
+Atoms are immutable — they're frozen dataclasses — so to "change" one you build a modified copy. The right
+tool is `copy.replace(atom, field=...)`, which produces a new instance with the given fields swapped and
+preserves the classical-negation sign. Reach for that, not `dataclasses.replace`, which looks equivalent
+but silently drops the sign.

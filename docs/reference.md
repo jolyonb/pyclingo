@@ -115,8 +115,7 @@ All five are taught in [Source locations](diagnostics.md#source-locations).
 - **`NegatedSignature`** — what `-P` on a predicate *class* builds: a
   declaration of the classically negated signature, for `raw_asp()`'s
   `predicates=` seatbelt.
-  [Classical negation](predicates.md#classical-negation) and
-  [the seatbelt](escape-hatches.md#the-predicates-seatbelt).
+  [The predicates= seatbelt](escape-hatches.md#the-predicates-seatbelt).
 - **`Field`** — typed field annotations: `Field[int]`, `Field[str]`,
   `Field[SomePredicate]`; validated writes, plain typed reads.
   [Declaring predicates](predicates.md#declaring-predicates).
@@ -219,7 +218,7 @@ One line per exported symbol, in `__all__` order:
 | `PredicateOccurrence` | You consume occurrence collection: a `(class, negated, is_atom)` triple. |
 | `Term` | You accept any term at all — the hierarchy's abstract root. |
 | `BasicTerm` | You accept anything usable directly as a predicate argument. |
-| `Value` | You accept a basic value (a variable or constant); equal live values are the same object — see [Atoms as values](predicates.md#atoms-as-values). |
+| `Value` | You accept a basic value (a variable or constant); equal live values are the same object — see [Atoms as values](predicates.md#predicate-instances-as-python-values). |
 | `ConstantBase` | You accept any constant but not a variable. |
 | `ComparableTerm` | You accept anything that may appear in a comparison. |
 | `Negatable` | You accept anything `~` applies to. |
