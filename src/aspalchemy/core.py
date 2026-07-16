@@ -56,6 +56,22 @@ def require_int32(value: int, noun: str, extra: str = "") -> None:
         )
 
 
+def require_clean_string(value: str, noun: str) -> None:
+    """
+    Reject string content clingo cannot carry — there is no escaping
+    support. One home for the rules (String's constructor and the Field
+    write path both call it); noun tailors the message. (Tests pin short
+    fragments of these messages, not full text — the wording is not API.)
+    """
+    if '"' in value:
+        raise ValueError(f"{noun} cannot contain double quotes (no escaping support): {value}")
+    if "\\" in value or "\n" in value or "\r" in value or "\x00" in value:
+        raise ValueError(
+            f"{noun} cannot contain backslashes, newlines, or NUL "
+            f"(they break clingo's lexer; there is no escaping support): {value!r}"
+        )
+
+
 class RenderingContext(Enum):
     """
     Enum for defining rendering contexts where predicates may need to know to surround themselves in parentheses.
@@ -657,14 +673,7 @@ class String(ConstantBase):
             raise TypeError(f"String constant value must be a string, got {type(value).__name__}")
         # value is a plain str here: _ValueMeta.__call__ normalizes subclass
         # instances before construction (what is keyed is what is stored)
-        if '"' in value:
-            raise ValueError(f"String constant cannot contain double quotes (no escaping support): {value}")
-        if "\\" in value or "\n" in value or "\r" in value or "\x00" in value:
-            raise ValueError(
-                f"String constant cannot contain backslashes, newlines, or NUL "
-                f"(they break clingo's lexer; there is no escaping support): {value!r}"
-            )
-
+        require_clean_string(value, "String constant")
         self._value = value
 
     @property

@@ -11,6 +11,19 @@
   proves the argument count). Roughly a 10% cut in per-atom reconstruction
   cost; teaching errors for unreadable atoms are unchanged.
 
+- **Field writes validate directly instead of round-tripping through the
+  interned wrappers.** Writing an int or str into a field — every argument
+  of every reconstructed solution atom, and every `fact()` argument — built
+  a throwaway `Number`/`String` purely to reuse its validation, a
+  guaranteed interning-cache miss per write. The range and content rules
+  now live in shared validators that `Number`, `String`, and the Field
+  write path all call, so nothing is enforced in two places. Combined with
+  the converter cut above, reconstruction measured ~19 → ~12.5 µs/atom
+  (100k three-int-field atoms); program-side writes speed up the same way.
+  A bonus for diagnostics: out-of-range and bad-content errors now name
+  the field (`Field 'age' value ... outside clingo's integer range`)
+  instead of the internal wrapper.
+
 ### Fixed
 
 - **A reference cycle in caller code capturing an abandoned search no longer

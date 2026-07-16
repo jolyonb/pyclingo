@@ -22,6 +22,8 @@ from aspalchemy.core import (
     String,
     Value,
     Variable,
+    require_clean_string,
+    require_int32,
 )
 from aspalchemy.source_location import SourceLocation, capture_location, capture_origin
 
@@ -118,18 +120,28 @@ class Field[T]:
         ground = self._ground_type
         if ground is None:
             return self._validated_polymorphic(value)
+        # Ground int/str writes call the shared validators directly
+        # (require_int32 / require_clean_string — the same one-home rules
+        # Number and String enforce) rather than round-tripping through the
+        # wrapper constructors: this is the hot path of solution-atom
+        # reconstruction, and a throwaway Number per int write is a
+        # guaranteed interning-cache miss bought for nothing. int()/str()
+        # keep the subclass normalization _ValueMeta performed (an IntEnum
+        # write stores a plain int, exactly as before).
         if ground is int:
             if isinstance(value, Number):
                 return value.value
             if isinstance(value, bool) or not isinstance(value, int):
                 raise TypeError(f"Field '{self._name}' expects int, got {type(value).__name__}")
-            return Number(value).value  # reuses Number's range validation
+            require_int32(value, f"Field '{self._name}' value")
+            return int(value)
         if ground is str:
             if isinstance(value, String):
                 return value.value
             if not isinstance(value, str):
                 raise TypeError(f"Field '{self._name}' expects str, got {type(value).__name__}")
-            return String(value).value  # reuses String's content validation
+            require_clean_string(value, f"Field '{self._name}' value")
+            return str(value)
         # Ground type is a Predicate subclass
         if isinstance(value, ground):
             return value
@@ -145,10 +157,16 @@ class Field[T]:
             return value.value
         if isinstance(value, String):
             return value.value
+        # Direct validator calls, exactly as in _validated (see the comment
+        # there); bool needs its own refusal here because it subclasses int
+        if isinstance(value, bool):
+            raise TypeError(f"Predicate argument {self._name} expects an ASP term, got bool")
         if isinstance(value, int):
-            return Number(value).value  # rejects bool, validates int32 range
+            require_int32(value, f"Predicate argument {self._name}")
+            return int(value)
         if isinstance(value, str):
-            return String(value).value  # validates content
+            require_clean_string(value, f"Predicate argument {self._name}")
+            return str(value)
         if isinstance(value, tuple):
             # The read side teaches the same idiom for clingo tuples
             raise TypeError(

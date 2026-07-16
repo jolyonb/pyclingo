@@ -19,11 +19,10 @@ This is a wishlist of items.
   in the converter that `_field_names` exists to avoid. The adjudicated
   menu:
   - DONE in 1.4.2: (P1) converter uses positional construction with no
-    per-atom `dataclasses.fields()` walk (19.4 → ~17 µs).
-  - TO DO, low-risk: (P2) `_validated` calls the range/content validators
-    directly instead of building Numbers/Strings — ~10.4 µs, same
-    semantics, speeds `fact()` writes too (keep the int/str-subclass
-    normalization the metaclass performed).
+    per-atom `dataclasses.fields()` walk; (P2) `_validated` calls the
+    shared validators (require_int32/require_clean_string) directly
+    instead of building throwaway Numbers/Strings. Combined: ~19 →
+    ~12.5 µs/atom.
   - HELD until 10^6-atom models are real: (P3) a checked fast-path
     constructor for solver-returned symbols (`object.__new__` + direct
     dict fill, ALL validation retained; 5.6 µs, first-model 1.94s → 0.63s).
