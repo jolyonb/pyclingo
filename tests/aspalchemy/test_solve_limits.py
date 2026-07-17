@@ -397,3 +397,36 @@ def test_finished_publishes_only_after_finalization(monkeypatch: pytest.MonkeyPa
     # stops guarding the publish-after-finalize order — fail loudly instead
     assert calls["n"] == 1
     grounded.solve().close()  # and the grounding is free again
+
+
+def test_atexit_hook_closes_open_async_searches() -> None:
+    """
+    The exit-deadlock guard's in-process half (the subprocess half lives in
+    test_copy): an async search — a timeout engages clasp's native solve
+    thread — abandoned mid-stream is registered, and the atexit hook closes
+    it exactly as close() would, finalizing flags and statistics while the
+    solve thread can still finish. A search without a timeout has no second
+    thread and no hazard, so it is never registered; a search already
+    finished is a quiet no-op for the hook.
+    """
+    # No timeout, no registration: sync searches keep their existing teardown
+    before = set(solve_result_module._open_async_searches)
+    sync_result = make_choice_program(2).solve()
+    next(iter(sync_result))
+    assert set(solve_result_module._open_async_searches) == before
+    sync_result.close()
+
+    # An abandoned async search is registered, and the hook closes it
+    result = make_choice_program(2).solve(timeout=60)
+    next(iter(result))  # one model, then walk away
+    assert len(solve_result_module._open_async_searches) == len(before) + 1
+    solve_result_module._close_abandoned_async_searches()
+    assert result.finished is True
+    assert result.statistics is not None  # closed in the window where the snapshot works
+
+    # Already finished: the hook has nothing to do and nothing to break
+    exhausted = make_choice_program(1).solve(timeout=60)
+    list(exhausted)
+    assert exhausted.exhausted is True
+    solve_result_module._close_abandoned_async_searches()
+    assert exhausted.exhausted is True

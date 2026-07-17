@@ -1,5 +1,27 @@
 # Changelog
 
+## 1.4.3 — 2026-07-17
+
+### Fixed
+
+- **Abandoning an async search no longer deadlocks the interpreter at
+  exit.** The abandoned-search family's third door, and this one HANGS
+  instead of crashing: a solve with a `timeout` engages clasp's native
+  solve thread (async solving), and a search abandoned to interpreter
+  shutdown wedged the exit — the solve thread must attach to Python to
+  finish (the on_finish callback), CPython parks threads attaching during
+  finalization, and freeing the Control waits on that very thread forever
+  (deterministic: 10 hangs in 10 runs, timeout-bearing solves only). The
+  1.2.0/1.4.2 skip guards cannot close this door — the wait is inside
+  clingo's own `Control.__del__`, and running cancel/get instead would
+  wait on the same never-finishing thread — so the fix acts EARLIER: an
+  atexit hook (registered at import, so it runs after later-registered
+  caller hooks) closes every async search still open while the solve
+  thread can still attach, where cancel and the statistics snapshot both
+  work and the exit stays an exit. Sync searches have no second thread
+  and are untouched; the skip guards still cover their shutdown and
+  GC-cycle doors.
+
 ## 1.4.2 — 2026-07-16
 
 ### Performance

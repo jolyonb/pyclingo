@@ -300,6 +300,46 @@ def test_a_user_cycle_capturing_an_abandoned_search_does_not_crash() -> None:
     )
 
 
+def test_an_abandoned_async_search_does_not_deadlock_the_interpreter_at_exit() -> None:
+    """
+    Regression, the third door of the abandoned-search family — and this one
+    HANGS instead of crashing. A timeout engages clasp's native solve thread
+    (async solving); abandon that search to interpreter shutdown and the
+    exit deadlocks: the solve thread must attach to Python to finish (the
+    on_finish callback), CPython parks threads attaching during
+    finalization, and freeing the Control waits on that very thread forever
+    (ClaspFacade::shutdown -> Async::doWait). Skipping our own native calls
+    cannot help — the wait is inside clingo's Control.__del__ — so an atexit
+    hook now closes still-open async searches while the thread can still
+    finish. Without the fix this deadlocked 10 runs in 10; the subprocess
+    timeout below is what turns a regression into a failure instead of a
+    hung test session.
+    """
+    script = textwrap.dedent("""
+        from aspalchemy import ASPProgram, Field, Predicate
+
+        class Seed(Predicate):
+            x: Field[int]
+
+        program = ASPProgram()
+        program.fact(Seed(x=1), Seed(x=2))
+        result = program.ground().solve(timeout=60)
+        next(iter(result))     # one model, then walk away
+    """)
+    for _ in range(3):
+        try:
+            completed = subprocess.run([sys.executable, "-c", script], capture_output=True, timeout=30)
+        except subprocess.TimeoutExpired:
+            pytest.fail(
+                "abandoned async search deadlocked the interpreter at exit "
+                "(the process never finished; the regression is a hang, not a crash)"
+            )
+        assert completed.returncode == 0, (
+            f"abandoned async search broke interpreter exit: exit {completed.returncode} "
+            f"(negative or >=128 means a signal)"
+        )
+
+
 # --- builders: Choice and Aggregate -----------------------------------------
 #
 # A builder is the one mutable thing a rule can record, so its copy semantics

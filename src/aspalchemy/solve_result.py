@@ -49,6 +49,22 @@ state flags still publish. Abandoning a search is a documented idiom —
 next(iter(result)) takes one model and walks away — so these paths must be
 safe, not merely discouraged.
 
+The guards close the segfault doors, but ASYNC searches (a wall-clock
+timeout engages clasp's native solve thread) have a third door that
+skipping cannot close: a DEADLOCK at exit. Once interpreter finalization
+begins, clasp's solve thread cannot finish — its finish path delivers an
+on_finish event through a Python callback, and CPython parks any thread
+attaching during finalization (take_gil hangs it, forever). Meanwhile
+freeing the Control (clingo's own __del__, unskippable from here) waits on
+that very thread (ClaspFacade::shutdown -> Async::doWait), so the process
+hangs instead of exiting — and no ordering of OUR native calls helps,
+because cancel/get would wait on the same never-finishing thread. The only
+safe moment is BEFORE finalization: an atexit hook (registered at import,
+so it runs after later-registered caller hooks) closes every async search
+still open, while the solve thread can still attach and finish. Sync
+searches have no second thread and no such hazard; they stay with the skip
+guards alone.
+
 One nuance: a GroundedProgram keeps a strong reference to its most recent
 handle (the sequential guard's _active), so an abandoned mid-flight handle
 tears down by refcount only once the GroundedProgram itself is dropped or
@@ -56,10 +72,12 @@ abandon() is called — until then the suspended native search stays alive,
 and the next solve attempt raises the loud still-open error.
 """
 
+import atexit
 import copy
 import gc
 import sys
 import time
+import weakref
 from abc import ABC, abstractmethod
 from collections.abc import Generator, Iterator, Sequence
 from contextlib import suppress
@@ -545,20 +563,27 @@ class Search(ABC):
         """
         state = _SearchState()
         self._state = state
-        self._iterator = _ClosedCheckingIterator(
-            _search_generator(
-                control,
-                predicate_types,
-                timeout,
-                time.perf_counter(),
-                state,
-                message_handler,
-                assumptions or [],
-                mode=mode,
-                hidden_classes=hidden_classes,
-            ),
+        generator = _search_generator(
+            control,
+            predicate_types,
+            timeout,
+            time.perf_counter(),
             state,
+            message_handler,
+            assumptions or [],
+            mode=mode,
+            hidden_classes=hidden_classes,
         )
+        if timeout > 0:
+            # A timeout means async solving — a native clasp solve thread —
+            # and an async search abandoned to interpreter shutdown
+            # deadlocks the exit. The atexit hook closes whatever is still
+            # open while the thread can still finish (see
+            # _open_async_searches). Registered here, on the generator:
+            # whatever keeps a search alive keeps its generator alive, and
+            # one dead by then was already torn down safely by refcount.
+            _open_async_searches.add(generator)
+        self._iterator = _ClosedCheckingIterator(generator, state)
 
     @abstractmethod
     def __iter__(self) -> Iterator[AtomCollection]:
@@ -841,6 +866,37 @@ class OptimizeSteps(Search):
     def __iter__(self) -> Iterator[CostedModel]:
         self._guard_consumed("call optimize_iter() again to restart")
         return cast(Iterator[CostedModel], self._iterator)
+
+
+# Every ASYNC search generator still open (weakly held: refcount teardown
+# mid-run needs no help — and is already safe). Abandoning an async search
+# to interpreter shutdown would deadlock the exit: clasp's native solve
+# thread must attach to Python to finish (the on_finish callback), CPython
+# hangs threads attaching during finalization, and freeing the Control
+# waits on that thread forever (the module docstring tells the whole
+# story). So the hook below closes them in the atexit window — after
+# caller atexit hooks (LIFO: registered at import means running last),
+# before finalization — where the solve thread can still attach, cancel
+# and the statistics snapshot both work, and the exit stays an exit.
+_open_async_searches: weakref.WeakSet[Generator[AtomCollection]] = weakref.WeakSet()
+
+
+def _close_abandoned_async_searches() -> None:
+    """
+    Close every async search still open at exit (see _open_async_searches).
+
+    Closing runs the generator's normal cleanup — cancel, flags,
+    statistics — exactly as an explicit close() would; finished and
+    never-started generators are no-ops. A search executing in another
+    (daemon) thread right now cannot be closed (generators refuse) and is
+    skipped: nothing can be done for it from here.
+    """
+    for generator in list(_open_async_searches):
+        with suppress(Exception):
+            generator.close()
+
+
+atexit.register(_close_abandoned_async_searches)
 
 
 def _control_finalized(control: clingo.Control) -> bool:
