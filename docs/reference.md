@@ -153,7 +153,7 @@ All five are taught in [Source locations](diagnostics.md#source-locations).
 
 All five are taught in [Aggregates](choices-and-aggregates.md#aggregates);
 put one in a comparison to make a guard —
-[Guards, the right way](choices-and-aggregates.md#guards-the-right-way).
+[Guards done right](choices-and-aggregates.md#guards-done-right).
 
 - **`Count`** — `#count`: how many distinct elements hold.
 - **`Sum`** — `#sum`: the total of weighted elements.

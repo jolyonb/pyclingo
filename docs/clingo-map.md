@@ -74,8 +74,8 @@ construct anyway.
 | clingo | ASPAlchemy | details |
 |--------|------------|---------|
 | `#count{...}` / `#sum{...}` / `#sum+{...}` / `#min{...}` / `#max{...}` | `Count` / `Sum` / `SumPlus` / `Min` / `Max` — tuple terms and conditions as arguments, more elements via `add()` | [Aggregates](choices-and-aggregates.md#aggregates) |
-| `#count{...} > 3` (one-sided guard) | one comparison: `Count(...) > 3` | [Guards, the right way](choices-and-aggregates.md#guards-the-right-way) |
-| `2 <= #count{...} <= 4` (two-sided guard) | two comparisons over the same aggregate: `Count(...) >= 2, Count(...) <= 4` — grounds to byte-identical aspif, receipt included | [Guards, the right way](choices-and-aggregates.md#guards-the-right-way) |
+| `#count{...} > 3` (one-sided guard) | one comparison: `Count(...) > 3` | [Guards done right](choices-and-aggregates.md#guards-done-right) |
+| `2 <= #count{...} <= 4` (two-sided guard) | two comparisons over the same aggregate: `Count(...) >= 2, Count(...) <= 4` — gringo grounds the shared aggregate once | [Guards done right](choices-and-aggregates.md#guards-done-right) |
 | aggregates on both sides of one comparison | **refused** — a clingo syntax error anyway; bind one to a variable in a separate rule | [Better errors](unsupported.md#better-errors-not-restrictions) |
 
 ## Arithmetic

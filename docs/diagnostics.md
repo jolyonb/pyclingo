@@ -251,10 +251,9 @@ gringo's own output formats:
   of dumping a ground file when debugging grounding size or content.
 - **`aspif()`** is the exact statement stream clasp receives, byte-for-byte
   what `clingo --mode=gringo` emits. This is the honest measure for
-  grounding-size questions: pretty-printed text re-prints shared aggregate
-  elements, aspif does not — the trap that misled the
-  [guard-idiom probes](choices-and-aggregates.md#verify-it-yourself) until
-  they switched to comparing aspif.
+  grounding-size questions: pretty-printed text re-prints the shared
+  elements of a [banded aggregate](choices-and-aggregates.md#guards-done-right)
+  and looks duplicated, while aspif shows what clasp actually receives.
 
 ```python
 from aspalchemy import RangePool
