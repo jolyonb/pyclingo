@@ -2,8 +2,8 @@
 
 If predicates are your data, statements are how you compute with it: what to derive, what to rule out, what
 must hold. This page is the vocabulary for writing them, and it comes in two halves — the handful of
-*verbs* that put statements into a program, and the *terms* those verbs accept. We'll walk the verbs 
-first, then each kind of term in turn. (For the predicates these rules
+*verbs* that put statements into a program, and the *terms* those verbs accept. We'll walk the verbs
+first, then each kind of term in turn. (For the predicates these statements
 operate on, see [Predicates and Data](predicates.md).)
 
 ## The verbs
@@ -22,9 +22,9 @@ ranking the solutions it finds, are separate verbs on their own pages —
 If you've written raw clingo, two things may feel unfamiliar. First, the verbs don't line up one-to-one
 with those three kinds: a rule isn't a single call but a `when()` — the conditions — closed with
 `.derive()` — what they produce, and a constraint is a deliberate `forbid()` or `require()` rather than a
-headless line. Second, there are more verbs than kinds: constraints alone come as `forbid()`, `require()`,
-and their `when()` forms, and choices and preferences bring their own later. The reason for these new verbs 
-is simply that we want to make the code readable — when you read a rule constructed in Python, its intent 
+bare `:-` line. Second, there are more verbs than kinds: constraints alone come as `forbid()`, `require()`,
+and their `when()` forms, and choices and preferences bring their own later. The reason for these new verbs
+is simply that we want to make the code readable — when you read a rule constructed in Python, its intent
 should be obvious. Under the hood, everything is converted appropriately and renders in standard clingo notation.
 
 We'll build one small program to demonstrate each verb — a guest list:
@@ -94,7 +94,7 @@ shows the rule's handiwork:
 ['adult("alice")', 'adult("carol")']
 ```
 
-The two halves `when` and `derive` are really one statement, so a `when()` you never close is an 
+The two halves `when` and `derive` are really one statement, so a `when()` you never close is an
 error at render, and the report points back to the line where you opened it (every statement remembers
 the line that authored it — see [source locations](diagnostics.md#source-locations)). Let's take a look:
 
@@ -115,21 +115,21 @@ closer finishes each `when()`, and closing it twice is an error, the same as nev
 ### Constraints: forbid() and require()
 
 Now the third kind of statement — the one that constructs nothing. `forbid(*conditions)` bans a
-combination outright: no answer set may satisfy all its conditions at once. It renders as a headless rule,
-`:- conditions.` which is clingo's own way of writing "this must never happen".
+combination outright: no answer set may satisfy all its conditions at once. It renders as `:- conditions.`,
+clingo's own way of writing "this must never happen".
 
 `require(target)` says it the other way round: you name the thing that must *hold*, and the library
 forbids its opposite. Requiring an atom forbids its default negation — `require(p)` renders `:- not p` —
 and requiring a comparison flips it to the inverse. A bare `require(target)` is a whole constraint on its
-own, so the target *is* the entire body — though that form is fairly rare.
+own — though that form is fairly rare.
 
 Closing a `when()` with `.require()` is a different statement: `when(*conditions).require(target)` asks that
-`target` hold **whenever** the conditions do, rendering `:- conditions, <target's opposite>`. The
-conditions become the body — and, crucially, they *bind* the variables the target uses: `Y` draws its
+`target` hold **whenever** the conditions do, rendering `:- conditions, <target's opposite>`. And
+crucially, those conditions *bind* the variables the target uses: `Y` draws its
 values from the `guest` condition rather than appearing from nowhere.
 
-The final form of constraint that you can use is `when(*conditions).forbid(target)`, which is just an
-alias for `forbid(*conditions, target)`. However, being able to write it as `when().forbid()` gives you
+The final form of constraint that you can use is `when(*conditions).forbid(*targets)`, which is just an
+alias for `forbid(*conditions, *targets)`. However, being able to write it as `when().forbid()` gives you
 an option to organize your thoughts around "what is the condition" and "what am I actually forbidding".
 
 Let's see a couple of these in action.
@@ -170,7 +170,7 @@ keeps them out of the report):
 
 ## Variable binding
 
-That's all three — fact, rule, and constraint. Everything from here on is the *terms* those verbs accept —
+That's all three statements — fact, rule, and constraint. Everything from here on is the *terms* those verbs accept —
 but before the catalogue, one idea sits under all of them, quietly at work in every rule so far:
 **binding**. It's the answer to a question the examples kept begging — how does the `X` in
 `Guest(name=X, age=Y)` know which guests to stand for?
@@ -186,8 +186,8 @@ Where do a variable's values come from? From the **positive body atoms** it appe
 un-negated predicates in the `when()`. In that rule `guest(X, Y)` is the positive atom, and it's what
 *binds* `X` and `Y`: each `guest` fact is one substitution, so `X` ranges over the four names and `Y` over
 their ages. Everything else only *reads* a value some positive atom already supplied. `Y >= 18` invents no
-ages — it filters the ones `guest(X, Y)` handed it; the head `adult(X)` invents no names — it carries out
-the `X` the body bound. That is the whole reason the rule derives `adult("alice")` and `adult("carol")`
+ages — it filters the ones `guest(X, Y)` handed it; `adult(X)` invents no names — it carries
+the `X` that the body bound. That is the whole reason the rule derives `adult("alice")` and `adult("carol")`
 and nothing else: those are the substitutions where a bound `Y` also cleared the comparison.
 
 The flip side is the rule you *can't* ground. A variable that shows up only in places that read — in the
@@ -207,9 +207,8 @@ and whole atoms alike. Names start with an uppercase letter. Two shorthands cove
 module-level `V` (a ready-made `Vars` instance) mints variables by attribute access, so `V.Room` is
 `Variable("Room")` with no declaration first; and `ANY` is the anonymous variable `_` for a don't-care
 position, as in the `Edge(a=N, b=ANY)` rules of
-[the tutorial](getting-started.md#derive-new-facts-with-rules). gringo (clingo's grounder — the part that
-instantiates your rules) accepts `_X`-style "don't warn" names, but ASPAlchemy refuses them: one
-underscore means anonymous, full stop. Use `ANY`.
+[the tutorial](getting-started.md#derive-new-facts-with-rules). ASPAlchemy is slightly stricter on
+variable names than clingo: all anonymous variables must be simply `ANY`; `_X` is disallowed.
 
 ```python
 >>> from aspalchemy import V
@@ -219,54 +218,45 @@ underscore means anonymous, full stop. Use `ANY`.
 '_'
 ```
 
-A variable that appears exactly once in a rule is almost always a typo, so ASPAlchemy rejects it — a lint
-gringo itself doesn't do (it stays quiet about singletons; this is one of the library's
-[deliberate strictnesses](unsupported.md#deliberate-strictness)). The fix is either the variable you
-actually meant, or `ANY` to say the don't-care out loud. And if you really do mean it, the lint is
-switchable:
+A variable that appears exactly once in a rule is almost always a typo, so ASPAlchemy rejects it.
+The fix is either the variable you actually meant, or `ANY` to say the don't-care out loud.
+(Note that this is stricter than clingo, which will accept a singleton, but it can lead to
+unexpected results, see [deliberate strictnesses](unsupported.md#deliberate-strictness).)
 
 ```python
 Reading = Predicate.define("reading", ["sensor", "value"], show=False)
 
-strict = ASPProgram()
+prog = ASPProgram()
 ```
 
 ```python
->>> strict.forbid(Reading(sensor=X, value=Y), X > 0)  # Y used exactly once
+>>> prog.forbid(Reading(sensor=X, value=Y), X > 0)  # Y used exactly once
 Traceback (most recent call last):
   ...
 ValueError: Singleton variable(s) Y in rule: :- reading(X, Y), X > 0.
 A variable used exactly once is usually a typo; use ANY for an intentional don't-care.
 ```
 
-```python
-loose = ASPProgram(allow_singletons=True)
-loose.forbid(Reading(sensor=X, value=Y), X > 0)  # accepted as written
-```
-
-Unsafe variables get the same treatment — a variable that appears in a rule head or a negative condition
+Unsafe variables get the same treatment — a variable that appears in the derived atom or a negative condition
 but that no positive condition *binds* — flagged at the line that built the rule. Here `X` and `Y` sit
 only under a `not`, where [nothing binds them](#variable-binding):
 
 ```python
->>> strict.forbid(~Reading(sensor=X, value=Y))  # X, Y appear only under `not`
+>>> prog.forbid(~Reading(sensor=X, value=Y))  # X, Y appear only under `not`
 Traceback (most recent call last):
   ...
 ValueError: Unsafe variable(s) X, Y in rule: :- not reading(X, Y).
 Every variable must be bound by a positive body literal (or an equality with something bound).
 ```
 
-Unlike the singleton lint, this one isn't switchable and isn't an opinion: every rejection is a rule
-gringo would refuse anyway, just caught before clingo ever runs.
-
 ## Comparisons
 
 Variables become conditions once you compare them. The Python comparison operators — `==`, `!=`, `<`,
 `<=`, `>`, `>=` — applied to variables, numbers, expressions, or aggregates build **Comparison terms**,
-and a comparison drops into a rule body like any other condition; the `Y >= 18` back in the first rule was
+and a comparison joins the conditions like any other; the `Y >= 18` back in the first rule was
 one. Arithmetic composes underneath, so `X + 1 < Y * 2` is a comparison over expressions (the operator
 table and the clingo-vs-Python fine print are in [Arithmetic](math.md)), and the right-hand side can even
-be a whole atom: `X == Cell(row=1, col=2)` compares against — and destructures — a nested term.
+be a whole atom: `X == Cell(row=1, col=2)` compares against a nested term.
 
 There's a catch that falls out of `==` building a term: a comparison has no truth value. So `if X == Y:`
 is almost always a bug, and ASPAlchemy makes it a *loud* one rather than letting you take a silently wrong
@@ -289,13 +279,10 @@ Traceback (most recent call last):
 TypeError: A Comparison (X = Y) has no boolean value: comparison operators on aspalchemy terms build ASP terms rather than evaluating them. ...
 ```
 
-One shorthand you'll reach for constantly: `X.in_(pool_or_range)` renders as `X = 1..5`-style domain
-membership — more on that under [Pools and ranges](#pools-and-ranges) below.
-
 Equality is clingo's binding assignment: `X == Y + 1` renders as `X = Y + 1`, and — as in clingo — that
 equality *binds* `X`, so it counts as a positive condition for the [safety check](#variable-binding). It's
 the one comparison *operator* that binds — `<`, `>`, `!=` and the rest only filter values something else
-supplied. (Domain membership, `X.in_(...)`, renders with `=` too and binds the same way.)
+supplied.
 
 ```python
 >>> (X == (Y + 1)).render()
@@ -341,8 +328,8 @@ carries the weight for [binding](#variable-binding): `R` is bound by the positiv
 negated `~Booked(room=R)` only *reads* it — a `not` condition can never bind a variable, which is why a
 rule negating the only occurrence of a variable is unsafe. One practical note: that
 `Booked(room=2)` fact is load-bearing. If a default-negated predicate is never derived *anywhere* — no
-fact, no rule head — gringo flags it ("atom does not occur in any rule head"). Raw clingo shrugs and
-grounds anyway (the negation trivially holds), but a never-derivable atom in a body is usually a
+fact, no rule — gringo flags it ("atom does not occur in any rule head"). Raw clingo shrugs and
+grounds anyway (the negation trivially holds), but a never-derivable atom in a condition is usually a
 misspelled predicate name, so ASPAlchemy [makes that message loud](diagnostics.md#clingos-messages) at
 solve time by default.
 
@@ -350,8 +337,7 @@ solve time by default.
 the classical minus sign that's part of the atom itself, lives in
 [Predicates and Data](predicates.md#classical-and-default-negation).)
 
-The fine print, for when you nest negations or negate a comparison — each claim below is shown in a
-runnable transcript, and each row of the [translation map](clingo-map.md#negation) points back here:
+The fine print, for when you nest negations or negate a comparison:
 
 - On atoms, a **double negation is preserved**: `not not p` is *not* equivalent to `p` under stable-model
   semantics, and a triple collapses to a single. (Contrast arithmetic, where `-` and `Compl` really are
@@ -378,8 +364,8 @@ runnable transcript, and each row of the [translation map](clingo-map.md#negatio
 
 ## Conditional literals
 
-A conditional literal is clingo's `p(X) : q(X)`. In a rule body it means "for **every** `X` where `q(X)`
-holds, `p(X)` holds too." The picture that makes it stick: the head is a *key* and the condition a *lock*,
+A conditional literal is clingo's `p(X) : q(X)`. In a rule it means "for **every** `X` where `q(X)`
+holds, `p(X)` holds too." A picture that might help: `p(X)` is a *key* and `q(X)` a *lock*,
 and the literal holds when every lock has a matching key. Keys without locks are fine; a lock with no key
 fails.
 
@@ -455,6 +441,8 @@ restriction:
 'X = (2; 4; 8)'
 ```
 
+Note that this usage counts as binding the variable `X`.
+
 Those two are the only legal positions. A bare pool sitting alone as a rule element is a clingo syntax
 error, so ASPAlchemy refuses it at construction — along with the subtler shapes (a negated pool
 comparison, a pool inside `require()`) whose clingo reading is never what the code seems to say: see
@@ -463,7 +451,7 @@ comparison, a pool inside `require()`) whose clingo reading is never what the co
 ## Constants and extremes
 
 `define_constant(name, value)` registers a clingo `#const` and hands back a `DefinedConstant` you use in
-rules — one named number (or string) threaded through the program and defined in exactly one place:
+rules — one named number, string, or ground atom threaded through the program and defined in exactly one place:
 
 ```python
 config = ASPProgram()
@@ -485,12 +473,9 @@ config.when(Size(n=N)).require(N <= max_size)
 
 A `str` value renders as a quoted ASP string — `"n"` is never the bare symbol `n`. For a *symbolic*
 constant, pass a ground atom instead: `define_constant("dir", North())` with
-`North = Predicate.define("n", [])` renders `#const dir = n.` (The `#const` directive is refused inside
-`raw_asp` blocks precisely because this verb already exists — see the
-[translation map](clingo-map.md#directives).)
+`North = Predicate.define("n", [])` renders `#const dir = n.`
 
-The explicit `Number` and `String` types exist but you'll rarely write them — plain Python ints and strs
-coerce wherever a term is expected, as every example here does. Two extremes round out the vocabulary:
+Two extremes round out the vocabulary:
 `SUP` and `INF` render as clingo's `#sup` and `#inf`, the greatest and least terms of the ordering. Their
 everyday use is the empty-set answer — `Min` over nothing is `#sup` (and `Max` is `#inf`) — so comparing
 against `SUP` is really asking "was the set empty?"

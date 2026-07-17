@@ -212,19 +212,15 @@ variable in a separate rule.
 
 Everything in the previous section fails in clingo too. This section is
 different: valid clingo we refuse anyway, because each construct is nearly
-always a mistake.
-Every refusal is a teaching error naming the supported spelling — and per
-the site's single-demo rule, the executable demos live in the guide pages
-linked below, not here.
+always a mistake. Every refusal is a teaching error naming the supported spelling.
 
 **`_X` don't-warn variables.** gringo allows underscore-prefixed names to
 suppress its own warnings; ASPAlchemy's rule is narrower — one underscore
 means anonymous, full stop. Use `ANY` for don't-care positions.
 
 **Singleton variables.** A variable used exactly once in a rule is usually a
-typo, so it fails a lint here (gringo itself stays silent). The demo and the
-`ASPProgram(allow_singletons=True)` switch live in
-[Variables](statements.md#variables).
+typo, so it fails a lint here (gringo itself stays silent). If you desire to
+turn this lint off, you can supply `ASPProgram(allow_singletons=True)`.
 
 **Braces in rule bodies.** `2 { p(X) } 4` in a body is a cardinality *test*,
 not a choice — same syntax, different semantics. Spell tests as `Count`
