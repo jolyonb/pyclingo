@@ -541,3 +541,12 @@ def test_unsat_core_is_empty_when_no_assumptions_conflict() -> None:
     sat_result = sat_program.solve()
     assert len(list(sat_result)) == 1
     assert sat_result.unsat_core is None
+
+
+def test_grounding_time_is_recorded() -> None:
+    P = Predicate.define("p_gt", ["x"])
+    program = ASPProgram()
+    program.fact(P(x=RangePool(1, 50)))
+    grounded = program.ground()
+    assert grounded.grounding_time > 0.0
+    assert grounded.grounding_time < 60.0  # sanity: seconds, not nanoseconds-as-seconds

@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **`GroundedProgram.grounding_time`: wall-clock seconds the ground()
+  took.** Rendering, gringo's instantiation, and snapshot construction
+  together. The search handles' statistics deliberately start their
+  `wall_time` after grounding, so the phase that dominates large
+  programs was recorded nowhere; now the grounding carries its own
+  receipt.
+
 ## 1.5.0 — 2026-07-17
 
 ### Added

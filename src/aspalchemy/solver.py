@@ -5,6 +5,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 from collections.abc import Iterator, Mapping, Sequence
 from typing import Any, Self
 
@@ -1080,6 +1081,7 @@ class ASPProgram:
                 or the log level threshold is exceeded
         """
         _validate_stop_level(stop_on_log_level)
+        ground_started = time.perf_counter()
         asp_source, line_origins, all_classes, has_raw, statement_table, raw_locations = self._render_with_origins()
 
         message_handler = ClingoMessageHandler(asp_source, stop_on_level=stop_on_log_level, line_origins=line_origins)
@@ -1196,6 +1198,7 @@ class ASPProgram:
             grounding_context=context,
             statement_table=statement_table,
             raw_locations=raw_locations,
+            grounding_time=time.perf_counter() - ground_started,
         )
 
     def solve(
@@ -1376,6 +1379,7 @@ class GroundedProgram:
         grounding_context: object,
         statement_table: Mapping[int, tuple[str, SourceLocation | None, str]],
         raw_locations: Mapping[int, SourceLocation | None],
+        grounding_time: float,
     ) -> None:
         self._text = text
         # Retained for the on-demand re-grounds behind ground_text()/aspif():
@@ -1393,6 +1397,7 @@ class GroundedProgram:
         # strings and locations, not live element references)
         self._statement_table = statement_table
         self._raw_locations = raw_locations
+        self._grounding_time = grounding_time
         # Classes whose atoms are never shown: read surfaces teach instead
         # of returning a silent empty
         self._hidden_classes = hidden_classes
@@ -1440,6 +1445,17 @@ class GroundedProgram:
     def text(self) -> str:
         """The rendered ASP program this grounding solves."""
         return self._text
+
+    @property
+    def grounding_time(self) -> float:
+        """
+        Wall-clock seconds ground() took: rendering, gringo's
+        instantiation, and snapshot construction together. The search
+        handles' statistics deliberately start their wall_time AFTER
+        grounding, so this is the only record of the phase that
+        dominates large programs.
+        """
+        return self._grounding_time
 
     def ground_text(self) -> str:
         """

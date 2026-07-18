@@ -106,6 +106,20 @@ person = Person(name=X, age=A+1)
 Variable('X')
 ```
 
+That read is *non-ground*, so the term comes back on its own. A ground field is the other way around:
+attribute access hands you the plain Python value — `mary.age` is the `int` `25`. Occasionally you want a
+ground field back as an ASP *term* instead, to build an expression out of an atom's fields, and there
+`mary.age` works against you twice: it does Python arithmetic rather than ASP, and a type checker narrows
+the result to `int` when a term is what you need. The subscript form `atom["field"]` is the escape hatch —
+it reads the field as a term, typed loosely, so arithmetic on it builds an `Expression` object:
+
+```python
+>>> mary.age + 5                 # attribute access does Python arithmetic
+30
+>>> (mary["age"] + 5).render()   # subscript reads a term, so this builds an ASP expression
+'25 + 5'
+```
+
 When you try to write to a field, ASPAlchemy checks that the value is the right type — writing a variable
 or expression is exempt, since rule terms pass straight through.
 
