@@ -38,6 +38,10 @@ section that teaches it.
 - **`StatementGrounding`** — one row of `statement_profile()`: a statement's
   ground instantiation count and its authoring line; constraints included.
   [Profiling by statement](diagnostics.md#profiling-by-statement).
+- **`RecursiveComponent`** — one row of `recursion_profile()`: signatures
+  whose derivations depend on each other, the statements in the cycle, and
+  whether the recursion passes through negation.
+  [Profiling recursion](diagnostics.md#profiling-recursion).
 - **`SolveResult`** — the lazy, unbounded model stream `solve()` returns;
   iterate it, or take `first()`.
   [The model stream](solving.md#the-model-stream).

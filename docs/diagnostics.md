@@ -459,6 +459,65 @@ Three consequences worth knowing:
   those aggregate rows charge an upper bound, not the single emitted
   rule. Aggregates directly over facts are exact.
 
+## Profiling recursion
+
+Recursive grounding has its own cost model: gringo grounds each strongly
+connected component of the positive predicate dependency graph as one
+fixpoint, re-evaluating the component's rules across the iteration. A
+statement inside that fixpoint that need not feed the recursion — a
+derivation restatable as a requirement — is the classic slow-grounding
+finding, and it is visible from the program's *structure* alone.
+`analyze_recursion()` reports it before any grounding is paid:
+
+```python
+X, Y, Z = Variable("X"), Variable("Y"), Variable("Z")
+
+class Edge(Predicate, show=False):
+    a: Field[int]
+    b: Field[int]
+
+class Reach(Predicate):
+    a: Field[int]
+    b: Field[int]
+
+tc_program = ASPProgram()
+with location_override(SourceLocation("paths.py", 7)):
+    tc_program.fact(Edge(a=1, b=2), Edge(a=2, b=3))
+with location_override(SourceLocation("paths.py", 8)):
+    tc_program.when(Edge(a=X, b=Y)).derive(Reach(a=X, b=Y))
+with location_override(SourceLocation("paths.py", 9)):
+    tc_program.when(Reach(a=X, b=Y), Edge(a=Y, b=Z)).derive(Reach(a=X, b=Z))
+```
+
+```python
+>>> print(tc_program.analyze_recursion())
+Recursion profile: 1 recursive component
+  reach/2
+    reach(X, Z) :- reach(X, Y), edge(Y, Z).  — paths.py:9
+```
+
+The base rule seeds the component but is not listed: only rules that
+depend on the component from within it — positively, or through the
+negation that makes a component unstratified — are part of its cycle. `recursion_profile()` returns the same data structured — one
+`RecursiveComponent` per component: `signatures`, `statements` (rendered
+text with authoring locations), and `unstratified` — True when some rule
+of the component also reaches it through default negation, a `not p`
+whose `p` is in the component. Components are the strongly connected
+components of the FULL dependency graph — positive and default-negated
+edges together, the textbook object of stratification — so a cycle
+running entirely through negation (`p :- not q. q :- not p.`), or two
+positive fixpoints entangled by mutual negation, is reported and
+flagged. An unstratified component means strongly circular rules —
+defined in terms of their own absence: gringo cannot settle them and
+clasp is relegated to guess-and-check search. A well-shaped encoding is
+a tower — base data, then choices, then rules on top, each stratum
+negating only what is settled below — and an unstratified component is
+the tower folding back on itself: expensive to solve and almost always
+unintended. Stated
+plainly: the analysis is static (no grounding runs), and `raw_asp()`
+text is invisible here — its `predicates=` declarations give existence,
+not structure.
+
 ## Clingo's messages
 
 Some mistakes only grounding can catch, and clingo reports them as log

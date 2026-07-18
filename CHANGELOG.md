@@ -4,6 +4,25 @@
 
 ### Added
 
+- **`ASPProgram.recursion_profile()` / `analyze_recursion()`: the recursive
+  components of the predicate dependency graph, before any grounding is
+  paid.** Gringo grounds each strongly connected component as
+  one fixpoint, re-evaluating its rules across the iteration — so a
+  statement inside a component that need not feed the recursion (a
+  derivation restatable as a requirement) is the classic slow-grounding
+  finding, and it is visible from program structure alone. Each
+  `RecursiveComponent` carries the component's signatures, the statements
+  grounding inside its fixpoint (with authoring locations), and an
+  unstratified flag — the component's cycle passes through default
+  negation, making the rules strongly circular: solving degrades to
+  guess-and-check search, and it is almost always unintended. Components 
+  are the strongly connected components of the FULL
+  dependency graph (positive and negated edges together, the textbook
+  object of stratification), so negation-only cycles and positive
+  fixpoints entangled by mutual negation are reported and flagged, not
+  silently ignored. Static analysis in a new `recursion` module;
+  `raw_asp` text is ignored.
+
 - **`GroundedProgram.statement_profile()` / `analyze_statements()`: where the
   grounding's WORK comes from, per statement.** `grounding_profile()` counts
   the atoms each signature ends up with, which leaves a documented blind

@@ -22,6 +22,7 @@ from aspalchemy.exceptions import GroundingError, UnsatisfiableError
 from aspalchemy.optimization import OptStrategy, TupleTermType, WeakConstraint
 from aspalchemy.predicate import NegatedSignature, Predicate
 from aspalchemy.program_elements import ProgramElement, RawASP, RenderedLine, Rule, script_spans
+from aspalchemy.recursion import RecursiveComponent, analyze_recursion, recursion_profile
 from aspalchemy.scoping import validate_rule
 from aspalchemy.segment import Segment, When
 from aspalchemy.solve_result import (
@@ -1021,6 +1022,36 @@ class ASPProgram:
 
         if unregistered := used_constants - set(self._defined_constants.keys()):
             raise ValueError(f"Undefined constants used in program: {', '.join(sorted(unregistered))}")
+
+    def recursion_profile(self) -> tuple[RecursiveComponent, ...]:
+        """
+        The recursive components of this program's predicate dependency
+        graph — positive and default-negated edges together — largest
+        first: signatures whose derivations depend on each other, each
+        with the statements inside the component's cycle. A stratified
+        component grounds as one gringo fixpoint; an unstratified one
+        passes through 'not' and clasp resolves it by search. Static
+        structure analysis: no grounding is performed, so it answers
+        "what will ground recursively?" before any ground() is paid.
+        analyze_recursion() renders exactly this as prose; raw_asp text
+        is invisible here.
+        """
+        for segment in self._segments.values():
+            segment.check_pending()
+        rules = [element for segment in self._segments.values() for element in segment if isinstance(element, Rule)]
+        return recursion_profile(rules)
+
+    def analyze_recursion(self) -> str:
+        """
+        The recursion profile as prose: each recursive component's
+        signatures, whether it is stratified, and the statements gringo
+        re-evaluates across the component's fixpoint. Those statements
+        are where recursive grounding time lives: one that need not feed
+        the recursion (a derivation restatable as a requirement) is the
+        classic finding. recursion_profile() is the same data,
+        structured.
+        """
+        return analyze_recursion(self.recursion_profile())
 
     def ground(self, stop_on_log_level: LogLevel = LogLevel.INFO, context: object = None) -> GroundedProgram:
         """

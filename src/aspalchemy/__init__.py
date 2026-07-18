@@ -51,6 +51,7 @@ from .operators import ComparisonOperator, Operation
 from .optimization import OptStrategy
 from .predicate import Field, FieldAsTermType, NegatedSignature, Predicate, PredicateArg, TupleTermType
 from .program_elements import ProgramElement, RenderedLine
+from .recursion import RecursiveComponent
 from .segment import Segment, When
 from .solve_result import (
     AtomCollection,
@@ -85,6 +86,7 @@ __all__ = [  # noqa: RUF022 (categorized deliberately, not sorted)
     "When",
     "GroundedProgram",
     "SignatureGrounding",
+    "RecursiveComponent",
     "StatementGrounding",
     "SolveResult",
     "Model",
