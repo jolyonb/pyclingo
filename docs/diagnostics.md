@@ -362,8 +362,102 @@ one typed `SignatureGrounding` row per signature — `name`, `arity`,
 One blind spot, stated plainly: the report joins on rule *heads*, so a
 statement whose body grounds large without deriving new atoms — a wide join
 feeding a small head — shows up under its head's count, not as its own row.
+The statement profile below closes it.
 Grounding size is also only half the scale story; the other half, reading
 large models back, has [its own honest paragraph](solving.md#a-note-on-scale).
+
+## Profiling by statement
+
+The signature profile counts the atoms each signature ends up with — but a
+*constraint* has no head to charge, and the costliest statements in a
+program are often exactly the headless ones. `analyze_statements()` charges
+every statement its own row: ground instantiation counts, largest first,
+each with its authoring line. Here is the cross-product again, this time
+built from a pooled range and joined by a constraint:
+
+```python
+X = Variable("X")
+stmt_program = ASPProgram()
+with location_override(SourceLocation("puzzle.py", 12)):
+    stmt_program.when(X.in_(RangePool(1, 30))).derive(Item(n=X))
+with location_override(SourceLocation("puzzle.py", 13)):
+    stmt_program.when(Item(n=A), Item(n=B)).derive(Pair(a=A, b=B))
+with location_override(SourceLocation("puzzle.py", 14)):
+    stmt_program.forbid(Pair(a=A, b=B), Pair(a=B, b=A), A != B)
+```
+
+```python
+>>> print(stmt_program.ground().analyze_statements())
+Statement profile: 1800 ground instantiations across 3 statements
+         900  pair(A, B) :- item(A), item(B).  — puzzle.py:13
+         870  :- pair(A, B), pair(B, A), A != B.  — puzzle.py:14
+          30  item(X) :- X = 1..30.  — puzzle.py:12
+```
+
+The constraint — invisible to the signature profile — is the second-largest
+row here, and in real programs it is routinely the first. When you want the
+same data structured, `statement_profile()` returns one typed
+`StatementGrounding` row per statement — `statement`, `location`,
+`instances`:
+
+```python
+>>> row = stmt_program.ground().statement_profile()[1]
+>>> row.statement, row.instances
+(':- pair(A, B), pair(B, A), A != B.', 870)
+```
+
+How it counts, stated plainly. Each call re-grounds an *instrumented* copy
+of the program, and a ground-program observer tallies a reserved marker
+literal (`__aspalchemy_stmt/1`) per statement — no text is ever parsed.
+Statements are classified structurally from the render itself, so a comment
+or directive can never be mistaken for one. The instrumentation is chosen
+per statement kind so the copy grounds as faithfully as possible:
+
+- **Facts stay real facts** — they are counted by a companion rule whose
+  pool expansion instantiates once per fact instance — so aggregate
+  evaluation over facts, and ground-evaluable conditions generally,
+  resolve exactly as in the true grounding.
+- **Rules** carry the marker in their bodies (joined with `;`, which a
+  trailing conditional literal's condition cannot absorb); the marker
+  keeps each instantiation a rule, so instances the real grounding would
+  fold into facts are still counted. Bodiless choice statements gate on
+  the marker instead (choice atoms are open in the real grounding too),
+  as do raw statements whose heads the companion cannot wrap —
+  disjunctions, conditional heads, and cardinality-bounded choices.
+- **Weak constraints are not touched at all** — their bodies ground
+  exactly as the real program; the tail's priority is redirected to a
+  reserved value per statement, and gringo's minimize callback reports
+  one entry per ground tuple there.
+- **Anonymous variables are renamed apart** in the instrumented copy:
+  gringo's projection rewrite would otherwise hide a statement's join work
+  from the marker (`p(_, C)` counting distinct `C` instead of the join).
+  Occurrences under default negation are left alone — renaming them would
+  be unsafe, and a negated literal carries no join work. The
+  `ASPALCHEMY_ANON*` variable names are reserved for this, and fresh
+  indices start past any already present in the program.
+
+Three consequences worth knowing:
+
+- Counts are the instantiations gringo emits for each statement, kept
+  visible past the final fact-folding. `minimize()`/`maximize()`
+  directives are the one excluded statement kind — a wide-bodied
+  objective's grounding work is invisible here, as it is in the
+  signature profile.
+- Each call pays a full in-process re-ground, with `ground_text()`'s
+  stateful-context caveat (a context answering differently on the second
+  call skews or breaks the profile) — but none of its threading caveat.
+- Every rendered ASPAlchemy statement except optimization directives is
+  counted. Inside `raw_asp()` text, attribution is line-based, and lines
+  the pass cannot honestly attribute pass through uncounted: statements
+  spanning several lines (including a `1..\n3` range split), several
+  statements sharing one line, a statement sharing its line with a block
+  comment, and raw weak constraints and directives. A bare choice over a
+  pool counts gringo's per-element ground rules.
+- One honest upper bound: a rule derived purely from facts is OPEN in
+  the instrumented copy, so an assignment aggregate over such derived
+  atoms grounds over its achievable range rather than evaluating —
+  those aggregate rows charge an upper bound, not the single emitted
+  rule. Aggregates directly over facts are exact.
 
 ## Clingo's messages
 

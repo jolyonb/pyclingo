@@ -35,6 +35,9 @@ section that teaches it.
 - **`SignatureGrounding`** — one row of `grounding_profile()`: a signature's
   ground-atom count and the Python lines that derive it.
   [Profiling grounding](diagnostics.md#profiling-grounding).
+- **`StatementGrounding`** — one row of `statement_profile()`: a statement's
+  ground instantiation count and its authoring line; constraints included.
+  [Profiling by statement](diagnostics.md#profiling-by-statement).
 - **`SolveResult`** — the lazy, unbounded model stream `solve()` returns;
   iterate it, or take `first()`.
   [The model stream](solving.md#the-model-stream).

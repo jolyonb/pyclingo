@@ -11,6 +11,7 @@ from .aggregates import (
     Sum,
     SumPlus,
 )
+from .analysis import SignatureGrounding, StatementGrounding
 from .choice import CardinalityType, Choice
 from .clingo_handler import ClingoMessage, LogLevel
 from .conditional_literal import ConditionalLiteral
@@ -67,7 +68,7 @@ from .solve_result import (
     convert_predicate_to_symbol,
     convert_symbol_to_predicate,
 )
-from .solver import ASPProgram, GroundedProgram, SignatureGrounding
+from .solver import ASPProgram, GroundedProgram
 from .source_location import (
     SourceLocation,
     attribute_to_caller,
@@ -84,6 +85,7 @@ __all__ = [  # noqa: RUF022 (categorized deliberately, not sorted)
     "When",
     "GroundedProgram",
     "SignatureGrounding",
+    "StatementGrounding",
     "SolveResult",
     "Model",
     "CostedModel",

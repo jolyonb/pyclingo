@@ -129,10 +129,20 @@ def _script_end(text: str, start: int) -> int | None:
     return None
 
 
+def skip_string(text: str, i: int) -> int:
+    """i at the opening quote: the index just past the closing quote, honoring backslash escapes."""
+    i += 1
+    n = len(text)
+    while i < n and text[i] != '"':
+        i += 2 if text[i] == "\\" else 1
+    return i + 1
+
+
 @dataclass(frozen=True)
 class _ScanResult:
     directive: str | None  # the first unsupported directive, or None
     script_spans: list[tuple[int, int]]  # [start, end) of every #script block
+    comment_spans: list[tuple[int, int]]  # [start, end) of every %* *% block comment
     unterminated: str | None  # a construct left open at end of text, or None
 
 
@@ -157,6 +167,8 @@ def _scan_asp_text(text: str) -> _ScanResult:
     """
     directive: str | None = None
     spans: list[tuple[int, int]] = []
+    comment_spans: list[tuple[int, int]] = []
+    comment_start = 0
     i, n = 0, len(text)
     depth = 0
     while i < n:
@@ -167,10 +179,13 @@ def _scan_asp_text(text: str) -> _ScanResult:
             elif text.startswith("*%", i):
                 depth -= 1
                 i += 2
+                if depth == 0:
+                    comment_spans.append((comment_start, i))
             else:
                 i += 1
         elif text.startswith("%*", i):
             depth += 1
+            comment_start = i
             i += 2
         elif text[i] == "%":
             # Line comment: code resumes after the newline
@@ -179,18 +194,15 @@ def _scan_asp_text(text: str) -> _ScanResult:
                 break
             i = newline + 1
         elif text[i] == '"':
-            # String literal, honoring \" escapes (raw text is arbitrary gringo)
-            i += 1
-            while i < n and text[i] != '"':
-                i += 2 if text[i] == "\\" else 1
-            i += 1
+            # String literal (raw text is arbitrary gringo)
+            i = skip_string(text, i)
         elif text.startswith("#script", i):
             end = _script_end(text, i)
             if end is None:
                 # Unterminated script: it swallows the rest of the scan, and
                 # raw_asp() rejects the block (self-containment)
                 spans.append((i, n))
-                return _ScanResult(directive, spans, "#script block")
+                return _ScanResult(directive, spans, comment_spans, "#script block")
             spans.append((i, end))
             i = end
         elif directive is None and text.startswith("#program", i):
@@ -207,12 +219,23 @@ def _scan_asp_text(text: str) -> _ScanResult:
             i += len("#const")
         else:
             i += 1
-    return _ScanResult(directive, spans, "%* block comment" if depth else None)
+    if depth:
+        comment_spans.append((comment_start, n))
+    return _ScanResult(directive, spans, comment_spans, "%* block comment" if depth else None)
 
 
 def script_spans(text: str) -> list[tuple[int, int]]:
     """The [start, end) character span of every #script block, judged outside strings and comments."""
     return _scan_asp_text(text).script_spans
+
+
+def masked_spans(text: str) -> list[tuple[int, int]]:
+    """
+    The [start, end) character span of every region that is not code: every
+    #script block and every %* *% block comment, judged outside strings.
+    """
+    result = _scan_asp_text(text)
+    return sorted(result.script_spans + result.comment_spans)
 
 
 class RawASP(ProgramElement):

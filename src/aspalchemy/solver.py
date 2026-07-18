@@ -6,12 +6,13 @@ import sys
 import tempfile
 import threading
 from collections.abc import Iterator, Mapping, Sequence
-from dataclasses import dataclass
 from typing import Any, Self
 
 import clingo
 from clingo.application import Application, clingo_main
 
+import aspalchemy.analysis as analysis
+from aspalchemy.analysis import SignatureGrounding, StatementGrounding
 from aspalchemy.choice import Choice
 from aspalchemy.clingo_handler import ClingoMessageHandler, LogLevel
 from aspalchemy.conditional_literal import ConditionalLiteral
@@ -294,23 +295,6 @@ def _annotate_lines(lines: list[RenderedLine]) -> list[RenderedLine]:
             line_text = f"{line_text}  % {note}"
         annotated.append(RenderedLine(line_text, element))
     return annotated
-
-
-@dataclass(frozen=True)
-class SignatureGrounding:
-    """
-    One row of a grounding profile: a signature's ground atom count and
-    the statements that derive it. derived_at holds authoring locations,
-    deduplicated in document order; None stands for a statement whose
-    segment had source locations switched off, and an empty tuple means
-    no aspalchemy statement derives the signature (e.g. raw-text atoms
-    declared only via show()).
-    """
-
-    name: str
-    arity: int
-    atom_count: int
-    derived_at: tuple[SourceLocation | None, ...]
 
 
 class ASPProgram:
@@ -850,11 +834,26 @@ class ASPProgram:
         lines, _all_classes, _has_raw = self._render_lines(annotate=annotate)
         return "\n".join(line.text for line in lines) + "\n"
 
-    def _render_with_origins(self) -> tuple[str, dict[int, SourceLocation], set[type[Predicate]], bool]:
+    def _render_with_origins(
+        self,
+    ) -> tuple[
+        str,
+        dict[int, SourceLocation],
+        set[type[Predicate]],
+        bool,
+        dict[int, tuple[str, SourceLocation | None, str]],
+        dict[int, SourceLocation | None],
+    ]:
         """
         The rendered program, a 1-based line -> authoring-location map for
-        grounding diagnostics, and the walk products ground() reuses: the
-        program's full class universe and whether raw blocks exist.
+        grounding diagnostics, the walk products ground() reuses (the
+        program's full class universe, whether raw blocks exist), and the
+        statement profiler's structural classification: a line ->
+        (statement text, location, kind) table for every rendered Rule
+        and WeakConstraint
+        (the render's element column knows statement-ness and fact-ness —
+        nothing is re-derived from text) plus the raw-block line map that
+        takes the residual textual pass.
         """
         lines, all_classes, has_raw = self._render_lines(annotate=False)
         origins = {
@@ -862,7 +861,15 @@ class ASPProgram:
             for line_number, line in enumerate(lines, start=1)
             if line.element is not None and line.element.source_location is not None
         }
-        return "\n".join(line.text for line in lines) + "\n", origins, all_classes, has_raw
+        statement_table, raw_locations = analysis.classify_statements(lines)
+        return (
+            "\n".join(line.text for line in lines) + "\n",
+            origins,
+            all_classes,
+            has_raw,
+            statement_table,
+            raw_locations,
+        )
 
     def _render_lines(self, annotate: bool) -> tuple[list[RenderedLine], set[type[Predicate]], bool]:
         """
@@ -1042,7 +1049,7 @@ class ASPProgram:
                 or the log level threshold is exceeded
         """
         _validate_stop_level(stop_on_log_level)
-        asp_source, line_origins, all_classes, has_raw = self._render_with_origins()
+        asp_source, line_origins, all_classes, has_raw, statement_table, raw_locations = self._render_with_origins()
 
         message_handler = ClingoMessageHandler(asp_source, stop_on_level=stop_on_log_level, line_origins=line_origins)
         control = clingo.Control(logger=message_handler.on_message, arguments=["--stats"])
@@ -1156,6 +1163,8 @@ class ASPProgram:
             derivation_sites={signature: tuple(sites) for signature, sites in derivation_sites.items()},
             hidden_classes=hidden_classes,
             grounding_context=context,
+            statement_table=statement_table,
+            raw_locations=raw_locations,
         )
 
     def solve(
@@ -1334,6 +1343,8 @@ class GroundedProgram:
         derivation_sites: dict[tuple[str, int], tuple[SourceLocation | None, ...]],
         hidden_classes: frozenset[type[Predicate]],
         grounding_context: object,
+        statement_table: Mapping[int, tuple[str, SourceLocation | None, str]],
+        raw_locations: Mapping[int, SourceLocation | None],
     ) -> None:
         self._text = text
         # Retained for the on-demand re-grounds behind ground_text()/aspif():
@@ -1346,6 +1357,11 @@ class GroundedProgram:
         # Signature -> the authoring lines of its deriving statements, for
         # analyze_grounding()
         self._derivation_sites = derivation_sites
+        # The statement profiler's structural classification, extracted from
+        # the render's element column at ground time (derived immutable data:
+        # strings and locations, not live element references)
+        self._statement_table = statement_table
+        self._raw_locations = raw_locations
         # Classes whose atoms are never shown: read surfaces teach instead
         # of returning a silent empty
         self._hidden_classes = hidden_classes
@@ -1481,18 +1497,7 @@ class GroundedProgram:
         gone; both signs of a signature count together).
         analyze_grounding() renders exactly this as prose.
         """
-        counts: dict[tuple[str, int], int] = {}
-        for name, arity, positive in self._control.symbolic_atoms.signatures:
-            tally = sum(1 for _ in self._control.symbolic_atoms.by_signature(name, arity, positive=positive))
-            counts[(name, arity)] = counts.get((name, arity), 0) + tally
-        profile: list[SignatureGrounding] = []
-        for (name, arity), count in sorted(counts.items(), key=lambda item: (-item[1], item[0])):
-            deduped: list[SourceLocation | None] = []
-            for site in self._derivation_sites.get((name, arity), ()):
-                if site not in deduped:
-                    deduped.append(site)
-            profile.append(SignatureGrounding(name, arity, count, tuple(deduped)))
-        return tuple(profile)
+        return analysis.grounding_profile(self._control, self._derivation_sites)
 
     def analyze_grounding(self) -> str:
         """
@@ -1505,18 +1510,38 @@ class GroundedProgram:
         One blind spot, stated plainly: the report joins on HEADS, so a
         statement whose body grounds large without deriving new atoms
         (a wide joint feeding a small head) shows up under its head's
-        count, not as its own row.
+        count, not as its own row. statement_profile() charges every
+        statement its own row — constraints and weak constraints
+        included — leaving only minimize()/maximize() directives
+        unattributed.
         """
-        profile = self.grounding_profile()
-        total = sum(entry.atom_count for entry in profile)
-        lines = [f"Grounding profile: {total} ground atoms across {len(profile)} signatures"]
-        for entry in profile:
-            described = [
-                site.display() if site is not None else "unknown (source locations off)" for site in entry.derived_at
-            ]
-            origin = ", ".join(described) if described else "no aspalchemy statement (declared but underived?)"
-            lines.append(f"  {entry.name}/{entry.arity}: {entry.atom_count} atoms — derived at {origin}")
-        return "\n".join(lines)
+        return analysis.analyze_grounding(self.grounding_profile())
+
+    def statement_profile(self) -> tuple[StatementGrounding, ...]:
+        """
+        Where the grounding's WORK comes from, as data: one
+        StatementGrounding per statement, largest instantiation count
+        first. Where grounding_profile() counts the atoms each signature
+        ends up with, this counts the ground INSTANCES each statement
+        produces — so constraints and wide-bodied rules, invisible to a
+        head-joined profile, charge their own rows. analyze_statements()
+        renders exactly this as prose; the full counting contract (per-
+        kind instrumentation, exclusions, honest limits) is documented on
+        analysis.statement_profile and in the diagnostics guide.
+        """
+        return analysis.statement_profile(
+            self._text, self._statement_table, self._raw_locations, self._grounding_context
+        )
+
+    def analyze_statements(self) -> str:
+        """
+        The statement profile as prose: ground instantiation counts per
+        statement, largest first, each with its authoring line. The
+        per-statement complement to analyze_grounding() — no head-join
+        blind spot, at the price of one instrumented re-ground per call
+        (see statement_profile() for exactly what is counted).
+        """
+        return analysis.analyze_statements(self.statement_profile())
 
     def _convert_assumptions(
         self, assumptions: Sequence[Predicate | DefaultNegation]

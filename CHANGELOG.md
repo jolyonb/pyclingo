@@ -1,5 +1,37 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **`GroundedProgram.statement_profile()` / `analyze_statements()`: where the
+  grounding's WORK comes from, per statement.** `grounding_profile()` counts
+  the atoms each signature ends up with, which leaves a documented blind
+  spot: constraints have no head to charge, and a wide-bodied rule feeding a
+  small head hides under the head's count. The statement profile closes it —
+  every statement charges its own row, ranked by ground instantiation count
+  and joined to its authoring line.
+
+  How it counts: an instrumented re-ground tallies a reserved marker
+  literal per statement with a ground-program observer, with the instrumentation chosen per
+  statement kind — classified structurally from the render's element
+  column — so the copy grounds as faithfully as possible. Facts stay REAL
+  facts, counted by a companion rule whose pool expansion instantiates
+  once per fact instance, so aggregates over facts evaluate exactly as
+  the true grounding; aggregates over atoms DERIVED
+  from facts remain an upper bound, stated in the docs. Weak constraints are
+  not touched at all: their priority is redirected to a reserved value
+  and the minimize callback's per-tuple entries are counted there.
+  Anonymous variables are renamed apart so gringo's projection rewrite
+  cannot hide a statement's join work — except under default negation,
+  where renaming would be unsafe. minimize()/maximize()
+  directives are the one excluded statement kind. Only `raw_asp` text
+  takes a line-based pass: statements spanning several lines or sharing
+  one line pass through uncounted. Each call pays a full in-process
+  re-ground with `ground_text()`'s stateful-context caveat but no
+  threading caveat. `StatementGrounding` is exported alongside
+  `SignatureGrounding`.
+
 ## 1.4.3 — 2026-07-17
 
 ### Fixed
