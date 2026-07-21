@@ -171,8 +171,6 @@ class Segment:
 
     def fact(self, *facts: Predicate) -> None:
         """Add unconditional statements: grounded atoms, asserted true."""
-        if not facts:
-            raise ValueError("fact() requires at least one statement")
         for statement in facts:
             if isinstance(statement, Choice):
                 raise TypeError(

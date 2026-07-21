@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.5.2 — 2026-07-21
+
+### Changed
+
+- **`fact()` accepts zero facts, as a no-op.** It used to raise
+  `ValueError` on `fact()` with nothing to state. But `fact(*atoms)` over
+  a generated collection is the ordinary spelling, and a generated
+  collection is legitimately empty — the refusal only made every caller
+  write the same guard around it, to reach the same outcome the no-op
+  gives them. Stating nothing adds nothing; that is not an error worth
+  raising.
+
 ## 1.5.1 — 2026-07-17
 
 ### Added

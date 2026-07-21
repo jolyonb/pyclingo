@@ -196,10 +196,16 @@ def test_define_constant_rejects_bool_and_non_ascii() -> None:
         program.define_constant("größe", 3)
 
 
-def test_empty_fact_rejected() -> None:
+def test_empty_fact_is_a_no_op() -> None:
+    # A generated collection may legitimately be empty; fact(*atoms) must not
+    # make callers guard against that.
     program = ASPProgram()
-    with pytest.raises(ValueError, match="at least one statement"):
-        program.fact()
+    program.fact()
+    P = Predicate.define("p_empty_fact", ["x"])
+    program.fact(*[])
+    assert "p_empty_fact" not in program.render()
+    program.fact(P(x=1))
+    assert "p_empty_fact(1)." in program.render()
 
 
 def test_empty_conditional_literal_condition_rejected() -> None:
